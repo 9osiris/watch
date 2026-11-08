@@ -1403,28 +1403,59 @@ select:focus {
 
 /* ===== Top 10 Movies & TV Shows Side-by-Side Rank Numbers (Image 2 reference) ===== */
 .top10-side-track {
-  display: flex; gap: 16px; align-items: flex-end;
+  display: flex; gap: 18px; align-items: flex-end;
   padding-left: var(--gutter);
 }
 .top10-item-wrap {
   display: flex; align-items: flex-end; flex: 0 0 auto;
+  position: relative;
+  scroll-snap-align: start;
 }
 .top10-side-num {
-  font-size: 5.6rem;
-  font-weight: 900;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  line-height: 0.78;
+  font-size: clamp(3.6rem, 6.2vw, 5.4rem);
+  font-weight: 800;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 0.82;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.24) 65%, rgba(255, 255, 255, 0.04) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
   color: transparent;
-  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.38);
-  letter-spacing: -0.07em;
-  margin-right: -8px;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.36);
+  paint-order: stroke fill;
+  letter-spacing: -0.06em;
+  margin-right: -10px;
+  padding-bottom: 4px;
   z-index: 2;
   user-select: none; pointer-events: none;
-  transition: -webkit-text-stroke-color 0.25s, transform 0.25s;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.65));
+  transition: transform 0.25s var(--ease-out), -webkit-text-stroke-color 0.25s, filter 0.25s;
+}
+[data-theme="light"] .top10-side-num {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72) 0%, rgba(15, 23, 42, 0.22) 70%, rgba(15, 23, 42, 0.05) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-stroke: 1.5px rgba(15, 23, 42, 0.34);
+  filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.14));
 }
 .top10-item-wrap:hover .top10-side-num {
-  -webkit-text-stroke-color: #ffffff;
-  transform: translateX(-3px);
+  -webkit-text-stroke-color: var(--accent);
+  transform: translateX(-3px) scale(1.03);
+}
+@media (max-width: 768px) {
+  .top10-side-track {
+    gap: 12px;
+  }
+  .top10-side-num {
+    font-size: 3.35rem;
+    line-height: 0.84;
+    -webkit-text-stroke-width: 1.25px;
+    margin-right: -8px;
+    padding-bottom: 2px;
+  }
+  .top10-item-wrap:hover .top10-side-num {
+    transform: none;
+  }
 }
 .row-period-wrap { position: relative; display: inline-flex; }
 .row-period-btn {

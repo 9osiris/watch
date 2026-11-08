@@ -825,8 +825,8 @@ function getBackdropConfig() {
   const baseHex = getBackdropBaseHex();
   const rawSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.6"));
   const speed = Number.isFinite(rawSpeed) ? Math.max(0, Math.min(2, rawSpeed)) : 0.6;
-  const rawGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.08"));
-  const grain = Number.isFinite(rawGrain) ? Math.max(0, Math.min(0.4, rawGrain)) : 0.08;
+  const rawGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0"));
+  const grain = Number.isFinite(rawGrain) ? Math.max(0, Math.min(0.4, rawGrain)) : 0;
   const reduceMotion = SETTINGS.get(SETTINGS.reduceMotionKey) === "1";
   const colors = buildBackdropPalette(validStyle === "none" ? "rings" : validStyle, baseHex, isLight);
   return {
@@ -5084,8 +5084,8 @@ function initSettingsPage() {
   const grainInput = $("#settings-bg-grain");
   const grainOutput = $("#settings-bg-grain-val");
   if (grainInput) {
-    const initGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.08"));
-    const gVal = Number.isFinite(initGrain) ? initGrain : 0.08;
+    const initGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0"));
+    const gVal = Number.isFinite(initGrain) ? initGrain : 0;
     grainInput.value = String(gVal);
     if (grainOutput) grainOutput.textContent = `${Math.round(gVal * 100)}%`;
     grainInput.addEventListener("input", () => {
