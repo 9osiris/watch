@@ -1087,12 +1087,15 @@ select:focus {
   object-fit: cover;
   object-position: center 18%;
   opacity: 0;
-  transition: opacity 0.9s ease;
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity;
 }
 .hero-slide.is-active { opacity: 1; }
-.hero.hero-fading .hero-content,
-.hero.hero-fading .hero-backdrop .hero-slide.is-active { opacity: 0; transition: opacity 0.42s ease; }
+.hero.hero-fading .hero-content {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
 .hero-overlay {
   position: absolute; inset: 0; z-index: 1;
   background:
@@ -1122,8 +1125,8 @@ select:focus {
   padding: 0 var(--gutter) clamp(52px, 8vh, 96px);
   max-width: 640px;
   color: #fff;
-  animation: heroFade 0.9s var(--ease-out) 0.1s both;
-  transition: opacity 0.45s ease;
+  animation: heroFade 0.65s var(--ease-out) 0.05s both;
+  transition: opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1), transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes heroFade { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
 .hero-type {
@@ -1946,6 +1949,7 @@ button.cast-item { border: none; background: none; color: inherit; cursor: point
   position: relative;
 }
 .instant-search-dropdown {
+  animation: cardFadeIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
   position: absolute;
   top: calc(100% + 8px);
   left: 0;

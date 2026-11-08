@@ -555,6 +555,9 @@ function renderKeywords(container, keywords, type) {
       ).join("")}</div>
     </div>`;
 }
+const IMG_W185 = "https://image.tmdb.org/t/p/w185";
+const IMG_W300 = "https://image.tmdb.org/t/p/w300";
+
 function renderCastRow(cast) {
   const section = $("#cast-section");
   const row = $("#cast-row");
@@ -566,8 +569,11 @@ function renderCastRow(cast) {
     d.type = "button";
     d.className = "cast-item";
     d.setAttribute("aria-label", `${a.name}${a.character ? `, as ${a.character}` : ""}`);
-    d.innerHTML = `${a.profile_path ? `<img src="${esc(IMG_W500 + a.profile_path)}" alt="${esc(a.name || '')}" loading="lazy" draggable="false"/>` : `<div class="cast-placeholder"></div>`}<div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="role" title="${esc(a.character || "")}">${esc(a.character || "")}</div>`;
-    d.addEventListener("click", () => openPersonModal(a.id));
+    d.innerHTML = `${a.profile_path ? `<img src="${esc(IMG_W185 + a.profile_path)}" alt="${esc(a.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : `<div class="cast-placeholder"></div>`}<div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="role" title="${esc(a.character || "")}">${esc(a.character || "")}</div>`;
+    const prewarmPerson = () => { if (a.id) tmdb(`/person/${a.id}?append_to_response=combined_credits`).catch(() => {}); };
+    d.addEventListener("mouseenter", prewarmPerson, { passive: true, once: true });
+    d.addEventListener("touchstart", prewarmPerson, { passive: true, once: true });
+    d.addEventListener("click", () => openPersonModal(a.id, a));
     row.appendChild(d);
   });
 }
@@ -598,19 +604,30 @@ function hostAfter(el, id) {
   }
   return node;
 }
-async function openPersonModal(id) {
+async function openPersonModal(id, seedActor = null) {
   let modal = $("#person-modal");
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "person-modal";
     modal.className = "modal-overlay person-modal";
-    modal.innerHTML = `<button class="modal-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="modal-box"><div class="spinner" style="margin:40px auto"></div></div>`;
+    modal.innerHTML = `<button class="modal-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="modal-box"></div>`;
     document.body.appendChild(modal);
     modal.querySelector(".modal-close").addEventListener("click", closePersonModal);
     modal.addEventListener("click", e => { if (e.target === modal) closePersonModal(); });
   }
   const box = modal.querySelector(".modal-box");
-  box.innerHTML = `<div class="spinner" style="margin:40px auto"></div>`;
+  box.innerHTML = `
+    <div class="person-head">
+      ${seedActor?.profile_path ? `<img src="${esc(IMG_W185 + seedActor.profile_path)}" alt="${esc(seedActor.name || '')}"/>` : `<div class="person-ph skel-pulse"></div>`}
+      <div style="flex:1">
+        <h2>${seedActor?.name ? esc(seedActor.name) : '<span class="skel-pulse" style="display:inline-block;width:140px;height:20px;border-radius:6px"></span>'}</h2>
+        <p><span class="skel-pulse" style="display:inline-block;width:100px;height:12px;border-radius:4px"></span></p>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <div class="skel-pulse" style="width:100%;height:12px;border-radius:4px"></div>
+      <div class="skel-pulse" style="width:88%;height:12px;border-radius:4px"></div>
+    </div>`;
   modal.classList.add("open");
   trapModalFocus(modal, "Cast member");
   try {
@@ -618,7 +635,7 @@ async function openPersonModal(id) {
     const credits = (p.combined_credits?.cast || []).sort((a, b) => (b.popularity || 0) - (a.popularity || 0)).slice(0, 12);
     box.innerHTML = `
       <div class="person-head">
-        ${p.profile_path ? `<img src="${esc(IMG_W500 + p.profile_path)}" alt="${esc(p.name || '')}"/>` : `<div class="person-ph"></div>`}
+        ${p.profile_path ? `<img src="${esc(IMG_W185 + p.profile_path)}" alt="${esc(p.name || '')}"/>` : `<div class="person-ph"></div>`}
         <div>
           <h2>${esc(p.name)}</h2>
           <p>${esc(p.known_for_department || "")}${p.place_of_birth ? ` · ${esc(p.place_of_birth)}` : ""}</p>
@@ -627,13 +644,27 @@ async function openPersonModal(id) {
       ${p.biography ? `<p style="font-size:0.82rem;color:var(--text-muted);line-height:1.55;margin-bottom:16px">${esc(p.biography.slice(0, 280))}${p.biography.length > 280 ? "…" : ""}</p>` : ""}
       <div class="person-credits">
         <h3>Known for</h3>
-        <div class="person-credit-list">${credits.map(c => {
+        <div class="person-credit-list">${credits.map((c, idx) => {
           const kind = c.media_type === "tv" ? "tv" : "movie";
           const href = kind === "tv" ? `${routeUrl("tv")}?id=${c.id}` : `${routeUrl("movie")}?id=${c.id}`;
           const title = c.title || c.name || "Untitled";
-          return `<a href="${href}"><span>${esc(title)}</span><span>${year(c.release_date || c.first_air_date)}</span></a>`;
+          return `<a href="${href}" data-credit-idx="${idx}"><span>${esc(title)}</span><span>${year(c.release_date || c.first_air_date)}</span></a>`;
         }).join("")}</div>
       </div>`;
+    box.querySelectorAll("a[data-credit-idx]").forEach(a => {
+      const c = credits[Number(a.dataset.creditIdx)];
+      if (!c) return;
+      const kind = c.media_type === "tv" ? "tv" : "movie";
+      const href = a.getAttribute("href");
+      const title = c.title || c.name || "Untitled";
+      a.addEventListener("click", e => {
+        if (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey) return;
+        e.preventDefault();
+        closePersonModal();
+        const bg = c.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${c.backdrop_path}` : (posterUrl(c.poster_path) || "");
+        navigateWithLoader(href, bg, title, { id: c.id, type: kind, item: c });
+      });
+    });
   } catch {
     box.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:24px">Couldn't load this profile.</p>`;
   }
@@ -2198,10 +2229,7 @@ async function sharePageLink(title) {
   }
 }
 
-function resumeLabel(prog) {
-  if (!prog || prog.progress < 5 || prog.progress >= 98) return "";
-  return `Resume · ${Math.round(prog.progress)}% watched`;
-}
+
 
 function initBackToTop() {
   if ($("#back-top")) return;
@@ -3046,25 +3074,36 @@ function swapHeroBackdrop(url) {
     const b = $("#hero-backdrop-b");
     if (!url || !a || !b) { resolve(); return; }
 
-    applyHeroColorBleed(url);
+    const fastUrl = url.replace("/original/", "/w780/");
+    applyHeroColorBleed(fastUrl);
     const next = heroImgSlot % 2 === 0 ? b : a;
     const cur = heroImgSlot % 2 === 0 ? a : b;
 
+    let swapped = false;
     const finishSwap = () => {
+      if (swapped) return;
+      swapped = true;
       cur.classList.remove("is-active");
       next.classList.add("is-active");
       heroImgSlot++;
       resolve();
+      if (!isMobile() && fastUrl !== url) {
+        const hi = new Image();
+        hi.onload = () => {
+          if (next.classList.contains("is-active")) next.src = url;
+        };
+        hi.src = url;
+      }
     };
 
-    if (next.src === url && next.classList.contains("is-active")) {
+    if ((next.src === fastUrl || next.src === url) && next.classList.contains("is-active")) {
       resolve();
       return;
     }
     next.onload = finishSwap;
     next.onerror = finishSwap;
-    next.src = url;
-    if (next.complete) finishSwap();
+    next.src = fastUrl;
+    if (next.complete && next.naturalWidth > 0) finishSwap();
   });
 }
 
@@ -3133,7 +3172,7 @@ async function setHeroSlide(i, animate = false) {
   if (animate) {
     heroFading = true;
     $(".hero")?.classList.add("hero-fading");
-    await new Promise(r => setTimeout(r, 420));
+    await new Promise(r => setTimeout(r, 170));
   }
   try {
     await loadHero(heroSlides[i]);
@@ -3150,7 +3189,12 @@ async function setHeroSlide(i, animate = false) {
   const nextSlide = heroSlides[(i + 1) % heroSlides.length];
   if (nextSlide?.backdrop_path) {
     const pImg = new Image();
-    pImg.src = `${IMG_ORIG}${nextSlide.backdrop_path}`;
+    pImg.src = `${IMG_W780}${nextSlide.backdrop_path}`;
+    const nextType = mediaType(nextSlide);
+    const nextKey = `${nextType}_${nextSlide.id}`;
+    if (!heroDetailCache[nextKey]) {
+      tmdb(`/${nextType}/${nextSlide.id}?append_to_response=images,videos`).then(d => { heroDetailCache[nextKey] = d; }).catch(() => {});
+    }
   }
 }
 
@@ -3160,6 +3204,17 @@ function initHeroCarousel(slides) {
   buildHeroDots();
   loadHero(slides[0]);
   startHeroTimer();
+  slides.slice(1, 3).forEach(s => {
+    if (s.backdrop_path) {
+      const pre = new Image();
+      pre.src = `${IMG_W780}${s.backdrop_path}`;
+    }
+    const st = mediaType(s);
+    const sk = `${st}_${s.id}`;
+    if (!heroDetailCache[sk]) {
+      tmdb(`/${st}/${s.id}?append_to_response=images,videos`).then(d => { heroDetailCache[sk] = d; }).catch(() => {});
+    }
+  });
 }
 
 let heroData = null;
@@ -3175,12 +3230,15 @@ async function loadHero(item) {
   const title = item.title || item.name || "";
   const backdrop = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : "";
 
-  await swapHeroBackdrop(backdrop);
-
   if ($("#hero-type")) $("#hero-type").textContent = realType === "tv" ? "Series" : "Film";
   if ($("#hero-desc")) $("#hero-desc").textContent = item.overview || "";
-
   const cacheKey = `${realType}_${id}`;
+  if (!heroDetailCache[cacheKey] && $("#hero-title")) {
+    $("#hero-title").textContent = title;
+  }
+
+  swapHeroBackdrop(backdrop);
+
   try {
     let d = heroDetailCache[cacheKey];
     if (!d) {
@@ -3355,7 +3413,13 @@ function buildSeasonSpotlight(shows) {
       <div class="spotlight-foot">
         <div class="spotlight-title">${esc(s.name || s.title || "")}</div>
       </div>`;
-    const go = () => { location.href = `${routeUrl("tv")}?id=${s.id}`; };
+    const href = `${routeUrl("tv")}?id=${s.id}`;
+    card.href = href;
+    const go = e => {
+      if (e && (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey)) return;
+      if (e) e.preventDefault();
+      navigateWithLoader(href, img || "", s.name || s.title || "", { id: s.id, type: "tv", item: s });
+    };
     card.addEventListener("click", go);
     card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
     track.appendChild(card);
@@ -3424,15 +3488,15 @@ function initInstantSearch(inputEl, isEnabled = () => true) {
           inputEl.parentElement.appendChild(dropdown);
         }
 
-        dropdown.innerHTML = hits.map(item => {
+        dropdown.innerHTML = hits.map((item, idx) => {
           const type = item.media_type === "tv" ? "tv" : "movie";
           const title = item.title || item.name || "";
-          const img = posterUrl(item.poster_path) || "";
+          const img = item.poster_path ? `${IMG_W185}${item.poster_path}` : "";
           const y = year(item.release_date || item.first_air_date);
           const link = `/${type}?id=${item.id}`;
           return `
-            <a href="${link}" class="instant-search-item">
-              <img src="${esc(img)}" class="instant-search-poster" alt="${esc(item.title || item.name || '')}" />
+            <a href="${link}" class="instant-search-item" data-hit-idx="${idx}">
+              <img src="${esc(img)}" class="instant-search-poster" alt="${esc(item.title || item.name || '')}" loading="eager" decoding="async" />
               <div>
                 <div class="instant-search-title">${esc(title)}</div>
                 <div class="instant-search-sub">${type === "tv" ? "TV Series" : "Movie"}${y ? " · " + y : ""}</div>
@@ -3440,8 +3504,27 @@ function initInstantSearch(inputEl, isEnabled = () => true) {
             </a>
           `;
         }).join("");
+        const topHit = hits[0];
+        if (topHit?.id) {
+          const topType = topHit.media_type === "tv" ? "tv" : "movie";
+          tmdb(`/${topType}/${topHit.id}?append_to_response=images,credits,similar,recommendations,videos,external_ids,${topType === "tv" ? "content_ratings" : "release_dates"}`).catch(() => {});
+        }
+        dropdown.querySelectorAll(".instant-search-item").forEach(a => {
+          const item = hits[Number(a.dataset.hitIdx)];
+          if (!item) return;
+          const type = item.media_type === "tv" ? "tv" : "movie";
+          const title = item.title || item.name || "";
+          const link = a.getAttribute("href");
+          a.addEventListener("click", e => {
+            if (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey) return;
+            e.preventDefault();
+            closeDropdown();
+            const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
+            navigateWithLoader(link, bg, title, { id: item.id, type, item });
+          });
+        });
       } catch (err) { console.warn('Caught error:', err); closeDropdown(); }
-    }, 200);
+    }, 140);
   });
 
   document.addEventListener("click", e => {
@@ -3547,19 +3630,11 @@ function initHeroSwipe() {
 }
 
 function resumeLabel(progressObj) {
-  if (!progressObj) return "";
-  if (progressObj.season && progressObj.episode) {
-    return `Resumes at S${progressObj.season} E${progressObj.episode}`;
+  if (!progressObj || progressObj.progress < 5 || progressObj.progress >= 98) return "";
+  if (progressObj.season && progressObj.episode && (progressObj.mediaType === "tv" || progressObj.type === "tv")) {
+    return `Resume S${progressObj.season} E${progressObj.episode} · ${Math.round(progressObj.progress)}% watched`;
   }
-  const watchedSec = progressObj.currentTime;
-  if (watchedSec && watchedSec > 10) {
-    const m = Math.floor(watchedSec / 60);
-    const h = Math.floor(m / 60);
-    const rM = m % 60;
-    if (h > 0) return `Resumes at ${h}h ${rM}m`;
-    return `Resumes at ${rM}m`;
-  }
-  return "Resumes playback";
+  return `Resume · ${Math.round(progressObj.progress)}% watched`;
 }
 
 async function renderRecommendedForYouRow() {
@@ -3624,6 +3699,7 @@ function navigateWithLoader(href, bg = "", title = "", seed = null) {
       }));
     }
   } catch (err) {}
+  if (typeof NProgress !== "undefined" && NProgress.start) NProgress.start();
   location.href = href;
 }
 
@@ -4276,7 +4352,7 @@ async function initTvPage() {
           el.innerHTML = `
             <span class="ep-row-num">${ep.episode_number}</span>
             ${WatchedEpisodes.has(id, sn, ep.episode_number) ? '<span class="ep-watched-check" title="Watched" style="color:var(--accent);margin-left:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></span>' : ''}
-            <div class="ep-row-thumb">${ep.still_path ? `<img src="${esc(IMG_W500 + ep.still_path)}" alt="${esc(ep.name || '')}" loading="lazy" draggable="false"/>` : ""}</div>
+            <div class="ep-row-thumb">${ep.still_path ? `<img src="${esc(IMG_W300 + ep.still_path)}" alt="${esc(ep.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : ""}</div>
             <div class="ep-row-body">
               <div class="ep-row-title">${esc(ep.name || `Episode ${ep.episode_number}`)}</div>
               ${air ? `<div class="ep-row-date">${air}</div>` : ""}
@@ -5640,10 +5716,7 @@ function playLoader(bg, title, opts = {}) {
   });
 }
 
-function navigateWithLoader(href, bg, title) {
-  if (window.NProgress) NProgress.start();
-  location.href = href;
-}
+
 
 const NProgress = {
   el: null,
