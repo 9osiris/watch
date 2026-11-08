@@ -585,14 +585,24 @@ function renderCardRow(sectionSel, rowSel, items, type) {
   row.textContent = "";
   items.forEach(it => row.appendChild(buildCard(it, type)));
 }
-function ensureRecommendSection() {
+function ensureRecommendSection(seedTitle = "") {
   let sec = $("#recommend-section");
-  if (sec) return sec.querySelector(".similar-row");
-  sec = document.createElement("section");
-  sec.id = "recommend-section";
-  sec.style.display = "none";
-  sec.innerHTML = `<h2 class="section-head">Recommended For You</h2><div class="similar-row" id="recommend-row"></div>`;
-  $("#similar-section")?.before(sec);
+  if (!sec) {
+    sec = document.createElement("section");
+    sec.id = "recommend-section";
+    sec.style.display = "none";
+    sec.innerHTML = `
+      <div class="section-head syw-detail-head" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="syw-prefix">Since you watched</span>
+        <span class="syw-seed-name" id="detail-syw-name">${esc(seedTitle || "this title")}</span>
+        <span class="syw-ai-badge">AI</span>
+      </div>
+      <div class="similar-row" id="recommend-row"></div>`;
+    $("#similar-section")?.before(sec);
+  } else if (seedTitle) {
+    const nameEl = sec.querySelector("#detail-syw-name");
+    if (nameEl) nameEl.textContent = seedTitle;
+  }
   return sec.querySelector(".similar-row");
 }
 function hostAfter(el, id) {
@@ -1947,6 +1957,32 @@ const Progress = {
   },
 };
 
+const RecentViewed = {
+  key: "orc_recent_viewed",
+  max: 12,
+  get() {
+    try { return JSON.parse(safeGetItem(this.key) || "[]"); } catch { return []; }
+  },
+  add(item, type = "movie") {
+    if (!item || !item.id) return;
+    const mediaType = type === "tv" ? "tv" : "movie";
+    const title = (item.title || item.name || "").trim();
+    if (!title) return;
+    const entry = {
+      id: Number(item.id) || item.id,
+      mediaType,
+      title,
+      poster_path: item.poster_path || item.poster || "",
+      backdrop_path: item.backdrop_path || "",
+      release_date: item.release_date || item.first_air_date || "",
+      vote_average: item.vote_average || 0,
+      viewedAt: Date.now()
+    };
+    const existing = this.get().filter(x => !(String(x.id) === String(entry.id) && x.mediaType === mediaType));
+    safeSetItem(this.key, JSON.stringify([entry, ...existing].slice(0, this.max)));
+  }
+};
+
 window.addEventListener("message", e => {
   try {
     let originHost = "";
@@ -2328,9 +2364,10 @@ function buildCard(item, type = "movie", opts = {}) {
   card.setAttribute("role", "link");
   card.href = href;
   card.setAttribute("aria-label", title);
+  const aiRec = item._aiRec || null;
   card.innerHTML = `
     ${opts.rank && opts.top10Today ? `<span class="top10-today-card-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>${opts.rank}</span>` : opts.rank ? `<span class="rank">${opts.rank}</span>` : ""}
-    ${prog && prog > 2 ? `<span class="progress-badge">${Math.round(prog)}%</span>` : ""}
+    ${prog && prog > 2 ? `<span class="progress-badge">${Math.round(prog)}%</span>` : aiRec?.matchPct ? `<span class="card-ai-badge">${aiRec.rankedByAI ? "AI · " : ""}${aiRec.matchPct}% Match</span>` : ""}
     ${!opts.rank && (!prog || prog <= 2) && Number.isFinite(item.vote_average) && item.vote_average >= 6 ? `<span class="card-rating">★ ${(typeof item.vote_average === "number" ? item.vote_average.toFixed(1) : "")}</span>` : ""}
     ${img ? `<img class="card-img" src="${esc(img)}" alt="${esc(title)}" loading="${opts.eager ? "eager" : "lazy"}"${opts.eager ? ' fetchpriority="high"' : ""} draggable="false" decoding="async" />` : `<div class="no-img-poster">${ICONS.film}<span>${esc(title)}</span></div>`}
     ${prog ? `<div class="progress-bar"><span style="width:${Math.min(prog, 100)}%"></span></div>` : ""}
@@ -2340,6 +2377,7 @@ function buildCard(item, type = "movie", opts = {}) {
     <div class="card-foot">
       <div class="card-foot-title">${esc(title)}</div>
       <div class="card-foot-meta">${y ? `${y} · ` : ""}${kind === "tv" ? "Series" : "Movie"}</div>
+      ${aiRec?.reason ? `<div class="card-foot-ai-reason">${esc(aiRec.reason)}</div>` : ""}
     </div>`;
 
   const cardImgEl = card.querySelector("img.card-img");
@@ -2545,6 +2583,7 @@ function showPopup(card, item, type) {
     <div class="card-popup-body">
       <div class="card-popup-title">${esc(title)}</div>
       <div class="card-popup-meta">${year(item.release_date || item.first_air_date)}${rating ? ` · ★ ${rating}` : ""} · ${kind === "tv" ? "Series" : "Film"}</div>
+      ${item._aiRec?.reason ? `<div class="card-popup-ai-reason"><strong>${item._aiRec.matchPct ? `${item._aiRec.matchPct}% AI Match: ` : "AI Match: "}</strong>${esc(item._aiRec.reason)}</div>` : ""}
       <p class="card-popup-overview">${esc(item.overview ? "" : "Loading summary…")}</p>
       <div class="card-popup-actions">
         <button type="button" class="pp-play">Play</button>
@@ -3637,43 +3676,536 @@ function resumeLabel(progressObj) {
   return `Resume · ${Math.round(progressObj.progress)}% watched`;
 }
 
+const AIRecommendations = (() => {
+  const CACHE_PREFIX = "orc_ai_syw_v2_";
+  const STOP_TOKENS = new Set("a an and are as at be but by can could do for from good have his her him i in into is it its like me movie movies of on one or our out over please recommend series she show shows some something that the their them then there these they this through to tv up upon want was watch watched we were what when where which while who whom why will with would you your".split(" "));
+
+  function tokenizeText(str) {
+    if (!str) return [];
+    return String(str)
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !STOP_TOKENS.has(w));
+  }
+
+  async function collectSeeds() {
+    const map = new Map();
+    const addSeed = (id, type, title, poster, yearStr, sourceLabel) => {
+      if (!id) return;
+      const cleanType = type === "tv" ? "tv" : "movie";
+      const key = `${cleanType}_${id}`;
+      if (map.has(key)) return;
+      map.set(key, {
+        id: Number(id) || id,
+        type: cleanType,
+        title: (title || "").trim(),
+        poster: poster || "",
+        year: yearStr ? String(yearStr).slice(0, 4) : "",
+        sourceLabel
+      });
+    };
+
+    // 1. Watched / In-Progress items
+    Progress.getAll().forEach(p => {
+      const id = p.id || p.mediaId;
+      const type = (p.mediaType || p.type) === "tv" ? "tv" : "movie";
+      addSeed(id, type, p.title || p.name || "", p.poster_path || p.poster || "", p.release_date || p.first_air_date || "", "Watched");
+    });
+
+    // 2. Recently viewed detail pages
+    RecentViewed.get().forEach(v => {
+      addSeed(v.id, v.mediaType, v.title, v.poster_path, v.release_date, "Watched");
+    });
+
+    // 3. Saved Watchlist & Folder items
+    MyList.get().forEach(m => {
+      addSeed(m.id, m.type, m.title, m.poster || m.poster_path, "", "Saved");
+    });
+    Folders.get().forEach(f => {
+      (f.items || []).forEach(it => {
+        addSeed(it.id, it.type, it.title, it.poster || it.poster_path, "", "Saved");
+      });
+    });
+
+    let seeds = [...map.values()].slice(0, 10);
+
+    // Hydrate any seed missing its title or poster from TMDB cache/network
+    if (seeds.length) {
+      await Promise.allSettled(seeds.map(async s => {
+        if (s.title && s.poster) return;
+        try {
+          const d = await tmdb(`/${s.type}/${s.id}`);
+          if (d) {
+            s.title = d.title || d.name || s.title;
+            s.poster = d.poster_path || s.poster;
+            s.year = String(d.release_date || d.first_air_date || "").slice(0, 4);
+          }
+        } catch {}
+      }));
+      seeds = seeds.filter(s => s.title);
+    }
+
+    // 4. Cold-start fallback if user has zero history/watchlist yet
+    if (!seeds.length) {
+      try {
+        const trend = await tmdb("/trending/all/day");
+        (trend?.results || [])
+          .filter(it => (it.media_type === "movie" || it.media_type === "tv") && (it.title || it.name) && it.poster_path)
+          .slice(0, 6)
+          .forEach(it => {
+            addSeed(it.id, it.media_type, it.title || it.name, it.poster_path, it.release_date || it.first_air_date, "Featured");
+          });
+        seeds = [...map.values()].slice(0, 6);
+      } catch {}
+    }
+
+    return seeds;
+  }
+
+  async function generateForSeed(seed, opts = {}) {
+    const type = seed.type === "tv" ? "tv" : "movie";
+    const id = seed.id;
+    const cacheKey = `${CACHE_PREFIX}${type}_${id}`;
+
+    try {
+      const cachedRaw = sessionStorage.getItem(cacheKey);
+      if (cachedRaw && !opts.forceRefresh) {
+        const parsed = JSON.parse(cachedRaw);
+        if (parsed && Array.isArray(parsed.items) && parsed.items.length >= 6 && Date.now() - (parsed.ts || 0) < 30 * 60 * 1000) {
+          return parsed;
+        }
+      }
+    } catch {}
+
+    // Stage 1: Deep Seed Profiling
+    let detail = opts.seedDetail || null;
+    if (!detail || !detail.keywords || !detail.credits) {
+      try {
+        detail = await tmdb(`/${type}/${id}?append_to_response=keywords,credits,recommendations,similar`);
+      } catch {
+        detail = detail || { id, title: seed.title, name: seed.title };
+      }
+    }
+
+    const seedTitle = detail.title || detail.name || seed.title || "this title";
+    const seedYear = Number(String(detail.release_date || detail.first_air_date || seed.year || "").slice(0, 4)) || null;
+    const seedGenres = (detail.genres || []).map(g => ({ id: g.id, name: g.name })).filter(g => g.id && g.name);
+    const seedGenreIds = seedGenres.map(g => g.id);
+    const seedGenreNames = seedGenres.map(g => g.name);
+    const rawKeywords = detail.keywords?.keywords || detail.keywords?.results || [];
+    const seedKeywords = rawKeywords.slice(0, 12).map(k => ({ id: k.id, name: k.name })).filter(k => k.id && k.name);
+    const seedKeywordIds = seedKeywords.map(k => k.id);
+    const seedKeywordNames = seedKeywords.map(k => k.name);
+
+    const directors = type === "tv"
+      ? (detail.created_by || []).slice(0, 2).map(c => ({ id: c.id, name: c.name, role: "Creator" }))
+      : (detail.credits?.crew || []).filter(c => c.job === "Director").slice(0, 2).map(c => ({ id: c.id, name: c.name, role: "Director" }));
+    const leadCast = (detail.credits?.cast || []).slice(0, 2).map(c => ({ id: c.id, name: c.name, role: "Cast" }));
+
+    const seedTokens = new Set(tokenizeText([
+      seedTitle,
+      detail.overview || "",
+      detail.tagline || "",
+      ...seedKeywordNames,
+      ...seedGenreNames
+    ].join(" ")));
+
+    // Stage 2: Multi-Path Candidate Harvesting (5 parallel signal paths)
+    const candidateMap = new Map();
+    const excludedKeys = new Set([`${type}_${id}`]);
+    Progress.getAll().forEach(p => {
+      if ((p.progress || 0) >= 95 && (p.id || p.mediaId)) {
+        const pt = (p.mediaType || p.type) === "tv" ? "tv" : "movie";
+        excludedKeys.add(`${pt}_${p.id || p.mediaId}`);
+      }
+    });
+
+    const hideAdult = SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
+    const today = new Date().toISOString().slice(0, 10);
+
+    const registerCandidate = (raw, cType, source, metaNote = "") => {
+      if (!raw || !raw.id || (!raw.poster_path && !raw.backdrop_path)) return;
+      if (hideAdult && raw.adult === true) return;
+      const itemType = raw.media_type === "tv" || raw.media_type === "movie" ? raw.media_type : cType;
+      const key = `${itemType}_${raw.id}`;
+      if (excludedKeys.has(key)) return;
+      const itemTitle = (raw.title || raw.name || "").trim();
+      if (!itemTitle || itemTitle.toLowerCase() === seedTitle.toLowerCase()) return;
+      const relDate = raw.release_date || raw.first_air_date || "";
+      if (relDate && relDate > today) return;
+
+      const existing = candidateMap.get(key);
+      if (existing) {
+        if (!existing._sources.includes(source)) existing._sources.push(source);
+        if (metaNote && !existing._notes.includes(metaNote)) existing._notes.push(metaNote);
+        return;
+      }
+      candidateMap.set(key, {
+        ...raw,
+        media_type: itemType,
+        _sources: [source],
+        _notes: metaNote ? [metaNote] : []
+      });
+    };
+
+    // Path A & B: Direct recommendations & similar from detail response
+    (detail.recommendations?.results || []).forEach(it => registerCandidate(it, type, "tmdb_rec"));
+    (detail.similar?.results || []).forEach(it => registerCandidate(it, type, "tmdb_sim"));
+
+    // Path C, D, E: Concurrent thematic keyword discovery, genre-intersection discovery, and auteur credits
+    const discoveryTasks = [];
+
+    if (seedKeywordIds.length) {
+      const kwParam = seedKeywordIds.slice(0, 4).join("|");
+      discoveryTasks.push(
+        tmdb(`/discover/${type}?with_keywords=${kwParam}&sort_by=vote_count.desc&vote_count.gte=15&include_adult=false`)
+          .then(res => (res?.results || []).forEach(it => registerCandidate(it, type, "keyword_match", seedKeywordNames.slice(0, 2).join(" & "))))
+          .catch(() => {})
+      );
+    }
+
+    if (seedGenreIds.length) {
+      const strictGenreParam = seedGenreIds.slice(0, 2).join(",");
+      discoveryTasks.push(
+        tmdb(`/discover/${type}?with_genres=${strictGenreParam}&sort_by=popularity.desc&vote_count.gte=25&include_adult=false`)
+          .then(res => (res?.results || []).forEach(it => registerCandidate(it, type, "genre_discover")))
+          .catch(() => {})
+      );
+      discoveryTasks.push(
+        tmdb(`/discover/${type}?with_genres=${seedGenreIds[0]}&sort_by=vote_average.desc&vote_count.gte=120&include_adult=false`)
+          .then(res => (res?.results || []).forEach(it => registerCandidate(it, type, "acclaimed_genre")))
+          .catch(() => {})
+      );
+    } else {
+      discoveryTasks.push(
+        tmdb(`/trending/${type}/week`)
+          .then(res => (res?.results || []).forEach(it => registerCandidate(it, type, "trending_fallback")))
+          .catch(() => {})
+      );
+    }
+
+    const auteurPerson = directors[0] || leadCast[0];
+    if (auteurPerson?.id) {
+      discoveryTasks.push(
+        tmdb(`/person/${auteurPerson.id}/combined_credits`)
+          .then(credits => {
+            const works = auteurPerson.role === "Cast"
+              ? (credits?.cast || [])
+              : [...(credits?.crew || []).filter(c => c.job === "Director" || c.job === "Creator" || c.job === "Writer"), ...(credits?.cast || [])];
+            works
+              .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0))
+              .slice(0, 10)
+              .forEach(it => registerCandidate(it, it.media_type || type, "auteur", `${auteurPerson.role}: ${auteurPerson.name}`));
+          })
+          .catch(() => {})
+      );
+    }
+
+    await Promise.allSettled(discoveryTasks);
+
+    // Stage 3: 6-Dimensional Deep Scoring & Reason Synthesis
+    const genreLookup = type === "tv"
+      ? { 10759: "Action & Adventure", 16: "Animation", 35: "Comedy", 80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family", 10762: "Kids", 9648: "Mystery", 10765: "Sci-Fi & Fantasy", 37: "Western" }
+      : { 28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music", 9648: "Mystery", 10749: "Romance", 878: "Sci-Fi", 53: "Thriller", 10752: "War", 37: "Western" };
+
+    const isDarkSeed = seedGenreIds.some(gid => [27, 53, 80, 9648].includes(gid));
+
+    const scored = [...candidateMap.values()].map(cand => {
+      const cGenreIds = cand.genre_ids || (cand.genres || []).map(g => g.id) || [];
+      const sharedGenreIds = cGenreIds.filter(gid => seedGenreIds.includes(gid));
+      const sharedGenreNames = sharedGenreIds.map(gid => genreLookup[gid]).filter(Boolean);
+
+      // 1. Genre overlap vector score
+      let score = sharedGenreIds.length * 3.2;
+      if (seedGenreIds.length && cGenreIds.includes(seedGenreIds[0])) score += 2.8;
+      if (isDarkSeed && cGenreIds.includes(10751) && !seedGenreIds.includes(10751)) score -= 5.0;
+
+      // 2. Semantic token overlap across overview + title
+      const candWords = tokenizeText(`${cand.title || cand.name || ""} ${cand.overview || ""}`);
+      const matchedWords = [...new Set(candWords.filter(w => seedTokens.has(w)))];
+      const tokenOverlap = seedTokens.size ? matchedWords.length / Math.min(18, seedTokens.size) : 0;
+      score += Math.min(8.5, tokenOverlap * 18);
+
+      // 3. Multi-path provenance weight
+      const srcs = cand._sources || [];
+      if (srcs.includes("tmdb_rec")) score += 6.2;
+      if (srcs.includes("keyword_match")) score += 5.4;
+      if (srcs.includes("auteur")) score += 4.5;
+      if (srcs.includes("tmdb_sim")) score += 3.4;
+      if (srcs.includes("acclaimed_genre")) score += 2.6;
+      if (srcs.length >= 2) score += (srcs.length - 1) * 2.2;
+
+      // 4. Era & language affinity
+      const candYear = Number(String(cand.release_date || cand.first_air_date || "").slice(0, 4)) || null;
+      if (seedYear && candYear && Math.abs(seedYear - candYear) <= 8) score += 1.4;
+      if (detail.original_language && cand.original_language === detail.original_language) score += 1.0;
+
+      // 5. Bayesian quality score
+      const v = Math.max(0, cand.vote_count || 0);
+      const r = Math.max(0, Math.min(10, cand.vote_average || 0));
+      const bayesian = (v * r + 120 * 6.5) / (v + 120);
+      score += (bayesian - 6.0) * 1.85;
+
+      // Synthesize a specific, human-readable match reason
+      let reason = "";
+      const auteurNote = (cand._notes || []).find(n => /^(Director|Creator|Cast):/.test(n));
+      if (auteurNote) {
+        reason = sharedGenreNames.length
+          ? `${auteurNote} · ${sharedGenreNames.slice(0, 2).join(" & ")}`
+          : `${auteurNote} affinity with ${seedTitle}`;
+      } else if (srcs.includes("keyword_match") && seedKeywordNames.length) {
+        reason = `Shared themes: ${seedKeywordNames.slice(0, 2).join(", ")}${sharedGenreNames[0] ? ` · ${sharedGenreNames[0]}` : ""}`;
+      } else if (sharedGenreNames.length >= 2) {
+        reason = `Matches ${seedTitle}'s ${sharedGenreNames.slice(0, 2).join(" & ").toLowerCase()} tone`;
+      } else if (sharedGenreNames.length === 1) {
+        reason = `${sharedGenreNames[0]} pick aligned with ${seedTitle}`;
+      } else {
+        reason = `Thematic & audience match for ${seedTitle}`;
+      }
+
+      return { ...cand, _rawScore: score, _synthesizedReason: reason };
+    }).sort((a, b) => b._rawScore - a._rawScore || (b.vote_count || 0) - (a.vote_count || 0));
+
+    const topCandidates = scored.slice(0, 20);
+    const maxScore = topCandidates[0]?._rawScore || 18;
+    const minScore = topCandidates[topCandidates.length - 1]?._rawScore || 6;
+    const span = Math.max(1, maxScore - minScore);
+
+    const finalizeItems = (list) => list.map((it, idx) => {
+      const norm = Math.max(0, Math.min(1, (it._rawScore - minScore) / span));
+      const matchPct = Math.round(84 + norm * 14 - Math.min(idx * 0.4, 5));
+      return {
+        ...it,
+        _aiRec: {
+          matchPct: Math.max(80, Math.min(99, matchPct)),
+          reason: it._ai?.reason || it._synthesizedReason,
+          rankedByAI: Boolean(it._ai?.rankedByAI)
+        }
+      };
+    });
+
+    const themeParts = [...seedGenreNames.slice(0, 2), ...seedKeywordNames.slice(0, 2)];
+    const defaultSubtitle = themeParts.length
+      ? `AI-synthesized from ${seedTitle}'s themes: ${themeParts.join(" · ")}`
+      : `AI-synthesized from plot themes, tone & catalog signals`;
+
+    const initialBundle = {
+      ts: Date.now(),
+      seedTitle,
+      subtitle: defaultSubtitle,
+      queryPrompt: `Titles like ${seedTitle}${seedYear ? ` (${seedYear})` : ""}: ${seedGenreNames.join(", ")}${seedKeywordNames.length ? `, themes of ${seedKeywordNames.slice(0, 3).join(", ")}` : ""}`,
+      items: finalizeItems(topCandidates.slice(0, 16))
+    };
+
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(initialBundle));
+    } catch {}
+
+    // Stage 4: Asynchronous Server AI Reranking & Explanation Upgrade (/api/ai-search)
+    if (window.OsirisAICatalog && topCandidates.length >= 4 && typeof opts.onAIUpgrade === "function") {
+      (async () => {
+        try {
+          const catalog = window.OsirisAICatalog;
+          const syntheticPlan = catalog.normalizePlan({
+            summary: `Recommendations based on ${seedTitle}`,
+            mediaType: "all",
+            genres: seedGenreNames.slice(0, 3),
+            keywords: seedKeywordNames.slice(0, 4),
+            seedTitles: [{ title: seedTitle, year: seedYear, type }]
+          }, "all");
+
+          const rankCandidatesPayload = topCandidates.slice(0, 18).map(c => ({
+            id: c.id,
+            media_type: c.media_type || type,
+            title: String(c.title || c.name || "").slice(0, 160),
+            release_date: c.release_date || c.first_air_date || "",
+            overview: String(c.overview || "").slice(0, 500),
+            genre_names: seedGenreNames.slice(0, 4),
+            vote_average: typeof c.vote_average === "number" ? c.vote_average : 0,
+            vote_count: Math.max(0, c.vote_count || 0),
+            runtime: null,
+            original_language: String(c.original_language || "en").slice(0, 2),
+            popularity: Math.max(0, c.popularity || 0),
+            source: (c._sources || []).join(", "),
+            evidence: c._synthesizedReason || `Related to: ${seedTitle}`
+          }));
+
+          const res = await fetch("/api/ai-search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              operation: "rank",
+              query: initialBundle.queryPrompt,
+              options: { mediaType: "all", hideAdult },
+              plan: syntheticPlan,
+              exclude: [...excludedKeys].slice(0, 50),
+              candidates: rankCandidatesPayload
+            })
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data?.version !== 2 || !Array.isArray(data.results) || !data.results.length) return;
+
+          const merged = catalog.mergeRankedResults(topCandidates, data.results, 16);
+          const upgradedBundle = {
+            ...initialBundle,
+            ts: Date.now(),
+            subtitle: data.intro || initialBundle.subtitle,
+            items: finalizeItems(merged)
+          };
+          try { sessionStorage.setItem(cacheKey, JSON.stringify(upgradedBundle)); } catch {}
+          opts.onAIUpgrade(upgradedBundle);
+        } catch {}
+      })();
+    }
+
+    return initialBundle;
+  }
+
+  return { collectSeeds, generateForSeed };
+})();
+
 async function renderRecommendedForYouRow() {
   const container = $("#categories");
   if (!container) return;
-  const items = Progress.getAll();
-  if (!items || !items.length) return;
 
-  const lastItem = items[0];
-  if (!lastItem || !lastItem.id) return;
+  const wrap = document.createElement("div");
+  wrap.className = "row-wrapper recommended-for-you-wrapper syw-row-wrapper visible";
+  wrap.innerHTML = `
+    <div class="row-header syw-row-header">
+      <div class="syw-header-left">
+        <h2 class="row-title syw-title">
+          <span class="syw-prefix">Since you watched</span>
+          <span class="syw-seed-wrap">
+            <button type="button" class="syw-seed-btn" aria-haspopup="listbox" aria-expanded="false">
+              <span class="syw-seed-name">Loading…</span>
+              <svg class="syw-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div class="syw-seed-menu" role="listbox" aria-label="Choose a watched title"></div>
+          </span>
+          <span class="syw-ai-badge" title="AI-Powered Multi-Signal Recommendations">AI</span>
+        </h2>
+        <p class="syw-subtitle">Synthesizing plot themes, keywords &amp; catalog signals…</p>
+      </div>
+      <div class="syw-header-actions">
+        <a href="/search?type=ai" class="syw-explore-btn" id="syw-explore-link">Ask AI Search →</a>
+      </div>
+    </div>
+    <div class="row-track-container">
+      <button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button>
+      <div class="row-track recommended-for-you-track"></div>
+      <button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>`;
 
-  const type = lastItem.mediaType === "tv" ? "tv" : "movie";
-  try {
-    const data = await tmdb(`/${type}/${lastItem.id}/recommendations`);
-    const recs = (data.results || []).filter(i => i.poster_path || i.backdrop_path).slice(0, 14);
-    if (!recs.length) return;
+  const track = wrap.querySelector(".recommended-for-you-track");
+  track.append(...skeletons(8));
 
-    const wrap = document.createElement("div");
-    wrap.className = "row-wrapper recommended-for-you-wrapper visible";
-    wrap.innerHTML = `
-      <div class="row-header"><h2 class="row-title">Recommended For You</h2></div>
-      <div class="row-track-container">
-        <button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button>
-        <div class="row-track recommended-for-you-track"></div>
-        <button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button>
-      </div>`;
-    const track = wrap.querySelector(".recommended-for-you-track");
-    recs.forEach(it => track.appendChild(buildCard(it, mediaType(it, type))));
+  const contRow = container.querySelector(".continue-watching-wrapper");
+  if (contRow) contRow.after(wrap);
+  else container.prepend(wrap);
 
-    const contRow = container.querySelector(".continue-watching-wrapper");
-    if (contRow) contRow.after(wrap);
-    else container.prepend(wrap);
+  const scroll = 360;
+  wrap.querySelector(".row-arrow.left")?.addEventListener("click", () => track.scrollBy({ left: -scroll, behavior: "smooth" }));
+  wrap.querySelector(".row-arrow.right")?.addEventListener("click", () => track.scrollBy({ left: scroll, behavior: "smooth" }));
 
+  const seeds = await AIRecommendations.collectSeeds();
+  if (!seeds.length) {
+    wrap.remove();
+    return;
+  }
+
+  const seedBtn = wrap.querySelector(".syw-seed-btn");
+  const seedNameEl = wrap.querySelector(".syw-seed-name");
+  const seedMenu = wrap.querySelector(".syw-seed-menu");
+  const subtitleEl = wrap.querySelector(".syw-subtitle");
+  const exploreLink = wrap.querySelector("#syw-explore-link");
+  const prefixEl = wrap.querySelector(".syw-prefix");
+
+  const savedSeedKey = sessionStorage.getItem("orc_syw_selected_seed");
+  let activeSeed = seeds.find(s => `${s.type}_${s.id}` === savedSeedKey) || seeds[0];
+  let currentRequestToken = 0;
+
+  const renderBundleIntoRow = (bundle, seedObj) => {
+    if (!bundle || !bundle.items || !bundle.items.length) return;
+    if (subtitleEl) subtitleEl.textContent = bundle.subtitle || "";
+    if (exploreLink && bundle.queryPrompt) {
+      exploreLink.href = `${routeUrl("search")}?type=ai&q=${encodeURIComponent(bundle.queryPrompt)}`;
+    }
+    track.textContent = "";
+    bundle.items.forEach((it, idx) => {
+      track.appendChild(buildCard(it, mediaType(it, seedObj.type), { eager: idx < 4 }));
+    });
     initRowDrag(track);
     initRowKeyboard(track);
-    const scroll = 360;
-    wrap.querySelector(".row-arrow.left")?.addEventListener("click", () => track.scrollBy({ left: -scroll, behavior: "smooth" }));
-    wrap.querySelector(".row-arrow.right")?.addEventListener("click", () => track.scrollBy({ left: scroll, behavior: "smooth" }));
-  } catch (err) { console.warn('Caught error:', err); }
+  };
+
+  const selectSeed = async (seedObj) => {
+    activeSeed = seedObj;
+    try { sessionStorage.setItem("orc_syw_selected_seed", `${seedObj.type}_${seedObj.id}`); } catch {}
+    if (seedNameEl) seedNameEl.textContent = seedObj.title;
+    if (prefixEl) {
+      prefixEl.textContent = seedObj.sourceLabel === "Saved" ? "Since you saved" : "Since you watched";
+    }
+    seedMenu.querySelectorAll(".syw-seed-opt").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.seedKey === `${seedObj.type}_${seedObj.id}`);
+    });
+    track.textContent = "";
+    track.append(...skeletons(8));
+    if (subtitleEl) subtitleEl.textContent = `Analyzing themes, keywords & tone of ${seedObj.title}…`;
+
+    const reqToken = ++currentRequestToken;
+    const bundle = await AIRecommendations.generateForSeed(seedObj, {
+      onAIUpgrade: upgraded => {
+        if (reqToken === currentRequestToken) {
+          renderBundleIntoRow(upgraded, seedObj);
+        }
+      }
+    });
+    if (reqToken !== currentRequestToken) return;
+    renderBundleIntoRow(bundle, seedObj);
+  };
+
+  seedMenu.innerHTML = seeds.map(s => {
+    const key = `${s.type}_${s.id}`;
+    const thumb = s.poster ? `${IMG_W185}${s.poster}` : "";
+    return `
+      <button type="button" class="syw-seed-opt${key === `${activeSeed.type}_${activeSeed.id}` ? " active" : ""}" data-seed-key="${esc(key)}" role="option">
+        ${thumb ? `<img src="${esc(thumb)}" class="syw-seed-opt-thumb" alt="" loading="lazy" decoding="async" />` : `<div class="syw-seed-opt-thumb"></div>`}
+        <div class="syw-seed-opt-info">
+          <div class="syw-seed-opt-title">${esc(s.title)}</div>
+          <div class="syw-seed-opt-meta">${s.year ? `${s.year} · ` : ""}${s.type === "tv" ? "Series" : "Film"}</div>
+        </div>
+        <span class="syw-seed-opt-tag">${esc(s.sourceLabel)}</span>
+      </button>`;
+  }).join("");
+
+  seedMenu.querySelectorAll(".syw-seed-opt").forEach((btn, idx) => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      seedMenu.classList.remove("open");
+      seedBtn.setAttribute("aria-expanded", "false");
+      if (seeds[idx]) selectSeed(seeds[idx]);
+    });
+  });
+
+  seedBtn?.addEventListener("click", e => {
+    e.stopPropagation();
+    const isOpen = seedMenu.classList.toggle("open");
+    seedBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+
+  document.addEventListener("click", e => {
+    if (!wrap.contains(e.target)) {
+      seedMenu.classList.remove("open");
+      seedBtn?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  await selectSeed(activeSeed);
 }
 
 function navigateWithLoader(href, bg = "", title = "", seed = null) {
@@ -4183,12 +4715,31 @@ async function initMoviePage() {
         ${m.homepage ? `<div class="info-cell"><label>Official site</label><a class="ext-link" href="${esc(m.homepage)}" target="_blank" rel="noopener">Website \u2197</a></div>` : ""}
       </div>`;
 
+    RecentViewed.add(m, "movie");
     renderCastRow(m.credits?.cast?.slice(0, 16) || []);
 
-    const rec = m.recommendations?.results?.slice(0, 14) || [];
-    if (rec.length) {
-      ensureRecommendSection();
-      renderCardRow("#recommend-section", "#recommend-row", rec, "movie");
+    ensureRecommendSection(m.title);
+    const recSec = $("#recommend-section");
+    const recRow = $("#recommend-row");
+    if (recSec && recRow) {
+      recSec.style.display = "";
+      recRow.textContent = "";
+      recRow.append(...skeletons(6));
+      AIRecommendations.generateForSeed(
+        { id: m.id, type: "movie", title: m.title, poster: m.poster_path, year: year(m.release_date) },
+        {
+          seedDetail: m,
+          onAIUpgrade: upgraded => {
+            if (upgraded?.items?.length) renderCardRow("#recommend-section", "#recommend-row", upgraded.items, "movie");
+          }
+        }
+      ).then(bundle => {
+        if (bundle?.items?.length) {
+          renderCardRow("#recommend-section", "#recommend-row", bundle.items, "movie");
+        } else {
+          recSec.style.display = "none";
+        }
+      }).catch(() => { recSec.style.display = "none"; });
     }
 
     const sim = m.similar?.results?.slice(0, 14) || [];
@@ -4424,12 +4975,31 @@ async function initTvPage() {
         </div>`;
     }
 
+    RecentViewed.add(show, "tv");
     renderCastRow(show.credits?.cast?.slice(0, 16) || []);
 
-    const rec = show.recommendations?.results?.slice(0, 14) || [];
-    if (rec.length) {
-      ensureRecommendSection();
-      renderCardRow("#recommend-section", "#recommend-row", rec, "tv");
+    ensureRecommendSection(show.name);
+    const recSec = $("#recommend-section");
+    const recRow = $("#recommend-row");
+    if (recSec && recRow) {
+      recSec.style.display = "";
+      recRow.textContent = "";
+      recRow.append(...skeletons(6));
+      AIRecommendations.generateForSeed(
+        { id: show.id, type: "tv", title: show.name, poster: show.poster_path, year: year(show.first_air_date) },
+        {
+          seedDetail: show,
+          onAIUpgrade: upgraded => {
+            if (upgraded?.items?.length) renderCardRow("#recommend-section", "#recommend-row", upgraded.items, "tv");
+          }
+        }
+      ).then(bundle => {
+        if (bundle?.items?.length) {
+          renderCardRow("#recommend-section", "#recommend-row", bundle.items, "tv");
+        } else {
+          recSec.style.display = "none";
+        }
+      }).catch(() => { recSec.style.display = "none"; });
     }
 
     const sim = show.similar?.results?.slice(0, 14) || [];

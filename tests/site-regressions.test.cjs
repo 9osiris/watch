@@ -188,4 +188,9 @@ test("detail pages use seamless alpha-mask fade, ambient color bleed, persistent
   assert.match(faviconSvg, /id="owBlue"/);
   assert.match(faviconSvg, /id="owSteel"/);
   assert.equal(manifest.name, "Osiris Watch");
+
+  assert.match(script, /const AIRecommendations =/);
+  assert.match(script, /Since you watched/);
+  assert.match(styles, /\.syw-seed-name/);
+  assert.match(styles, /\.syw-ai-badge/);
 });
