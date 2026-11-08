@@ -92,12 +92,44 @@ test("AI controls are accessible, new assets exist, and scripts compile", () => 
   assert.doesNotMatch(read("orc-script.js"), /async function aiSearch\(/);
 });
 
-test("service worker precaches AI assets and leaves API responses to the network", () => {
-  const script = read("sw.js"), handlers = {}, context = vm.createContext({ URL, self: { location: { origin }, addEventListener(type, callback) { handlers[type] = callback; } } });
+test("service worker precaches AI assets, strips redirect flags on navigation, and leaves API responses to the network", async () => {
+  const script = read("sw.js"), handlers = {}, context = vm.createContext({
+    URL,
+    Response,
+    Promise,
+    Map,
+    Set,
+    caches: {
+      open: async () => ({
+        match: async req => {
+          const u = typeof req === "string" ? req : req.url;
+          if (u.endsWith("/search")) {
+            const r = new Response("<html>search</html>", { status: 200 });
+            Object.defineProperty(r, "redirected", { value: true });
+            return r;
+          }
+          return null;
+        },
+        put: async () => {},
+      }),
+    },
+    fetch: async () => new Response("<html>net</html>", { status: 200 }),
+    self: { location: { origin }, skipWaiting: async () => {}, clients: { claim: async () => {} }, addEventListener(type, callback) { handlers[type] = callback; } },
+  });
   new vm.Script(script).runInContext(context);
   let intercepted = false;
   handlers.fetch({ request: { method: "GET", url: `${origin}/api/ai-search` }, respondWith() { intercepted = true; } });
   handlers.fetch({ request: { method: "POST", url: `${origin}/api/ai-search` }, respondWith() { intercepted = true; } });
   assert.equal(intercepted, false);
   for (const name of ["ai-search.css", "ai-search-catalog.js", "ai-search-ui.js"]) assert.ok(script.includes(`"/${name}"`));
+
+  let navPromise = null;
+  handlers.fetch({
+    request: { method: "GET", mode: "navigate", url: `${origin}/search.html` },
+    waitUntil() {},
+    respondWith(p) { navPromise = p; },
+  });
+  const navRes = await navPromise;
+  assert.equal(navRes.status, 200);
+  assert.equal(navRes.redirected, false);
 });
