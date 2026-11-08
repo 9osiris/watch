@@ -1,6 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /wfc.html
-Disallow: /wfc
-
-Sitemap: https://watch.osiris.rocks/sitemap.xml
