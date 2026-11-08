@@ -172,7 +172,7 @@
         if (!alive()) return;
         const plan = catalog.normalizePlan(response.plan, uiOptions.mediaType);
         if (sort?.value && sort.value !== "relevance") plan.sort = sort.value;
-        if (modelBadge) modelBadge.textContent = response.model === "openai/gpt-oss-20b" ? "GPT-OSS 20B" : response.model;
+        if (modelBadge) modelBadge.textContent = response.model === "openai/gpt-oss-20b" ? "Fibre 4.5" : response.model;
         progress("Verifying titles, credits, and catalog matches…");
         const collected = await catalog.collectCandidates({
           plan, query, recommendations: response.results, mediaType: uiOptions.mediaType, hideAdult: uiOptions.hideAdult,
