@@ -733,6 +733,7 @@ function applyGlobalSettings() {
 }
 
 const BACKDROP_STYLES = [
+  { id: "rings", label: "Rings" },
   { id: "aurora", label: "Aurora" },
   { id: "flow", label: "Flow" },
   { id: "mesh", label: "Mesh" },
@@ -740,7 +741,6 @@ const BACKDROP_STYLES = [
   { id: "waves", label: "Waves" },
   { id: "mist", label: "Mist" },
   { id: "prism", label: "Prism" },
-  { id: "rings", label: "Rings" },
   { id: "glow", label: "Glow" },
   { id: "swirl", label: "Swirl" },
   { id: "sky", label: "Sky" },
@@ -819,8 +819,8 @@ function buildBackdropPalette(style, baseHex, isLight) {
 }
 
 function getBackdropConfig() {
-  const rawStyle = SETTINGS.get(SETTINGS.bgStyleKey, "aurora") || "aurora";
-  const validStyle = BACKDROP_STYLES.some(s => s.id === rawStyle) ? rawStyle : "aurora";
+  const rawStyle = SETTINGS.get(SETTINGS.bgStyleKey, "rings") || "rings";
+  const validStyle = BACKDROP_STYLES.some(s => s.id === rawStyle) ? rawStyle : "rings";
   const isLight = SETTINGS.get(SETTINGS.themeKey, "dark") === "light";
   const baseHex = getBackdropBaseHex();
   const rawSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.6"));
@@ -828,7 +828,7 @@ function getBackdropConfig() {
   const rawGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.08"));
   const grain = Number.isFinite(rawGrain) ? Math.max(0, Math.min(0.4, rawGrain)) : 0.08;
   const reduceMotion = SETTINGS.get(SETTINGS.reduceMotionKey) === "1";
-  const colors = buildBackdropPalette(validStyle === "none" ? "aurora" : validStyle, baseHex, isLight);
+  const colors = buildBackdropPalette(validStyle === "none" ? "rings" : validStyle, baseHex, isLight);
   return {
     style: validStyle,
     colors,
@@ -878,7 +878,7 @@ function syncPageBackdrop() {
 
   const previewEl = document.getElementById("settings-backdrop-preview");
   if (previewEl && typeof window.GradientBackdrop !== "undefined") {
-    const previewStyle = cfg.style === "none" ? "aurora" : cfg.style;
+    const previewStyle = cfg.style === "none" ? "rings" : cfg.style;
     const previewOpts = {
       style: previewStyle,
       colors: cfg.colors,
@@ -2007,9 +2007,6 @@ function initSidebar(active) {
   el.innerHTML = `
     <div class="topnav-inner">
       <a href="${homeUrl()}" class="topnav-logo" aria-label="Osiris Watch home">
-        <span class="nav-logo-icon" style="color:#${ACCENT};display:inline-flex;align-items:center;margin-right:6px">
-          ${ICONS.play}
-        </span>
         <span class="topnav-word">Osiris<i>Watch</i></span>
       </a>
       <nav class="topnav-links" aria-label="Primary">
@@ -4992,7 +4989,7 @@ function initSettingsPage() {
   const bgStylesBox = $("#settings-backdrop-styles");
   if (bgStylesBox) {
     bgStylesBox.textContent = "";
-    const curStyle = SETTINGS.get(SETTINGS.bgStyleKey, "aurora") || "aurora";
+    const curStyle = SETTINGS.get(SETTINGS.bgStyleKey, "rings") || "rings";
     BACKDROP_STYLES.forEach(s => {
       const btn = document.createElement("button");
       btn.type = "button";
