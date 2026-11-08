@@ -23,7 +23,6 @@
     const media = document.querySelector("#ai-search-media");
     const sort = document.querySelector("#ai-search-sort");
     const hideWatched = document.querySelector("#ai-search-hide-watched");
-    const modelBadge = document.querySelector("#ai-search-model");
     let enabled = false, active = null, allItems = [], shown = 0, lastQuery = "", lastScope = "", round = 1;
     let excluded = [], resultBundle = null;
     if (hideWatched) hideWatched.checked = config.hideWatched?.() === true;
@@ -172,7 +171,6 @@
         if (!alive()) return;
         const plan = catalog.normalizePlan(response.plan, uiOptions.mediaType);
         if (sort?.value && sort.value !== "relevance") plan.sort = sort.value;
-        if (modelBadge) modelBadge.textContent = response.model === "openai/gpt-oss-20b" ? "Some random gpt model" : response.model;
         progress("Verifying titles, credits, and catalog matches…");
         const collected = await catalog.collectCandidates({
           plan, query, recommendations: response.results, mediaType: uiOptions.mediaType, hideAdult: uiOptions.hideAdult,

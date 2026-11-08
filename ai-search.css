@@ -3,8 +3,6 @@
 .search-page .discover-header-row > div { flex-wrap: wrap; }
 .search-page #ai-search-mode { white-space: nowrap; }
 .ai-search-panel { max-width: 900px; padding: 18px; margin: 0 0 24px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--bg-1)), var(--bg-1)); }
-.ai-search-panel-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; font-size: .82rem; color: var(--text-2); }
-.ai-model-badge { display: inline-flex; padding: 4px 8px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); font-size: .68rem; font-weight: 800; letter-spacing: .035em; }
 .ai-search-options { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; }
 .ai-search-options label { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--text-2); }
 .ai-search-options .list-sort-select { max-width: 100%; font-size: .8rem; }
