@@ -164,3 +164,28 @@ test("mobile interaction fixes: closeModal supports Elements, Surprise Me has no
   assert.match(styles, /\.topnav\s*\{[^}]*pointer-events:\s*none\s*!important/);
   assert.match(styles, /\.topnav-logo\s*\{[^}]*pointer-events:\s*auto\s*!important/);
 });
+
+test("detail pages use seamless alpha-mask fade, ambient color bleed, persistent cache, and new OW Monolith branding", () => {
+  const movieHtml = read("movie.html");
+  const tvHtml = read("tv.html");
+  const styles = read("orc-styles.css");
+  const script = read("orc-script.js");
+  const faviconSvg = read("favicon.svg");
+  const manifest = JSON.parse(read("manifest.json"));
+
+  assert.match(movieHtml, /id="hero-color-bleed-a"/);
+  assert.match(movieHtml, /id="hero-color-bleed-b"/);
+  assert.match(tvHtml, /id="hero-color-bleed-a"/);
+  assert.match(tvHtml, /id="hero-color-bleed-b"/);
+
+  assert.match(styles, /\.detail-hero\s*\{[\s\S]*?-webkit-mask-image:\s*linear-gradient\(to bottom/);
+  assert.doesNotMatch(styles, /\.detail-hero-fade\s*\{[\s\S]*?var\(--bg\)/);
+
+  assert.match(script, /function applyDetailBackdrop\(/);
+  assert.match(script, /function consumeNavSeed\(/);
+  assert.match(script, /orc_tmdb_cache_v2/);
+
+  assert.match(faviconSvg, /id="owBlue"/);
+  assert.match(faviconSvg, /id="owSteel"/);
+  assert.equal(manifest.name, "Osiris Watch");
+});

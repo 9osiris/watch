@@ -1629,9 +1629,37 @@ select:focus {
 }
 
 .skeleton-card {
-  flex: 0 0 auto; width: 152px; aspect-ratio: 2/3; border-radius: 12px;
-  background: linear-gradient(90deg, var(--bg-1) 25%, var(--bg-2) 50%, var(--bg-1) 75%);
-  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 auto;
+  width: 152px;
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background-image: linear-gradient(100deg, rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, 0.075) 50%, rgba(255, 255, 255, 0) 80%);
+  background-size: 220% 100%;
+  animation: shimmer 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.skeleton-card::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 28px;
+  bottom: 24px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.skeleton-card::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  width: 45%;
+  bottom: 10px;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.045);
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
@@ -1662,15 +1690,45 @@ select:focus {
 .card-popup-actions .pp-save.saved { background: var(--accent-soft); color: var(--accent); }
 
 /* ===== Detail page ===== */
-.detail-hero { position: relative; height: 56vh; min-height: 320px; max-height: 560px; overflow: hidden; }
-.detail-hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center 12%; }
-.detail-hero-fade {
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(0deg, var(--bg) 1%, rgba(0,0,0,0.2) 55%, rgba(0,0,0,0.45) 100%),
-    linear-gradient(90deg, rgba(0,0,0,0.5), transparent 60%);
+.detail-hero {
+  position: relative;
+  z-index: 1;
+  height: 68vh;
+  height: 68svh;
+  min-height: 380px;
+  max-height: 680px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 58%, rgba(0,0,0,0.72) 76%, rgba(0,0,0,0.22) 91%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 58%, rgba(0,0,0,0.72) 76%, rgba(0,0,0,0.22) 91%, transparent 100%);
 }
-.detail-body { padding: 0 var(--gutter); margin-top: -110px; position: relative; z-index: 2; }
+.detail-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 14%;
+  opacity: 0;
+  transform: scale(1.015);
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.detail-hero-bg.is-loaded {
+  opacity: 1;
+  transform: scale(1);
+}
+.detail-hero-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.24) 48%, rgba(0,0,0,0.38) 100%),
+    linear-gradient(90deg, rgba(0,0,0,0.76) 0%, rgba(0,0,0,0.32) 48%, transparent 82%);
+}
+.detail-color-bleed-wrap .hero-color-bleed {
+  top: -340px;
+  height: 860px;
+  filter: blur(135px) saturate(1.65);
+}
+.detail-body { padding: 0 var(--gutter); margin-top: -165px; position: relative; z-index: 2; }
 .detail-title { font-size: clamp(1.8rem, 4vw, 2.7rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 10px; }
 .detail-tagline { font-size: 0.95rem; font-style: italic; color: var(--text-2); margin: -2px 0 14px; max-width: 640px; }
 .detail-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.84rem; color: var(--text-2); margin-bottom: 16px; align-items: center; }
@@ -2588,8 +2646,8 @@ body.theater-mode .player-wrap {
   .skeleton-card { width: 132px; }
   .row-arrow { display: none; }
 
-  .detail-hero { height: 40vh; min-height: 220px; max-height: 320px; }
-  .detail-body { margin-top: -70px; }
+  .detail-hero { height: 50vh; height: 50svh; min-height: 280px; max-height: 430px; }
+  .detail-body { margin-top: -115px; }
   .detail-title { font-size: 1.6rem; }
   .detail-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .detail-actions .btn-play { grid-column: 1 / -1; justify-content: center; min-height: 46px; }
@@ -2913,13 +2971,14 @@ body.theater-mode .player-wrap {
   /* Detail */
   .detail-hero {
     width: 100%;
-    height: 38vh;
-    min-height: 200px;
-    max-height: 300px;
+    height: 50vh;
+    height: 50svh;
+    min-height: 280px;
+    max-height: 430px;
   }
 
   .detail-body {
-    margin-top: -56px;
+    margin-top: -115px;
     padding: 0 var(--gutter);
     width: 100%;
     box-sizing: border-box;

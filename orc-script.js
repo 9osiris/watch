@@ -392,9 +392,40 @@ function releaseModalFocus() {
   modalReturnFocus = null;
 }
 
-const TMDB_CACHE_MAX = 100;
-const TMDB_CACHE_TTL = 10 * 60 * 1000;
+const TMDB_CACHE_MAX = 90;
+const TMDB_CACHE_TTL = 15 * 60 * 1000;
+const TMDB_STORAGE_KEY = "orc_tmdb_cache_v2";
 const _tmdbCache = new Map();
+const _tmdbPersisted = new Map();
+let _tmdbSaveTimer = null;
+
+(function hydratePersistentTmdbCache() {
+  try {
+    const rawCache = sessionStorage.getItem(TMDB_STORAGE_KEY);
+    if (!rawCache) return;
+    const parsed = JSON.parse(rawCache);
+    const now = Date.now();
+    if (Array.isArray(parsed)) {
+      for (const [k, v] of parsed) {
+        if (v && v.data && typeof v.time === "number" && (now - v.time < TMDB_CACHE_TTL)) {
+          _tmdbPersisted.set(k, v);
+          _tmdbCache.set(k, { req: Promise.resolve(v.data), time: v.time, data: v.data });
+        }
+      }
+    }
+  } catch {}
+})();
+
+function scheduleSaveTmdbCache() {
+  if (_tmdbSaveTimer) return;
+  _tmdbSaveTimer = setTimeout(() => {
+    _tmdbSaveTimer = null;
+    try {
+      const entries = Array.from(_tmdbPersisted.entries()).slice(-65);
+      sessionStorage.setItem(TMDB_STORAGE_KEY, JSON.stringify(entries));
+    } catch {}
+  }, 250);
+}
 
 function tmdb(path, retries = 1, opts = {}) {
   if (opts.signal?.aborted) return Promise.reject(Object.assign(new Error("Search cancelled"), { name: "AbortError" }));
@@ -424,8 +455,17 @@ function tmdb(path, retries = 1, opts = {}) {
       try {
         const res = await fetch(`${TMDB_BASE}${finalPath}${sep}api_key=${TMDB_KEY}`, { signal: ctrl.signal });
         if (res.status === 429) { toast("TMDB Rate limit exceeded. Please wait a moment."); throw new Error("TMDB Rate Limit 429"); }
-  if (!res.ok) throw new Error(`TMDB ${res.status}`);
-        return await res.json();
+        if (!res.ok) throw new Error(`TMDB ${res.status}`);
+        const data = await res.json();
+        if (!opts.signal && data) {
+          if (_tmdbPersisted.size >= 65) {
+            const oldK = _tmdbPersisted.keys().next().value;
+            if (oldK) _tmdbPersisted.delete(oldK);
+          }
+          _tmdbPersisted.set(path, { data, time: Date.now() });
+          scheduleSaveTmdbCache();
+        }
+        return data;
       } catch (err) {
         if (err.name === 'AbortError' || attempts > retries) throw err;
         await new Promise(r => setTimeout(r, 600));
@@ -2267,6 +2307,22 @@ function buildCard(item, type = "movie", opts = {}) {
       <div class="card-foot-meta">${y ? `${y} · ` : ""}${kind === "tv" ? "Series" : "Movie"}</div>
     </div>`;
 
+  let _prefetched = false;
+  const prefetchDetail = () => {
+    if (_prefetched || !id) return;
+    _prefetched = true;
+    const detailQuery = kind === "tv"
+      ? `/tv/${id}?append_to_response=images,credits,similar,recommendations,videos,external_ids,content_ratings`
+      : `/movie/${id}?append_to_response=images,credits,similar,videos,recommendations,external_ids,release_dates`;
+    tmdb(detailQuery).catch(() => {});
+    if (item.backdrop_path) {
+      const preImg = new Image();
+      preImg.src = `${IMG_W780}${item.backdrop_path}`;
+    }
+  };
+
+  card.addEventListener("touchstart", prefetchDetail, { passive: true, once: true });
+
   card.addEventListener("click", e => {
     if (e.target.closest(".save-btn")) {
       e.preventDefault();
@@ -2276,7 +2332,7 @@ function buildCard(item, type = "movie", opts = {}) {
     if (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey) return;
     e.preventDefault();
     const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
-    navigateWithLoader(href, bg, title);
+    navigateWithLoader(href, bg, title, { id, type: kind, item });
   });
 
   card.addEventListener("keydown", e => {
@@ -2284,7 +2340,7 @@ function buildCard(item, type = "movie", opts = {}) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
-      navigateWithLoader(href, bg, title);
+      navigateWithLoader(href, bg, title, { id, type: kind, item });
     }
   });
 
@@ -2308,6 +2364,7 @@ function buildCard(item, type = "movie", opts = {}) {
   if (!isTouch()) {
     card.addEventListener("mouseenter", () => {
       card.classList.add("is-hovered");
+      prefetchDetail();
       timer = setTimeout(() => showPopup(card, item, kind), 1100);
     });
     card.addEventListener("mouseleave", () => {
@@ -2793,10 +2850,20 @@ let heroFading = false;
 let heroDetailCache = {};
 
 const heroAmbientColorCache = {};
+try {
+  const savedAmbient = sessionStorage.getItem("orc_ambient_cache_v1");
+  if (savedAmbient) Object.assign(heroAmbientColorCache, JSON.parse(savedAmbient));
+} catch {}
+
+function toSmallSampleUrl(imgUrl) {
+  if (!imgUrl) return "";
+  return imgUrl.replace("/original/", "/w342/").replace("/w1280/", "/w342/").replace("/w780/", "/w342/").replace("/w500/", "/w342/");
+}
 
 function extractHeroAmbientColors(imgUrl) {
   if (!imgUrl) return Promise.resolve(null);
-  if (heroAmbientColorCache[imgUrl]) return Promise.resolve(heroAmbientColorCache[imgUrl]);
+  const sampleUrl = toSmallSampleUrl(imgUrl);
+  if (heroAmbientColorCache[sampleUrl]) return Promise.resolve(heroAmbientColorCache[sampleUrl]);
 
   return new Promise(resolve => {
     const img = new Image();
@@ -2804,23 +2871,22 @@ function extractHeroAmbientColors(imgUrl) {
     img.onload = () => {
       try {
         const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        const w = 960;
-        const h = 540;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const w = 96;
+        const h = 54;
         canvas.width = w;
         canvas.height = h;
         ctx.drawImage(img, 0, 0, w, h);
 
         function sampleRegion(startX, endX) {
-          // Extract just the bottom 30 pixels of the region
-          const regionH = 30;
+          const regionH = 12;
           const data = ctx.getImageData(startX, h - regionH, endX - startX, regionH).data;
           let bestColor = null;
           let maxVibrance = -1;
           let sumR = 0, sumG = 0, sumB = 0, count = 0;
           let satSum = 0;
 
-          for (let i = 0; i < data.length; i += 16) {
+          for (let i = 0; i < data.length; i += 4) {
             const r = data[i], g = data[i+1], b = data[i+2];
             const maxC = Math.max(r, g, b);
             const minC = Math.min(r, g, b);
@@ -2840,7 +2906,7 @@ function extractHeroAmbientColors(imgUrl) {
 
           if (count === 0) return null;
           const avgSat = satSum / count;
-          if (avgSat < 0.1 && maxVibrance < 0.4) return null;
+          if (avgSat < 0.08 && maxVibrance < 0.35) return null;
 
           const avgR = sumR / count, avgG = sumG / count, avgB = sumB / count;
           let r = bestColor ? Math.round(bestColor[0] * 0.85 + avgR * 0.15) : Math.round(avgR);
@@ -2848,9 +2914,9 @@ function extractHeroAmbientColors(imgUrl) {
           let b = bestColor ? Math.round(bestColor[2] * 0.85 + avgB * 0.15) : Math.round(avgB);
 
           const avg = (r + g + b) / 3;
-          r = Math.min(255, Math.max(0, Math.round(r + (r - avg) * 0.8)));
-          g = Math.min(255, Math.max(0, Math.round(g + (g - avg) * 0.8)));
-          b = Math.min(255, Math.max(0, Math.round(b + (b - avg) * 0.8)));
+          r = Math.min(255, Math.max(0, Math.round(r + (r - avg) * 0.85)));
+          g = Math.min(255, Math.max(0, Math.round(g + (g - avg) * 0.85)));
+          b = Math.min(255, Math.max(0, Math.round(b + (b - avg) * 0.85)));
 
           return [r, g, b];
         }
@@ -2860,25 +2926,29 @@ function extractHeroAmbientColors(imgUrl) {
         const center = sampleRegion(step, step * 2);
         const right = sampleRegion(step * 2, w);
 
-        const fallback = [40, 50, 80];
+        const fallback = [40, 58, 105];
         const result = {
           left: left || center || right || fallback,
           center: center || left || right || fallback,
           right: right || center || left || fallback
         };
 
+        heroAmbientColorCache[sampleUrl] = result;
         heroAmbientColorCache[imgUrl] = result;
+        try {
+          sessionStorage.setItem("orc_ambient_cache_v1", JSON.stringify(heroAmbientColorCache));
+        } catch {}
         resolve(result);
-      } catch (err) { console.warn('Caught error:', err);
-        const fallback = [40, 50, 80];
+      } catch (err) {
+        const fallback = [40, 58, 105];
         resolve({ left: fallback, center: fallback, right: fallback });
       }
     };
     img.onerror = () => {
-      const fallback = [40, 50, 80];
+      const fallback = [40, 58, 105];
       resolve({ left: fallback, center: fallback, right: fallback });
     };
-    img.src = imgUrl + (imgUrl.includes("?") ? "&" : "?") + "cors=1";
+    img.src = sampleUrl;
   });
 }
 
@@ -2889,9 +2959,9 @@ function buildBleedGradient(left, center, right) {
   const cStr = `${center[0]},${center[1]},${center[2]}`;
   const rStr = `${right[0]},${right[1]},${right[2]}`;
   return `
-    radial-gradient(ellipse 65% 90% at 10% 0%, rgba(${lStr},0.45) 0%, transparent 68%),
-    radial-gradient(ellipse 65% 90% at 90% 0%, rgba(${rStr},0.45) 0%, transparent 68%),
-    radial-gradient(ellipse 85% 75% at 50% 0%, rgba(${cStr},0.35) 0%, transparent 80%)
+    radial-gradient(ellipse 68% 92% at 12% 0%, rgba(${lStr},0.52) 0%, transparent 70%),
+    radial-gradient(ellipse 68% 92% at 88% 0%, rgba(${rStr},0.52) 0%, transparent 70%),
+    radial-gradient(ellipse 88% 78% at 50% 0%, rgba(${cStr},0.42) 0%, transparent 82%)
   `;
 }
 
@@ -2905,11 +2975,11 @@ function applyHeroColorBleed(url) {
       const cur  = _bleedSlot % 2 === 0 ? elA : elB;
 
       if (!colors) {
-        colors = { left: [40,50,80], center: [40,50,80], right: [40,50,80] };
+        colors = { left: [40,58,105], center: [40,58,105], right: [40,58,105] };
       }
 
       next.style.background = buildBleedGradient(colors.left, colors.center, colors.right);
-      void next.offsetWidth; // Force reflow
+      void next.offsetWidth;
       next.style.opacity = "1";
       cur.style.opacity  = "0";
       _bleedSlot++;
@@ -2918,30 +2988,62 @@ function applyHeroColorBleed(url) {
   });
 }
 
+function applyDetailBackdrop(backdropPath) {
+  const backdropEl = $("#detail-backdrop");
+  if (!backdropEl || !backdropPath) return;
+  const fastUrl = `${IMG_W780}${backdropPath}`;
+  const fullUrl = isMobile() ? fastUrl : `${IMG_ORIG}${backdropPath}`;
+
+  applyHeroColorBleed(fastUrl);
+
+  const fastImg = new Image();
+  fastImg.onload = () => {
+    backdropEl.style.backgroundImage = `url(${fastUrl})`;
+    backdropEl.classList.add("is-loaded");
+    if (fullUrl !== fastUrl) {
+      const hiImg = new Image();
+      hiImg.onload = () => {
+        backdropEl.style.backgroundImage = `url(${fullUrl})`;
+      };
+      hiImg.src = fullUrl;
+    }
+  };
+  fastImg.onerror = () => {
+    backdropEl.style.backgroundImage = `url(${fullUrl})`;
+    backdropEl.classList.add("is-loaded");
+  };
+  fastImg.src = fastUrl;
+  if (fastImg.complete) {
+    backdropEl.style.backgroundImage = `url(${fastUrl})`;
+    backdropEl.classList.add("is-loaded");
+  }
+}
+
 function swapHeroBackdrop(url) {
   return new Promise(resolve => {
     const a = $("#hero-backdrop-a");
     const b = $("#hero-backdrop-b");
     if (!url || !a || !b) { resolve(); return; }
 
-    const colorPromise = applyHeroColorBleed(url);
+    applyHeroColorBleed(url);
     const next = heroImgSlot % 2 === 0 ? b : a;
     const cur = heroImgSlot % 2 === 0 ? a : b;
 
-    const imgPromise = new Promise(imgResolve => {
-      if (next.src === url && next.classList.contains("is-active")) { imgResolve(); return; }
-      next.onload = imgResolve;
-      next.onerror = imgResolve;
-      next.src = url;
-      if (next.complete) imgResolve();
-    });
-
-    Promise.all([imgPromise, colorPromise]).then(() => {
+    const finishSwap = () => {
       cur.classList.remove("is-active");
       next.classList.add("is-active");
       heroImgSlot++;
       resolve();
-    });
+    };
+
+    if (next.src === url && next.classList.contains("is-active")) {
+      resolve();
+      return;
+    }
+    next.onload = finishSwap;
+    next.onerror = finishSwap;
+    next.src = url;
+    if (next.complete) finishSwap();
   });
 }
 
@@ -3131,12 +3233,15 @@ function bindHeroActions() {
     const href = type === "tv" ? `${routeUrl("tv")}?id=${heroData.id}` : `${routeUrl("movie")}?id=${heroData.id}`;
     const backdrop = heroData.backdrop_path ? `${IMG_ORIG}${heroData.backdrop_path}` : "";
     const title = heroData.title || heroData.name || "";
-    navigateWithLoader(href, backdrop, title);
+    navigateWithLoader(href, backdrop, title, { id: heroData.id, type, item: heroData });
   });
   $("#hero-info-btn")?.addEventListener("click", () => {
     if (!heroData) return;
     const type = mediaType(heroData);
-    location.href = type === "tv" ? `${routeUrl("tv")}?id=${heroData.id}` : `${routeUrl("movie")}?id=${heroData.id}`;
+    const href = type === "tv" ? `${routeUrl("tv")}?id=${heroData.id}` : `${routeUrl("movie")}?id=${heroData.id}`;
+    const backdrop = heroData.backdrop_path ? `${IMG_ORIG}${heroData.backdrop_path}` : "";
+    const title = heroData.title || heroData.name || "";
+    navigateWithLoader(href, backdrop, title, { id: heroData.id, type, item: heroData });
   });
   $("#hero-list-btn")?.addEventListener("click", () => {
     if (!heroData) return;
@@ -3475,11 +3580,44 @@ async function renderRecommendedForYouRow() {
   } catch (err) { console.warn('Caught error:', err); }
 }
 
-function navigateWithLoader(href, bg = "", title = "") {
+function navigateWithLoader(href, bg = "", title = "", seed = null) {
   try {
-    sessionStorage.setItem("orc_loader", JSON.stringify({ bg, title }));
-  } catch (err) { console.warn('Caught error:', err); }
+    if (seed && seed.item) {
+      sessionStorage.setItem("orc_nav_seed", JSON.stringify({
+        id: String(seed.id || seed.item.id || ""),
+        type: seed.type || "movie",
+        time: Date.now(),
+        item: {
+          id: seed.item.id,
+          title: seed.item.title || seed.item.name || title,
+          name: seed.item.name || seed.item.title || title,
+          overview: seed.item.overview || "",
+          backdrop_path: seed.item.backdrop_path || "",
+          poster_path: seed.item.poster_path || "",
+          release_date: seed.item.release_date || "",
+          first_air_date: seed.item.first_air_date || "",
+          vote_average: seed.item.vote_average || 0,
+          vote_count: seed.item.vote_count || 0,
+           tagline: seed.item.tagline || ""
+        }
+      }));
+    }
+  } catch (err) {}
   location.href = href;
+}
+
+function consumeNavSeed(expectedId, expectedType) {
+  try {
+    const raw = sessionStorage.getItem("orc_nav_seed");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || String(parsed.id) !== String(expectedId)) return null;
+    if (expectedType && parsed.type && parsed.type !== expectedType) return null;
+    if (Date.now() - (parsed.time || 0) > 5 * 60 * 1000) return null;
+    return parsed.item || null;
+  } catch {
+    return null;
+  }
 }
 
 function debounce(func, wait) {
@@ -3501,7 +3639,7 @@ function throttle(func, limit) {
   };
 }
 
-const DEVLOG_ID = "v3.0_nov2026";
+const DEVLOG_ID = "v3.1_nov2026";
 
 function renderDevLogAnnouncement() {
   if (safeGetItem("orc_devlog_dismissed") === DEVLOG_ID) return;
@@ -3513,15 +3651,15 @@ function renderDevLogAnnouncement() {
     <div class="devlog-header">
       <div class="devlog-header-left">
         <span>UPDATE LOG</span>
-        <span class="devlog-date">· v3.0 RELEASE</span>
+        <span class="devlog-date">· v3.1 RELEASE</span>
       </div>
       <button type="button" class="devlog-close" id="devlog-close" aria-label="Dismiss update">✕</button>
     </div>
-    <div class="devlog-title">Fibre 4.5 AI Search, Shader Backdrops & Watch Migration</div>
+    <div class="devlog-title">New Osiris Watch Branding, Detail Ambient Bleed & Instant Cache</div>
     <div class="devlog-body">
-      <p>Upgraded Discover with Fibre 4.5 catalog-verified AI Search for natural-language mood, era, runtime, cast, and exclusion prompts.</p>
-      <p>Added customizable WebGL shader backdrops (defaulting to Rings locked to your accent color) with 15 styles, speed, and film grain controls in Settings.</p>
-      <p>Completed migration to watch.osiris.rocks with clean routing, offline service worker fixes, and streamlined navigation.</p>
+      <p>Refreshed Osiris Watch branding across the entire experience alongside seamless alpha-masked Movie & TV detail heroes with dynamic pixel-sampled ambient color bleed.</p>
+      <p>Upgraded Discover with Fibre 4.5 catalog-verified AI Search and customizable WebGL shader backdrops (defaulting to Rings locked to your accent color).</p>
+      <p>Added persistent cross-page catalog caching, hover/touch prefetching, and instant card-to-detail hydration for zero-wait navigation on mobile and desktop.</p>
     </div>
     <div class="devlog-foot">
       <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="devlog-discord-link">
@@ -3663,7 +3801,15 @@ async function initHomePage() {
     return { c, w, track };
   });
 
-  cats.forEach(async (c, i) => {
+  // Kick off Hero carousel immediately so it never waits behind 8 category rows
+  tmdb("/trending/all/week").then(data => {
+    const heroItems = dedupeItems(data.results || []).filter(i => i.backdrop_path);
+    if (heroItems.length && !heroSlides.length) {
+      initHeroCarousel(heroItems.slice(0, 6));
+    }
+  }).catch(() => {});
+
+  const loadCategoryRow = async (c, i) => {
     try {
       const data = await tmdb(c.path);
       const items = dedupeItems(data.results || []);
@@ -3689,7 +3835,7 @@ async function initHomePage() {
         initRowDrag(target.track);
         initRowKeyboard(target.track);
 
-        if (c.id === "trending" && items.length) {
+        if (c.id === "trending" && items.length && !heroSlides.length) {
           initHeroCarousel(items.slice(0, 6));
         }
       } else if (target) {
@@ -3697,6 +3843,14 @@ async function initHomePage() {
       }
     } catch (err) { console.warn('Caught error:', err);
       if (catRowEls[i]) catRowEls[i].w.remove();
+    }
+  };
+
+  cats.forEach((c, i) => {
+    if (i < 3 || c.eager) {
+      loadCategoryRow(c, i);
+    } else {
+      observeLazyRow(catRowEls[i].w, () => loadCategoryRow(c, i));
     }
   });
 
@@ -3811,6 +3965,33 @@ async function initMoviePage() {
   checkPlayLoader();
   initPlayerGuard();
 
+  const load = url => loadPlayerFrame(frame, url);
+  renderProviders($("#provider-bar"), "movie", id, 1, 1, load);
+  load(providerUrl("movie", id, 1, 1));
+
+  const seed = consumeNavSeed(id, "movie");
+  if (seed) {
+    document.title = `${seed.title || "Movie"} — ${BRAND}`;
+    if (seed.backdrop_path) applyDetailBackdrop(seed.backdrop_path);
+    const savedSeed = MyList.has(id, "movie");
+    const resumeSeed = resumeLabel(Progress.getItem(id, "movie"));
+    header.innerHTML = `
+      <h1 class="detail-title">${esc(seed.title || "")}</h1>
+      <div class="detail-meta">
+        ${seed.vote_average ? `<span class="score">★ ${Number(seed.vote_average).toFixed(1)}</span>` : ""}
+        ${seed.vote_count ? `<span>${fmtVotes(seed.vote_count)}</span>` : ""}
+        <span>${year(seed.release_date)}</span>
+      </div>
+      <p class="detail-overview">${esc(seed.overview || "")}</p>
+      ${resumeSeed ? `<p class="detail-resume">${esc(resumeSeed)}</p>` : ""}
+      <div class="detail-actions">
+        <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${resumeSeed ? "Resume" : "Play"}</button>
+        <button class="btn-ghost" id="detail-save">${savedSeed ? "✓ Saved" : "+ My List"}</button>
+        <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
+      </div>`;
+    LiquidGlass.glassify(header);
+  }
+
   const showErr = msg => {
     if (header) header.innerHTML = `<p style="color:var(--text-muted)">${esc(msg)}</p>`;
     if (frame) frame.innerHTML = `<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center">Could not load player.</p>`;
@@ -3823,15 +4004,13 @@ async function initMoviePage() {
     try {
       m = await tmdb(`/movie/${id}`);
     } catch (err) { console.warn('Caught error:', err);
-      m = { id, title: `Movie #${id}`, overview: "Select a stream provider below to start watching." };
+      m = seed || { id, title: `Movie #${id}`, overview: "Select a stream provider below to start watching." };
     }
   }
 
   try {
     document.title = `${m.title} — ${BRAND}`;
-    const backdrop = m.backdrop_path ? `${IMG_ORIG}${m.backdrop_path}` : "";
-    const backdropEl = $("#detail-backdrop");
-    if (backdropEl && backdrop) backdropEl.style.backgroundImage = `url(${backdrop})`;
+    if (m.backdrop_path) applyDetailBackdrop(m.backdrop_path);
 
     const saved = MyList.has(m.id, "movie");
     const trailer = pickTrailer(m.videos);
@@ -3876,9 +4055,10 @@ async function initMoviePage() {
       });
     });
 
-    const load = url => loadPlayerFrame(frame, url);
-    renderProviders($("#provider-bar"), "movie", id, 1, 1, load);
-    load(providerUrl("movie", id, 1, 1));
+    if (!frame.querySelector("iframe")) {
+      renderProviders($("#provider-bar"), "movie", id, 1, 1, load);
+      load(providerUrl("movie", id, 1, 1));
+    }
 
     const info = $("#detail-info");
     if (info) info.innerHTML = `
@@ -3934,6 +4114,27 @@ async function initTvPage() {
     if (frame) frame.innerHTML = `<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem">Could not load player.</p>`;
   };
 
+  const seed = consumeNavSeed(id, "tv");
+  if (seed) {
+    document.title = `${seed.name || seed.title || "Series"} — ${BRAND}`;
+    if (seed.backdrop_path) applyDetailBackdrop(seed.backdrop_path);
+    const savedSeed = MyList.has(id, "tv");
+    if (header) header.innerHTML = `
+      <h1 class="detail-title">${esc(seed.name || seed.title || "")}</h1>
+      <div class="detail-meta">
+        ${seed.vote_average ? `<span class="score">★ ${Number(seed.vote_average).toFixed(1)}</span>` : ""}
+        ${seed.vote_count ? `<span>${fmtVotes(seed.vote_count)}</span>` : ""}
+        <span>${year(seed.first_air_date || seed.release_date)}</span>
+      </div>
+      <p class="detail-overview">${esc(seed.overview || "")}</p>
+      <div class="detail-actions">
+        <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play</button>
+        <button class="btn-ghost" id="detail-save">${savedSeed ? "✓ Saved" : "+ My List"}</button>
+        <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
+      </div>`;
+    LiquidGlass.glassify(header);
+  }
+
   let show;
   try {
     show = await tmdb(`/tv/${id}?append_to_response=images,credits,similar,recommendations,videos,external_ids,content_ratings`);
@@ -3941,14 +4142,13 @@ async function initTvPage() {
     try {
       show = await tmdb(`/tv/${id}`);
     } catch (err) { console.warn('Caught error:', err);
-      show = { id, name: `TV Series #${id}`, overview: "Select season and episode below to start watching.", seasons: [{ season_number: 1, episode_count: 24 }] };
+      show = seed ? { ...seed, seasons: [{ season_number: 1, episode_count: 24 }] } : { id, name: `TV Series #${id}`, overview: "Select season and episode below to start watching.", seasons: [{ season_number: 1, episode_count: 24 }] };
     }
   }
 
   try {
     document.title = `${show.name} — ${BRAND}`;
-    const backdropEl = $("#detail-backdrop");
-    if (backdropEl && show.backdrop_path) backdropEl.style.backgroundImage = `url(${IMG_ORIG}${show.backdrop_path})`;
+    if (show.backdrop_path) applyDetailBackdrop(show.backdrop_path);
 
     const saved = MyList.has(show.id, "tv");
     const trailer = pickTrailer(show.videos);

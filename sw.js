@@ -1,4 +1,5 @@
-const CACHE_NAME = "orc-static-v27";
+const CACHE_NAME = "orc-static-v28";
+const TMDB_CACHE_NAME = "orc-tmdb-runtime-v1";
 const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/dmca"]);
 const HTML_TO_CLEAN = new Map([
   ["/index.html", "/"],
@@ -36,6 +37,7 @@ const STATIC_ASSETS = [
   "/manifest.json",
   "/favicon.svg",
   "/favicon.png",
+  "/apple-touch-icon.png",
   "/icon-192.png",
   "/icon-512.png"
 ];
@@ -68,17 +70,49 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME && key !== TMDB_CACHE_NAME)
+          .map(key => caches.delete(key))
+      )
     ).then(() => self.clients.claim())
   );
 });
 
-// Stale-While-Revalidate Strategy for Local Assets (with redirect-safe navigation responses)
+// Stale-While-Revalidate Strategy for Local Assets and TMDB Catalog GETs
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
 
-  // Only handle local same-origin requests
+  // Fast Stale-While-Revalidate for TMDB JSON catalog queries
+  if (url.hostname === "api.themoviedb.org" && url.pathname.startsWith("/3/")) {
+    event.respondWith(
+      caches.open(TMDB_CACHE_NAME).then(async cache => {
+        const cached = await cache.match(event.request);
+        const networkPromise = fetch(event.request)
+          .then(res => {
+            if (res && res.status === 200) {
+              cache.put(event.request, res.clone());
+            }
+            return res;
+          })
+          .catch(() => null);
+
+        if (cached) {
+          if (typeof event.waitUntil === "function") event.waitUntil(networkPromise);
+          return cached;
+        }
+        const netRes = await networkPromise;
+        return netRes || new Response(JSON.stringify({ results: [] }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" }
+        });
+      })
+    );
+    return;
+  }
+
+  // Only handle local same-origin requests below
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
