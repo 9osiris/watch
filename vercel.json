@@ -1,0 +1,88 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/movie",
+      "destination": "/movie.html"
+    },
+    {
+      "source": "/tv",
+      "destination": "/tv.html"
+    },
+    {
+      "source": "/search",
+      "destination": "/search.html"
+    },
+    {
+      "source": "/list",
+      "destination": "/list.html"
+    },
+    {
+      "source": "/settings",
+      "destination": "/settings.html"
+    },
+    {
+      "source": "/dmca",
+      "destination": "/dmca.html"
+    },
+    {
+      "source": "/css/orc-styles.css",
+      "destination": "/orc-styles.css"
+    },
+    {
+      "source": "/js/orc-script.js",
+      "destination": "/orc-script.js"
+    },
+    {
+      "source": "/images/favicon.svg",
+      "destination": "/favicon.svg"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/index.html",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/movie.html",
+      "destination": "/movie",
+      "permanent": true
+    },
+    {
+      "source": "/tv.html",
+      "destination": "/tv",
+      "permanent": true
+    },
+    {
+      "source": "/search.html",
+      "destination": "/search",
+      "permanent": true
+    },
+    {
+      "source": "/list.html",
+      "destination": "/list",
+      "permanent": true
+    },
+    {
+      "source": "/settings.html",
+      "destination": "/settings",
+      "permanent": true
+    },
+    {
+      "source": "/dmca.html",
+      "destination": "/dmca",
+      "permanent": true
+    },
+    {
+      "source": "/OsirisCinema.html",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/OsirisCinema",
+      "destination": "/",
+      "permanent": true
+    }
+  ]
+}

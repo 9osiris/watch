@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Osiris Watch - Watch Free Movies & TV Shows Online</title>
+  <meta name="description" content="Osiris Watch is a fast, free streaming platform to watch movies and TV shows online in HD. No subscription required. Browse trending movies, full TV series, and custom watchlists.">
+  <meta name="google-site-verification" content="googleb3700fd05b93ee70">
+  <link rel="canonical" href="https://www.osiris.rocks/">
+  <meta property="og:title" content="Osiris Watch - Watch Free Movies & TV Shows Online">
+  <meta property="og:description" content="Stream movies and TV shows online in HD for free on Osiris Watch.">
+  <meta property="og:url" content="https://www.osiris.rocks/">
+  <meta property="og:type" content="website">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Osiris Watch",
+    "alternateName": ["OsirisWatch", "Osiris Watch Official"],
+    "url": "https://www.osiris.rocks/",
+    "description": "Osiris Watch is a fast, free streaming platform to watch movies and TV shows online in HD.",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://www.osiris.rocks/search.html?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    },
+    "hasPart": [
+      {
+        "@type": "WebPage",
+        "name": "TV Shows",
+        "description": "Watch free TV series, full seasons, and episodes online on Osiris Watch.",
+        "url": "https://www.osiris.rocks/tv.html"
+      },
+      {
+        "@type": "WebPage",
+        "name": "Movies",
+        "description": "Stream popular trending HD movies online on Osiris Watch.",
+        "url": "https://www.osiris.rocks/movie.html"
+      },
+      {
+        "@type": "WebPage",
+        "name": "Discover & Search",
+        "description": "Search and filter thousands of movies and TV shows by genre, release year, or rating.",
+        "url": "https://www.osiris.rocks/search.html"
+      },
+      {
+        "@type": "WebPage",
+        "name": "Watchlist",
+        "description": "Access your saved favorite movies and TV shows on Osiris Watch.",
+        "url": "https://www.osiris.rocks/list.html"
+      },
+      {
+        "@type": "WebPage",
+        "name": "DMCA & Legal",
+        "description": "Copyright information, content disclaimer, and DMCA policy for Osiris Watch.",
+        "url": "https://www.osiris.rocks/dmca.html"
+      }
+    ]
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+  <link rel="dns-prefetch" href="https://image.tmdb.org">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preload" href="orc-styles.css" as="style">
+  <link rel="stylesheet" href="orc-styles.css">
+</head>
+<body>
+
+  <svg class="splash-filters" aria-hidden="true">
+    <filter id="orc-glass" x="-50%" y="-50%" width="200%" height="200%" primitiveUnits="objectBoundingBox">
+      <feImage id="orc-glass-map" x="-50%" y="-50%" width="200%" height="200%" result="map"/>
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.02" result="blur"/>
+      <feDisplacementMap in="blur" in2="map" scale="0.75" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="glass-distortion" x="-12%" y="-12%" width="124%" height="124%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.009 0.013" numOctaves="2" seed="42" result="turbulence"/>
+      <feGaussianBlur in="turbulence" stdDeviation="2" result="softMap"/>
+      <feDisplacementMap in="SourceGraphic" in2="softMap" scale="34" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="glass-soft" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox">
+      <feTurbulence type="fractalNoise" baseFrequency="0.005 0.009" numOctaves="2" seed="12" result="n"/>
+      <feGaussianBlur in="n" stdDeviation="1.4" result="m"/>
+      <feDisplacementMap in="SourceGraphic" in2="m" scale="8" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </svg>
+
+  <header class="topnav" id="topnav"></header>
+
+  <div class="app-shell">
+    <main id="main-content" style="opacity:0;transition:opacity .5s ease">
+
+      <section class="hero">
+        <div class="hero-backdrop" id="hero-backdrop">
+          <img class="hero-slide is-active" id="hero-backdrop-a" alt="" />
+          <img class="hero-slide" id="hero-backdrop-b" alt="" />
+        </div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <div class="hero-type" id="hero-type">Film</div>
+          <h1 class="hero-title" id="hero-title" aria-live="polite">Loading</h1>
+          <p class="hero-desc" id="hero-desc"></p>
+          <div class="hero-meta" id="hero-meta"></div>
+          <div class="hero-actions">
+            <button type="button" class="btn-play hero-play-btn" id="hero-play-btn" aria-label="Play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 18 12 6 20 6 4"/></svg>
+              <span>Play</span>
+            </button>
+            <div class="hero-dual-pill lg-surface">
+              <button type="button" class="dual-pill-btn" id="hero-info-btn" title="View details" aria-label="Details">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              </button>
+              <span class="dual-pill-divider"></span>
+              <button type="button" class="dual-pill-btn" id="hero-list-btn" title="Add to My List" aria-label="Add to My List">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="hero-dots" id="hero-dots"></div>
+      </section>
+
+      <div class="hero-color-bleed-wrap">
+        <div class="hero-color-bleed" id="hero-color-bleed-a"></div>
+        <div class="hero-color-bleed" id="hero-color-bleed-b"></div>
+      </div>
+
+      <div class="genre-strip" id="genre-strip"></div>
+
+      <section id="categories" class="categories"></section>
+
+      <footer class="page-foot">
+        <p>Movie data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>.</p>
+        <p>Osiris Watch does not store or host media. Streams are provided by third-party services; legal concerns should be raised with those hosts directly. Osiris Watch is not responsible for content served by external providers.</p>
+        <p>© 2026 Osiris Industries · <a href="/dmca.html">DMCA</a> · <a href="/settings.html">Settings</a></p>
+        <p class="foot-social"><a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" aria-label="Join our Discord"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"></path></svg><span>Discord</span></a></p>
+      </footer>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="orc-script.js"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Discover & Search Movies & TV Shows | Osiris Watch</title>
+  <meta name="description" content="Search and discover thousands of free movies and TV shows on Osiris Watch. Filter by genre, release year, vote score, and trend popularity.">
+  <link rel="canonical" href="https://www.osiris.rocks/search.html">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SearchResultsPage",
+    "name": "Search & Discover — Osiris Watch",
+    "url": "https://www.osiris.rocks/search.html",
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "Osiris Watch",
+      "url": "https://www.osiris.rocks/"
+    }
+  }
+  </script>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+  <link rel="dns-prefetch" href="https://image.tmdb.org">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="orc-styles.css">
+</head>
+<body class="search-page">
+
+  <header class="topnav" id="topnav"></header>
+
+  <div class="app-shell">
+    <main class="search-body">
+      <div class="discover-header-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <h1 style="font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:0">Discover</h1>
+        <div style="display:flex;align-items:center;gap:10px">
+          <select id="media-type-select" class="list-sort-select" aria-label="Media Type">
+            <option value="all" selected>Both</option>
+            <option value="movie">Movies</option>
+            <option value="tv">Series</option>
+          </select>
+          <button type="button" id="surprise-me-btn" class="glass-chip" style="gap:6px;cursor:pointer">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>
+            Surprise Me
+          </button>
+        </div>
+      </div>
+
+      <div class="search-input-wrap" style="margin-bottom:16px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="text" id="main-search-input" placeholder="Search titles, actors, keywords…" autocomplete="off" aria-label="Search titles, actors, and keywords">
+        <button type="button" id="search-clear" style="display:none;background:none;border:none;color:var(--text-dim);padding:4px;cursor:pointer" aria-label="Clear">✕</button>
+      </div>
+
+      <div class="discover-filters-bar" style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;align-items:center">
+        <select id="filter-genre" class="list-sort-select" aria-label="Filter by Genre">
+          <option value="all">All Genres</option>
+          <option value="28">Action</option>
+          <option value="12">Adventure</option>
+          <option value="16">Animation</option>
+          <option value="35">Comedy</option>
+          <option value="80">Crime</option>
+          <option value="99">Documentary</option>
+          <option value="18">Drama</option>
+          <option value="10751">Family</option>
+          <option value="14">Fantasy</option>
+          <option value="27">Horror</option>
+          <option value="10749">Romance</option>
+          <option value="878">Sci-Fi</option>
+          <option value="53">Thriller</option>
+        </select>
+        <select id="filter-provider" class="list-sort-select" aria-label="Filter by Provider">
+          <option value="all">All Providers</option>
+          <option value="netflix">Netflix</option>
+          <option value="hbo">Max / HBO</option>
+          <option value="disney">Disney+</option>
+          <option value="apple">Apple TV+</option>
+          <option value="prime">Prime Video</option>
+          <option value="hulu">Hulu</option>
+        </select>
+        <select id="filter-sort" class="list-sort-select" aria-label="Sort Results">
+          <option value="pop">Most Popular</option>
+          <option value="rating">Highest Rated</option>
+          <option value="newest">Newest First</option>
+        </select>
+        <select id="filter-era" class="list-sort-select" aria-label="Filter by Era">
+          <option value="all">From Year</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2020s">2020s</option>
+          <option value="2010s">2010s</option>
+          <option value="classic">Classics</option>
+        </select>
+        <select id="filter-rating" class="list-sort-select" aria-label="Filter by Rating">
+          <option value="all">All Ratings</option>
+          <option value="8">★ 8.0+ Top Rated</option>
+          <option value="7">★ 7.0+ Rated</option>
+        </select>
+      </div>
+
+      <div id="search-recent" class="search-recent" hidden></div>
+
+      <p class="search-status" id="search-status"></p>
+      <div class="search-grid" id="search-results"></div>
+    </main>
+
+    <footer class="page-foot">
+      <p>Movie data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>.</p>
+      <p>Osiris Watch does not store or host media. Streams are provided by third-party services; legal concerns should be raised with those hosts directly. Osiris Watch is not responsible for content served by external providers.</p>
+      <p>© 2026 Osiris Industries · <a href="/dmca.html">DMCA</a> · <a href="/settings.html">Settings</a></p>
+      <p class="foot-social"><a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" aria-label="Join our Discord"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"></path></svg><span>Discord</span></a></p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="orc-script.js"></script>
+</body>
+</html>

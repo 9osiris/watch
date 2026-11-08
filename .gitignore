@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit API keys. Configure them in Vercel env vars instead.
+.env
+.env.local
+.env.*.local
+
+# Build / misc
+.vercel
+.DS_Store
+*.log

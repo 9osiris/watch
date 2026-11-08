@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>wfc secret</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="orc-styles.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0b0b0d;
+      color: #f5f5f7;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .wfc-card {
+      width: min(440px, 92vw);
+      background: rgba(18, 18, 24, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 24px;
+      padding: 32px 24px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .wfc-title {
+      font-size: 1.3rem;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+    .wfc-hint-box {
+      min-height: 24px;
+      font-size: 0.84rem;
+      color: var(--text-2, #a6a6b0);
+      margin-bottom: 18px;
+      transition: opacity 0.3s;
+    }
+    .wfc-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      padding: 12px 16px;
+      color: #fff;
+      font-size: 0.95rem;
+      text-align: center;
+      outline: none;
+      margin-bottom: 14px;
+      box-sizing: border-box;
+    }
+    .wfc-input:focus {
+      border-color: var(--accent, #ffffff);
+    }
+    .wfc-btn {
+      width: 100%;
+      background: #ffffff;
+      color: #0b0b0d;
+      font-weight: 700;
+      font-size: 0.92rem;
+      padding: 12px 20px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .wfc-btn:hover {
+      transform: translateY(-1px);
+    }
+    .wfc-status {
+      font-size: 0.82rem;
+      color: #ef4444;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+    .wfc-big-text {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 20px 0;
+      animation: pulse 1s infinite alternate;
+    }
+    @keyframes pulse {
+      from { transform: scale(0.98); }
+      to { transform: scale(1.02); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wfc-card" id="wfc-card">
+    <!-- Stage 1 -->
+    <div id="wfc-stage-1" style="width:100%">
+      <div class="wfc-title">wfc secret page</div>
+      <div class="wfc-hint-box" id="wfc-hint-text">enter the secret password...</div>
+      <form id="wfc-form-1">
+        <input type="password" id="wfc-pwd-1" class="wfc-input" placeholder="password" autocomplete="off" />
+        <button type="submit" class="wfc-btn">submit</button>
+      </form>
+      <div class="wfc-status" id="wfc-status-1"></div>
+    </div>
+
+    <!-- Stage 2 -->
+    <div id="wfc-stage-2" style="width:100%;display:none">
+      <div class="wfc-title">password accepted &gt;_&lt;</div>
+      <button type="button" class="wfc-btn" id="wfc-read-btn-1" style="margin-top:16px">click to read</button>
+    </div>
+
+    <!-- Stage 3 -->
+    <div id="wfc-stage-3" style="width:100%;display:none">
+      <div class="wfc-title" style="font-size:1rem;color:var(--text-2)">idk the password MIGHT be ilovekingsybub123</div>
+      <form id="wfc-form-2" style="margin-top:14px">
+        <input type="password" id="wfc-pwd-2" class="wfc-input" placeholder="type the password" autocomplete="off" />
+        <button type="submit" class="wfc-btn">submit</button>
+      </form>
+      <div class="wfc-status" id="wfc-status-2"></div>
+    </div>
+
+    <!-- Stage 4 -->
+    <div id="wfc-stage-4" style="width:100%;display:none">
+      <div style="font-size:3.5rem;margin-bottom:12px">😳👉👈</div>
+      <div class="wfc-title">unlocked!</div>
+      <button type="button" class="wfc-btn" id="wfc-read-btn-2" style="margin-top:12px">click to read</button>
+    </div>
+
+    <!-- Stage 5 -->
+    <div id="wfc-stage-5" style="width:100%;display:none">
+      <div class="wfc-big-text">if ur reading this ur gay asf</div>
+      <div style="font-size:0.82rem;color:var(--text-2)" id="wfc-timer-text">redirecting to home in 5s...</div>
+    </div>
+  </div>
+
+  <script>
+    const hints = [
+      "what's noah's nickname?",
+      "weiner fungler club abbreviated?",
+      "what year is it?"
+    ];
+    let hintIdx = 0;
+    const hintEl = document.getElementById("wfc-hint-text");
+
+    setInterval(() => {
+      if (document.getElementById("wfc-stage-1").style.display !== "none") {
+        hintEl.style.opacity = 0;
+        setTimeout(() => {
+          hintEl.textContent = hints[hintIdx % hints.length];
+          hintEl.style.opacity = 1;
+          hintIdx++;
+        }, 300);
+      }
+    }, 15000);
+
+    // Form 1
+    document.getElementById("wfc-form-1").addEventListener("submit", e => {
+      e.preventDefault();
+      const pwd = document.getElementById("wfc-pwd-1").value.trim();
+      const status = document.getElementById("wfc-status-1");
+      if (pwd === "WFC2026NONO" || pwd.toUpperCase() === "WFC2026NONO") {
+        document.getElementById("wfc-stage-1").style.display = "none";
+        document.getElementById("wfc-stage-2").style.display = "block";
+      } else {
+        status.textContent = "wrong password try again";
+      }
+    });
+
+    // Stage 2 click
+    document.getElementById("wfc-read-btn-1").addEventListener("click", () => {
+      document.getElementById("wfc-stage-2").style.display = "none";
+      document.getElementById("wfc-stage-3").style.display = "block";
+    });
+
+    // Form 2
+    document.getElementById("wfc-form-2").addEventListener("submit", e => {
+      e.preventDefault();
+      const pwd = document.getElementById("wfc-pwd-2").value.trim();
+      const status = document.getElementById("wfc-status-2");
+      if (pwd === "ilovekingsybub123") {
+        document.getElementById("wfc-stage-3").style.display = "none";
+        document.getElementById("wfc-stage-4").style.display = "block";
+      } else {
+        status.textContent = "wrong! type ilovekingsybub123";
+      }
+    });
+
+    // Stage 4 click
+    document.getElementById("wfc-read-btn-2").addEventListener("click", () => {
+      document.getElementById("wfc-stage-4").style.display = "none";
+      document.getElementById("wfc-stage-5").style.display = "block";
+
+      let seconds = 5;
+      const timerEl = document.getElementById("wfc-timer-text");
+      const interval = setInterval(() => {
+        seconds--;
+        if (seconds > 0) {
+          timerEl.textContent = `redirecting to home in ${seconds}s...`;
+        } else {
+          clearInterval(interval);
+          location.href = "/";
+        }
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
