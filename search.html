@@ -32,12 +32,28 @@
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
   <link rel="dns-prefetch" href="https://image.tmdb.org">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style id="orc-critical-bg">
+    html, body { background-color: #0b0b0d; color: #f4f4f6; margin: 0; }
+    html[data-theme="light"], html[data-theme="light"] body { background-color: #f8fafc; color: #0f172a; }
+  </style>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("orc_theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        var a = localStorage.getItem("orc_accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="orc-styles.css">
   <link rel="stylesheet" href="ai-search.css">
 </head>
 <body class="search-page">
 
-  <header class="topnav" id="topnav"></header>
+  <header class="topnav" id="topnav"><div class="topnav-inner"><a href="/" class="topnav-logo" aria-label="Osiris Watch home"><span class="topnav-word">Osiris<i>Watch</i></span></a></div></header>
 
   <div class="app-shell">
     <main class="search-body">
@@ -52,7 +68,7 @@
           </select>
           <button type="button" id="ai-search-mode" class="filter-chip filter-chip-ai" data-filter="ai" aria-pressed="false">AI Search</button>
           <button type="button" id="surprise-me-btn" class="glass-chip" style="gap:6px;cursor:pointer">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
             Surprise Me
           </button>
         </div>
@@ -132,7 +148,7 @@
 
       <p class="search-status" id="search-status" role="status" aria-live="polite"></p>
       <section id="ai-results-summary" class="ai-results-summary" aria-label="AI search interpretation" hidden></section>
-      <div class="search-grid" id="search-results"></div>
+      <div class="search-grid" id="search-results"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
       <div id="ai-result-actions" class="ai-result-actions" hidden>
         <button type="button" id="ai-search-more" class="btn-ghost">Show more matches</button>
         <button type="button" id="ai-search-refresh" class="btn-ghost">Find different picks</button>

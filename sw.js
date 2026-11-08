@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v26";
+const CACHE_NAME = "orc-static-v27";
 const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/dmca"]);
 const HTML_TO_CLEAN = new Map([
   ["/index.html", "/"],

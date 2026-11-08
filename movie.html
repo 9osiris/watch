@@ -33,11 +33,27 @@
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
   <link rel="dns-prefetch" href="https://image.tmdb.org">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style id="orc-critical-bg">
+    html, body { background-color: #0b0b0d; color: #f4f4f6; margin: 0; }
+    html[data-theme="light"], html[data-theme="light"] body { background-color: #f8fafc; color: #0f172a; }
+  </style>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("orc_theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        var a = localStorage.getItem("orc_accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="orc-styles.css">
 </head>
 <body class="detail-page">
 
-  <header class="topnav" id="topnav"></header>
+  <header class="topnav" id="topnav"><div class="topnav-inner"><a href="/" class="topnav-logo" aria-label="Osiris Watch home"><span class="topnav-word">Osiris<i>Watch</i></span></a></div></header>
 
   <div class="app-shell">
     <div class="detail-hero">
@@ -47,11 +63,24 @@
 
     <div class="detail-body">
       <div id="detail-header">
-        <div class="skeleton-card" style="width:280px;height:32px;margin-bottom:12px;border-radius:6px"></div>
+        <div class="detail-skel-wrap">
+          <div class="detail-skel-title skel-pulse"></div>
+          <div class="detail-skel-meta">
+            <div class="detail-skel-tag skel-pulse"></div>
+            <div class="detail-skel-tag skel-pulse"></div>
+            <div class="detail-skel-tag skel-pulse"></div>
+          </div>
+          <div class="detail-skel-line skel-pulse"></div>
+          <div class="detail-skel-line short skel-pulse"></div>
+          <div class="detail-skel-actions">
+            <div class="detail-skel-btn skel-pulse"></div>
+            <div class="detail-skel-btn skel-pulse"></div>
+          </div>
+        </div>
       </div>
 
       <section class="player-wrap">
-        <div id="provider-bar"></div>
+        <div id="provider-bar" class="provider-tabs"><div class="detail-skel-tag skel-pulse" style="width:96px;height:36px"></div><div class="detail-skel-tag skel-pulse" style="width:96px;height:36px"></div><div class="detail-skel-tag skel-pulse" style="width:96px;height:36px"></div></div>
         <div class="player-frame" id="player-frame">
           <div class="spinner" style="position:absolute;top:50%;left:50%;margin:-18px 0 0 -18px"></div>
         </div>

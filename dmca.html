@@ -31,11 +31,27 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style id="orc-critical-bg">
+    html, body { background-color: #0b0b0d; color: #f4f4f6; margin: 0; }
+    html[data-theme="light"], html[data-theme="light"] body { background-color: #f8fafc; color: #0f172a; }
+  </style>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("orc_theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        var a = localStorage.getItem("orc_accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="orc-styles.css">
 </head>
 <body class="legal-page">
 
-  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topnav" id="topnav"><div class="topnav-inner"><a href="/" class="topnav-logo" aria-label="Osiris Watch home"><span class="topnav-word">Osiris<i>Watch</i></span></a></div></header>
 
   <div class="app-shell">
     <main class="legal-body">

@@ -136,3 +136,31 @@ test("service worker precaches AI assets, strips redirect flags on navigation, a
   assert.equal(navRes.status, 200);
   assert.equal(navRes.redirected, false);
 });
+
+test("all pages include anti-flash dark bootstrap, pre-rendered topnav, and initial skeletons", () => {
+  for (const page of pages) {
+    const html = read(`${page}.html`);
+    assert.match(html, /id="orc-critical-bg"/, `${page}: has critical dark background style`);
+    assert.match(html, /document\.documentElement\.setAttribute\("data-theme"/, `${page}: has synchronous theme bootstrap`);
+    assert.match(html, /<header class="topnav" id="topnav">/, `${page}: has unified topnav header`);
+    assert.doesNotMatch(html, /<aside class="sidebar"/, `${page}: no legacy empty sidebar tag`);
+  }
+  assert.doesNotMatch(read("index.html"), /id="main-content"[^>]*opacity:\s*0/i);
+  for (const page of ["index", "search", "list", "movie", "tv", "settings"]) {
+    assert.match(read(`${page}.html`), /skeleton-card|skel-pulse/, `${page}: has pre-rendered skeletons`);
+  }
+  assert.doesNotMatch(read("orc-styles.css"), /:root:not\(\[data-theme="dark"\]\):not\(\[data-theme="light"\]\)/);
+});
+
+test("mobile interaction fixes: closeModal supports Elements, Surprise Me has no emoji/sparkle, and save/folder modals open cleanly", () => {
+  const script = read("orc-script.js");
+  const searchHtml = read("search.html");
+  const styles = read("orc-styles.css");
+
+  assert.match(script, /target instanceof Element/);
+  assert.doesNotMatch(script, /🎲\s*Surprise Picker/);
+  assert.match(script, /<span class="surprise-badge">Surprise Picker<\/span>/);
+  assert.doesNotMatch(searchHtml, /id="surprise-me-btn"[\s\S]{0,220}M12 2L14\.5 9\.5L22 12/);
+  assert.match(styles, /\.topnav\s*\{[^}]*pointer-events:\s*none\s*!important/);
+  assert.match(styles, /\.topnav-logo\s*\{[^}]*pointer-events:\s*auto\s*!important/);
+});

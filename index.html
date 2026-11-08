@@ -72,6 +72,22 @@
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
   <link rel="dns-prefetch" href="https://image.tmdb.org">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style id="orc-critical-bg">
+    html, body { background-color: #0b0b0d; color: #f4f4f6; margin: 0; }
+    html[data-theme="light"], html[data-theme="light"] body { background-color: #f8fafc; color: #0f172a; }
+  </style>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("orc_theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        var a = localStorage.getItem("orc_accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="preload" href="orc-styles.css" as="style">
   <link rel="stylesheet" href="orc-styles.css">
 </head>
@@ -95,10 +111,10 @@
     </filter>
   </svg>
 
-  <header class="topnav" id="topnav"></header>
+  <header class="topnav" id="topnav"><div class="topnav-inner"><a href="/" class="topnav-logo" aria-label="Osiris Watch home"><span class="topnav-word">Osiris<i>Watch</i></span></a></div></header>
 
   <div class="app-shell">
-    <main id="main-content" style="opacity:0;transition:opacity .5s ease">
+    <main id="main-content">
 
       <section class="hero">
         <div class="hero-backdrop" id="hero-backdrop">
@@ -108,9 +124,9 @@
         <div class="hero-overlay"></div>
         <div class="hero-content">
           <div class="hero-type" id="hero-type">Film</div>
-          <h1 class="hero-title" id="hero-title" aria-live="polite">Loading</h1>
-          <p class="hero-desc" id="hero-desc"></p>
-          <div class="hero-meta" id="hero-meta"></div>
+          <h1 class="hero-title" id="hero-title" aria-live="polite"><div class="hero-skel-title skel-pulse"></div></h1>
+          <p class="hero-desc" id="hero-desc"><span class="hero-skel-desc skel-pulse" style="display:block"></span><span class="hero-skel-desc short skel-pulse" style="display:block"></span></p>
+          <div class="hero-meta" id="hero-meta"><span class="hero-skel-pill skel-pulse"></span><span class="hero-skel-pill skel-pulse"></span><span class="hero-skel-pill skel-pulse"></span></div>
           <div class="hero-actions">
             <button type="button" class="btn-play hero-play-btn" id="hero-play-btn" aria-label="Play">
               <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 18 12 6 20 6 4"/></svg>
@@ -135,9 +151,18 @@
         <div class="hero-color-bleed" id="hero-color-bleed-b"></div>
       </div>
 
-      <div class="genre-strip" id="genre-strip"></div>
+      <div class="genre-strip" id="genre-strip"><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div><div class="genre-pill-skel skel-pulse"></div></div>
 
-      <section id="categories" class="categories"></section>
+      <section id="categories" class="categories">
+        <div class="row-wrapper visible">
+          <div class="row-header"><div class="row-skel-title skel-pulse"></div></div>
+          <div class="row-track-container"><div class="row-track"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div></div>
+        </div>
+        <div class="row-wrapper visible">
+          <div class="row-header"><div class="row-skel-title skel-pulse"></div></div>
+          <div class="row-track-container"><div class="row-track"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div></div>
+        </div>
+      </section>
 
       <footer class="page-foot">
         <p>Movie data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>.</p>

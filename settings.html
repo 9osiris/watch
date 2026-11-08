@@ -18,11 +18,27 @@
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
   <link rel="dns-prefetch" href="https://image.tmdb.org">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style id="orc-critical-bg">
+    html, body { background-color: #0b0b0d; color: #f4f4f6; margin: 0; }
+    html[data-theme="light"], html[data-theme="light"] body { background-color: #f8fafc; color: #0f172a; }
+  </style>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("orc_theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        var a = localStorage.getItem("orc_accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="orc-styles.css">
 </head>
 <body class="settings-page">
 
-  <header class="topnav" id="topnav"></header>
+  <header class="topnav" id="topnav"><div class="topnav-inner"><a href="/" class="topnav-logo" aria-label="Osiris Watch home"><span class="topnav-word">Osiris<i>Watch</i></span></a></div></header>
 
   <div class="app-shell">
     <main class="settings-body">
@@ -50,7 +66,7 @@
       <section class="settings-section">
         <h2>Accent color</h2>
         <p class="settings-desc">Personalize the highlight color across the interface.</p>
-        <div class="settings-accents" id="settings-accents"></div>
+        <div class="settings-accents" id="settings-accents"><div class="skel-pulse" style="width:36px;height:36px;border-radius:50%"></div><div class="skel-pulse" style="width:36px;height:36px;border-radius:50%"></div><div class="skel-pulse" style="width:36px;height:36px;border-radius:50%"></div><div class="skel-pulse" style="width:36px;height:36px;border-radius:50%"></div><div class="skel-pulse" style="width:36px;height:36px;border-radius:50%"></div><div class="skel-pulse" style="width:36px;height:36px;border-radius:50%"></div></div>
       </section>
 
       <section class="settings-section" id="settings-backdrop-section">
@@ -59,7 +75,7 @@
         <div class="settings-backdrop-preview-wrap">
           <div class="settings-backdrop-preview" id="settings-backdrop-preview" aria-hidden="true"></div>
         </div>
-        <div class="settings-backdrop-styles" id="settings-backdrop-styles" role="group" aria-label="Backdrop style"></div>
+        <div class="settings-backdrop-styles" id="settings-backdrop-styles" role="group" aria-label="Backdrop style"><div class="skel-pulse" style="width:84px;height:34px;border-radius:999px"></div><div class="skel-pulse" style="width:84px;height:34px;border-radius:999px"></div><div class="skel-pulse" style="width:84px;height:34px;border-radius:999px"></div><div class="skel-pulse" style="width:84px;height:34px;border-radius:999px"></div><div class="skel-pulse" style="width:84px;height:34px;border-radius:999px"></div><div class="skel-pulse" style="width:84px;height:34px;border-radius:999px"></div></div>
         <div class="settings-toggle-row" style="margin-top:14px">
           <div><strong>Match accent color</strong><span>Automatically lock the background color palette to your chosen accent color</span></div>
           <button type="button" class="settings-toggle on" id="toggle-bg-sync-accent" aria-pressed="true"></button>
@@ -118,7 +134,7 @@
       <section class="settings-section">
         <h2>Stream provider</h2>
         <p class="settings-desc">Choose which embed service loads when you press Play.</p>
-        <div class="settings-providers" id="settings-providers"></div>
+        <div class="settings-providers" id="settings-providers"><div class="skel-pulse" style="width:120px;height:42px;border-radius:12px"></div><div class="skel-pulse" style="width:120px;height:42px;border-radius:12px"></div><div class="skel-pulse" style="width:120px;height:42px;border-radius:12px"></div><div class="skel-pulse" style="width:120px;height:42px;border-radius:12px"></div></div>
       </section>
 
       <section class="settings-section">

@@ -1777,17 +1777,35 @@ function openModal(modal) {
   else if (modal.id === "party-modal") label = "Watch Party";
   else if (modal.id === "surprise-modal") label = "Surprise Me";
   else if (modal.id === "save-modal") label = "Save to Folder";
+  else if (modal.id === "folder-modal") label = "Create New Folder";
   trapModalFocus(modal, label);
 }
 
-function closeModal(sel = ".modal-overlay") {
-  $$(sel).forEach(m => {
+let surpriseSpinInterval = null;
+
+function closeModal(target = ".modal-overlay") {
+  let list = [];
+  if (!target) {
+    list = $(".modal-overlay");
+  } else if (typeof target === "string") {
+    list = $(target);
+  } else if (target instanceof Element) {
+    list = [target];
+  } else if (Array.isArray(target) || target instanceof NodeList) {
+    list = [...target];
+  }
+  list.forEach(m => {
+    if (!m || !m.classList) return;
+    if (m.id === "surprise-modal" && surpriseSpinInterval) {
+      clearInterval(surpriseSpinInterval);
+      surpriseSpinInterval = null;
+    }
     m.classList.remove("open");
     setTimeout(() => {
       if (!m.classList.contains("open")) {
         m.style.display = "";
       }
-    }, 380);
+    }, 320);
   });
   releaseModalFocus();
 }
@@ -1942,7 +1960,7 @@ function buildMobilePillNav(active) {
 
   const items = [
     { href: homeUrl(), label: "Home", icon: ICONS.home, key: "home" },
-    { href: routeUrl("search"), label: "Discover", icon: ICONS.tv, key: "search" },
+    { href: routeUrl("search"), label: "Discover", icon: ICONS.search, key: "search" },
     { href: routeUrl("list"), label: "My List", icon: ICONS.list, key: "list" },
     { href: routeUrl("settings"), label: "Settings", icon: ICONS.settings, key: "settings" },
   ];
@@ -1953,10 +1971,17 @@ function buildMobilePillNav(active) {
   nav.setAttribute("aria-label", "Primary");
 
   nav.innerHTML = items.map(it => `
-    <a href="${it.href}" class="pill-nav-item${active === it.key ? " active" : ""}" aria-label="${it.label}"${active === it.key ? ' aria-current="page"' : ""}>
+    <a href="${it.href}" data-nav-key="${it.key}" class="pill-nav-item${active === it.key ? " active" : ""}" aria-label="${it.label}"${active === it.key ? ' aria-current="page"' : ""}>
       <span class="pill-nav-ico">${it.icon}</span>
     </a>
   `).join("");
+
+  nav.querySelectorAll(".pill-nav-item").forEach(a => {
+    a.addEventListener("click", () => {
+      nav.querySelectorAll(".pill-nav-item").forEach(el => el.classList.remove("active"));
+      a.classList.add("active");
+    });
+  });
 
   if (!existing) document.body.appendChild(nav);
 
@@ -1966,21 +1991,8 @@ function buildMobilePillNav(active) {
 
 function initMobilePillNavScroll() {
   const nav = $("#mobile-pill-nav");
-  if (!nav || nav._scrollBound) return;
-  nav._scrollBound = true;
-
-  let lastY = window.scrollY;
-  window.addEventListener("scroll", () => {
-    const curY = window.scrollY;
-    if (curY < 50) {
-      nav.classList.remove("nav-hidden");
-    } else if (curY - lastY > 15) {
-      nav.classList.add("nav-hidden");
-    } else if (lastY - curY > 15) {
-      nav.classList.remove("nav-hidden");
-    }
-    lastY = curY;
-  }, { passive: true });
+  if (!nav) return;
+  nav.classList.remove("nav-hidden");
 }
 
 function initScrollRestoration() {
@@ -2160,22 +2172,7 @@ function initBackToTop() {
   btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "auto" }));
 }
 
-function initGlobalShortcuts() {
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") {
-      closeTrailer();
-      closePersonModal();
-      closePopup();
-      return;
-    }
-    if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      const tag = document.activeElement?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
-      e.preventDefault();
-      location.href = routeUrl("search");
-    }
-  });
-}
+
 
 function initRowDrag(track) {
   if (!track || track.dataset.dragReady || isTouch()) return;
@@ -2270,17 +2267,15 @@ function buildCard(item, type = "movie", opts = {}) {
       <div class="card-foot-meta">${y ? `${y} · ` : ""}${kind === "tv" ? "Series" : "Movie"}</div>
     </div>`;
 
-    card.addEventListener("click", e => {
-    const saveBtn = e.target.closest(".save-btn");
-    if (saveBtn) {
-      if (saveBtn._clicked) return;
-      saveBtn._clicked = true;
-      setTimeout(() => saveBtn._clicked = false, 500);
+  card.addEventListener("click", e => {
+    if (e.target.closest(".save-btn")) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
     }
-    if (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey) return; // Allow middle-click and ctrl-click
+    if (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey) return;
     e.preventDefault();
-    if (e.target.closest(".save-btn")) return;
-    const bg = item.backdrop_path ? `${IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
+    const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
     navigateWithLoader(href, bg, title);
   });
 
@@ -2288,27 +2283,26 @@ function buildCard(item, type = "movie", opts = {}) {
     if (e.target.closest(".save-btn")) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      const bg = item.backdrop_path ? `${IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
+      const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
       navigateWithLoader(href, bg, title);
     }
   });
 
-  card.addEventListener("keydown", e => {
-    if (e.target.closest(".save-btn")) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      const bg = item.backdrop_path ? `${IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
-      navigateWithLoader(href, bg, title);
-    }
-  });
-  
-  card.querySelector(".save-btn").addEventListener("click", e => {
-    e.stopPropagation();
-    openSaveModal({ id, type: kind, title, poster: item.poster_path }, nowSaved => {
-      e.currentTarget.classList.toggle("saved", nowSaved);
-      e.currentTarget.innerHTML = nowSaved ? ICONS.check : ICONS.plus;
+  const saveBtnEl = card.querySelector(".save-btn");
+  if (saveBtnEl) {
+    ["touchstart", "pointerdown"].forEach(evt => {
+      saveBtnEl.addEventListener(evt, e => e.stopPropagation(), { passive: true });
     });
-  });
+    saveBtnEl.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      openSaveModal({ id, type: kind, title, poster: item.poster_path }, nowSaved => {
+        btn.classList.toggle("saved", nowSaved);
+        btn.innerHTML = nowSaved ? ICONS.check : ICONS.plus;
+      });
+    });
+  }
 
   let timer;
   if (!isTouch()) {
@@ -2368,20 +2362,20 @@ function openSaveModal(item, onToggle) {
   const folders = Folders.get();
   
   modal.innerHTML = `
-    <div class="modal-content" role="dialog" aria-modal="true" style="max-width:320px;padding:24px;border-radius:16px;background:var(--bg-2)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <h2 style="font-size:1.2rem;margin:0">Save to...</h2>
-        <button type="button" class="modal-close-btn" style="background:none;border:none;color:var(--text-2);cursor:pointer;padding:4px"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <div class="modal-content" role="dialog" aria-modal="true" style="width:min(340px,92vw);padding:22px;border-radius:20px;background:var(--bg-1);border:1px solid var(--border-2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h2 style="font-size:1.15rem;font-weight:800;margin:0">Save to...</h2>
+        <button type="button" class="modal-close-btn" aria-label="Close" style="background:var(--bg-2);border:1px solid var(--border);border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto">
-        <button class="save-opt-btn ${savedInWL ? 'active' : ''}" data-target="watchlist" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:none;background:${savedInWL ? 'var(--accent)' : 'var(--bg-3)'};color:${savedInWL ? '#000' : 'var(--text)'};cursor:pointer;font-weight:600;font-size:1rem;transition:background 0.2s">
-          <div style="width:20px;height:20px">${ICONS.list}</div> Watchlist ${savedInWL ? '<div style="margin-left:auto;width:20px;height:20px">'+ICONS.check+'</div>' : ''}
+        <button type="button" class="save-opt-btn ${savedInWL ? 'active' : ''}" data-target="watchlist" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:1px solid ${savedInWL ? 'var(--accent)' : 'var(--border)'};background:${savedInWL ? 'var(--accent)' : 'var(--bg-2)'};color:${savedInWL ? 'var(--on-accent, #000)' : 'var(--text)'};cursor:pointer;font-weight:700;font-size:0.95rem;transition:background 0.2s">
+          <div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center">${ICONS.list}</div> Watchlist ${savedInWL ? '<div style="margin-left:auto;width:20px;height:20px;display:flex;align-items:center;justify-content:center">'+ICONS.check+'</div>' : ''}
         </button>
-        ${folders.length > 0 ? `<div style="height:1px;background:var(--bg-3);margin:8px 0"></div>` : ''}
+        ${folders.length > 0 ? `<div style="height:1px;background:var(--border);margin:4px 0"></div>` : ''}
         ${folders.map(f => {
           const inF = Folders.hasItem(f.id, item.id, item.type);
-          return `<button class="save-opt-btn ${inF ? 'active' : ''}" data-folder-id="${f.id}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:none;background:${inF ? 'var(--accent)' : 'var(--bg-3)'};color:${inF ? '#000' : 'var(--text)'};cursor:pointer;font-weight:600;font-size:1rem;transition:background 0.2s">
-            <div style="width:20px;height:20px">${ICONS.list}</div> ${esc(f.name)} ${inF ? '<div style="margin-left:auto;width:20px;height:20px">'+ICONS.check+'</div>' : ''}
+          return `<button type="button" class="save-opt-btn ${inF ? 'active' : ''}" data-folder-id="${f.id}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:1px solid ${inF ? 'var(--accent)' : 'var(--border)'};background:${inF ? 'var(--accent)' : 'var(--bg-2)'};color:${inF ? 'var(--on-accent, #000)' : 'var(--text)'};cursor:pointer;font-weight:700;font-size:0.95rem;transition:background 0.2s">
+            <div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center">${ICONS.list}</div> ${esc(f.name)} ${inF ? '<div style="margin-left:auto;width:20px;height:20px;display:flex;align-items:center;justify-content:center">'+ICONS.check+'</div>' : ''}
           </button>`;
         }).join("")}
       </div>
@@ -2402,11 +2396,11 @@ function openSaveModal(item, onToggle) {
       if (onToggle) onToggle(nowSaved, added);
       
       closeModal(modal);
-      toast(added ? "Added" : "Removed");
+      toast(added ? "Added to list" : "Removed from list");
     });
   });
 
-  modal.style.display = "flex";
+  openModal(modal);
 }
 
 const OVERVIEW_PREVIEW = 95;
@@ -2660,6 +2654,7 @@ const LiquidGlass = (() => {
   let SUP = null, idc = 0;
 
   function detect() {
+    if (matchMedia("(hover: none), (pointer: coarse), (max-width: 768px)").matches) return false;
     const ua = navigator.userAgent || "";
     const isWebkit = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Android/.test(ua);
     const isFirefox = /Firefox/.test(ua);
@@ -3050,10 +3045,12 @@ let heroBound = false;
 async function loadHero(item) {
   if (!item) return;
   heroData = item;
+  bindHeroActions();
+  updateHeroListState();
   const id = item.id;
   const realType = mediaType(item);
   const title = item.title || item.name || "";
-  const backdrop = item.backdrop_path ? `${IMG_ORIG}${item.backdrop_path}` : "";
+  const backdrop = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : "";
 
   await swapHeroBackdrop(backdrop);
 
@@ -3177,6 +3174,7 @@ function closeTrailer() {
 function initGenreStrip() {
   const strip = $("#genre-strip");
   if (!strip) return;
+  strip.textContent = "";
   GENRES.forEach((g, i) => {
     const btn = document.createElement("button");
     btn.className = `genre-pill${i === 0 ? " active" : ""}`;
@@ -3225,7 +3223,7 @@ function buildSeasonSpotlight(shows) {
     card.setAttribute("role", "link");
     card.setAttribute("aria-label", s.name || s.title || "");
     card.innerHTML = `
-      ${img ? `<img src="${esc(img)}" alt="${esc(item.title || item.name || '')}" loading="lazy" draggable="false" decoding="async"/>` : `<div class="no-img">\u2014</div>`}
+      ${img ? `<img src="${esc(img)}" alt="${esc(s.title || s.name || '')}" loading="lazy" draggable="false" decoding="async"/>` : `<div class="no-img">\u2014</div>`}
       <div class="spotlight-shade"></div>
       ${sn ? `<span class="spotlight-badge">${ICONS.clapper} Season ${sn}</span>` : ""}
       <div class="spotlight-foot">
@@ -3332,32 +3330,7 @@ function initInstantSearch(inputEl, isEnabled = () => true) {
   return () => { clearTimeout(timer); closeDropdown(); };
 }
 
-function initGlobalShortcuts() {
-  if (window.__orcShortcutsBound) return;
-  window.__orcShortcutsBound = true;
 
-  document.addEventListener("keydown", e => {
-    const tag = document.activeElement?.tagName?.toUpperCase();
-    const isInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable;
-
-    if (e.key === "/" && !isInput) {
-      const searchInput = $("#main-search-input") || $(".topnav-search-input");
-      if (searchInput) {
-        e.preventDefault();
-        if (window.innerWidth >= 768) searchInput.focus();
-      }
-    } else if (e.key === "Escape") {
-      closeTrailer();
-      $(".instant-search-dropdown").forEach(d => d.remove());
-      const s = $("#search-input") || $(".ep-search-input");
-      if (s) s.setAttribute("aria-expanded", "false");
-      if (isPlayerFullscreen()) {
-        if (document.exitFullscreen) document.exitFullscreen();
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-      }
-    }
-  });
-}
 
 async function renderContinueWatchingRow() {
   const container = $("#categories");
@@ -3365,7 +3338,7 @@ async function renderContinueWatchingRow() {
   const items = Progress.getAll();
   if (!items || !items.length) return;
 
-  const validItems = items.filter(it => it && it.id && it.progress > 1 && it.progress < 98);
+  const validItems = items.filter(it => it && (it.id || it.mediaId) && it.progress > 1 && it.progress < 98);
   if (!validItems.length) return;
 
   const wrap = document.createElement("div");
@@ -3378,24 +3351,32 @@ async function renderContinueWatchingRow() {
       <button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button>
     </div>`;
   const track = wrap.querySelector(".continue-watching-track");
+  track.append(...skeletons(Math.min(validItems.length, 6)));
+  container.prepend(wrap);
 
-  for (const it of validItems.slice(0, 10)) {
-    try {
-      const type = it.mediaType === "tv" ? "tv" : "movie";
-      const d = await tmdb(`/${type}/${it.id}`);
-      if (!d) continue;
-      const card = buildCard(d, type, { progressValue: it.progress });
-      track.appendChild(card);
-    } catch (err) { console.warn('Caught error:', err); }
-  }
-
-  if (track.children.length > 0) {
-    container.prepend(wrap);
+  try {
+    const settled = await Promise.allSettled(validItems.slice(0, 10).map(it => {
+      const type = (it.mediaType || it.type) === "tv" ? "tv" : "movie";
+      const id = it.id || it.mediaId;
+      return tmdb(`/${type}/${id}`).then(d => ({ d, type, progress: it.progress }));
+    }));
+    const loaded = settled.filter(r => r.status === "fulfilled" && r.value?.d).map(r => r.value);
+    if (!loaded.length) {
+      wrap.remove();
+      return;
+    }
+    track.textContent = "";
+    loaded.forEach(({ d, type, progress }) => {
+      track.appendChild(buildCard(d, type, { progressValue: progress }));
+    });
     initRowDrag(track);
     initRowKeyboard(track);
     const scroll = 360;
     wrap.querySelector(".row-arrow.left")?.addEventListener("click", () => track.scrollBy({ left: -scroll, behavior: "smooth" }));
     wrap.querySelector(".row-arrow.right")?.addEventListener("click", () => track.scrollBy({ left: scroll, behavior: "smooth" }));
+  } catch (err) {
+    console.warn("Caught error:", err);
+    wrap.remove();
   }
 }
 
@@ -3409,6 +3390,11 @@ function initHeroSwipe() {
 
   heroEl.addEventListener("touchstart", e => {
     if (e.touches.length !== 1) return;
+    if (e.target.closest("button, a, .hero-actions, .hero-dots")) {
+      touchStartX = 0;
+      touchStartY = 0;
+      return;
+    }
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   }, { passive: true });
@@ -3558,15 +3544,14 @@ function renderDevLogAnnouncement() {
 async function initHomePage() {
   initSplash();
   initSidebar("home");
+  bindHeroActions();
   initGenreStrip();
   initGlobalShortcuts();
   initHeroSwipe();
-  renderContinueWatchingRow();
-  renderRecommendedForYouRow();
   renderDevLogAnnouncement();
 
   const main = $("#main-content");
-  if (main && (!$("#splash-screen") || sessionStorage.getItem("orc_splash"))) {
+  if (main) {
     main.style.opacity = "1";
   }
 
@@ -3574,32 +3559,8 @@ async function initHomePage() {
   if (!el) return;
   el.textContent = "";
 
-  const progress = Progress.getAll();
-  if (progress.length) {
-    const cwRow = document.createElement("div");
-    cwRow.className = "row-wrapper continue-watching-wrapper visible";
-    cwRow.innerHTML = `<div class="row-header"><h2 class="row-title">Continue Watching</h2></div><div class="row-track-container"><button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button><div class="row-track"></div><button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button></div>`;
-    const cwTrack = cwRow.querySelector(".row-track");
-    cwTrack.append(...skeletons(6));
-    el.appendChild(cwRow);
-
-    (async () => {
-      try {
-        const cw = await Promise.allSettled(progress.slice(0, 12).map(p =>
-          tmdb(p.type === "tv" ? `/tv/${p.id}` : `/movie/${p.id}`).then(d => ({ ...d, _type: p.type, _progress: p.progress }))
-        ));
-        const items = cw.filter(r => r.status === "fulfilled").map(r => r.value);
-        if (items.length) {
-          cwTrack.textContent = "";
-          items.forEach(it => cwTrack.appendChild(buildCard(it, it._type || "movie", { progressValue: it._progress, eager: true })));
-          initRowDrag(cwTrack);
-          initRowKeyboard(cwTrack);
-        } else {
-          cwRow.remove();
-        }
-      } catch (err) { console.warn('Caught error:', err); cwRow.remove(); }
-    })();
-  }
+  renderContinueWatchingRow();
+  renderRecommendedForYouRow();
 
   const list = MyList.get();
   if (list.length) {
@@ -4052,7 +4013,16 @@ async function initTvPage() {
     };
 
     async function loadEps(sn) {
-      $("#ep-grid").innerHTML = `<div class="spinner" style="margin:20px auto"></div>`;
+      $("#ep-grid").innerHTML = Array.from({ length: 4 }, () => `
+        <div class="ep-skel-row">
+          <div class="skel-pulse" style="width:20px;height:20px;border-radius:6px"></div>
+          <div class="ep-skel-thumb skel-pulse"></div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div class="skel-pulse" style="width:55%;height:16px"></div>
+            <div class="skel-pulse" style="width:85%;height:12px"></div>
+          </div>
+        </div>
+      `).join("");
       try {
         const sd = await tmdb(`/tv/${id}/season/${sn}`);
         $("#ep-grid").textContent = "";
@@ -4106,22 +4076,7 @@ async function initTvPage() {
     renderProviders($("#provider-bar"), "tv", id, season, episode, update);
     if (seasons.length && $("#season-select")) {
       $("#ep-block").style.display = "";
-      let epHead = $("#ep-block").querySelector(".ep-head");
-      if (!epHead) {
-        epHead = document.createElement("div");
-        epHead.className = "ep-head";
-        epHead.innerHTML = `<h2>Episodes</h2><input type="text" id="ep-search-input" placeholder="Filter episodes..." class="ep-search-input" />`;
-        $("#ep-block").prepend(epHead);
-      } else if (!$("#ep-search-input")) {
-        const inp = document.createElement("input");
-        inp.type = "text";
-        inp.id = "ep-search-input";
-        inp.placeholder = "Filter episodes...";
-        inp.className = "ep-search-input";
-        epHead.appendChild(inp);
-      }
       const seasonSel = $("#season-select");
-      if (seasonSel && seasonSel.parentElement !== epHead) epHead.insertBefore(seasonSel, $("#ep-search-input"));
       seasonSel.textContent = "";
       seasons.forEach(s => {
         const o = document.createElement("option");
@@ -4131,9 +4086,11 @@ async function initTvPage() {
         seasonSel.appendChild(o);
       });
       await loadEps(season);
-      $("#season-select").addEventListener("change", () => {
-        season = +$("#season-select").value;
+      seasonSel.addEventListener("change", () => {
+        season = +seasonSel.value;
         episode = 1;
+        const epInput = $("#ep-search-input");
+        if (epInput) epInput.value = "";
         loadEps(season).then(update);
       });
     }
@@ -4418,7 +4375,7 @@ function initSearchPage() {
   });
 
   const q = params.get("q") || "";
-  if (input && !q && !genreId) setTimeout(() => input.focus(), 120);
+  if (input && !q && !genreId && !isMobile() && !isTouch()) setTimeout(() => input.focus(), 120);
   if (input) {
     input.value = q;
     if (clear) clear.style.display = q ? "flex" : "none";
@@ -4434,11 +4391,12 @@ function initSearchPage() {
       if (e.key !== "Enter" || e.isComposing || current !== "ai") return;
       e.preventDefault();
       clearTimeout(timer);
+      closeInstant?.();
       doSearch(input.value.trim());
     });
     doSearch(q);
   }
-  clear?.addEventListener("click", () => { input.value = ""; clear.style.display = "none"; doSearch(""); if (window.innerWidth >= 768) input.focus(); });
+  clear?.addEventListener("click", () => { input.value = ""; clear.style.display = "none"; closeInstant?.(); doSearch(""); if (!isMobile() && !isTouch()) input.focus(); });
   renderRecent();
 }
 
@@ -4452,10 +4410,10 @@ async function initSurpriseMe() {
     modal.className = "modal-overlay";
     modal.id = "surprise-modal";
     modal.innerHTML = `
-      <div class="surprise-modal-box">
-        <button type="button" class="modal-close" id="surprise-modal-close" aria-label="Close">✕</button>
+      <div class="surprise-modal-box" role="dialog" aria-modal="true" aria-labelledby="surprise-title">
+        <button type="button" class="modal-close" id="surprise-modal-close" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
         <div class="surprise-modal-header">
-          <span class="surprise-badge">🎲 Surprise Picker</span>
+          <span class="surprise-badge">Surprise Picker</span>
         </div>
         <div class="surprise-reel-stage">
           <div class="surprise-reel-card">
@@ -4483,8 +4441,16 @@ async function initSurpriseMe() {
     `;
     document.body.appendChild(modal);
 
-    modal.querySelector("#surprise-modal-close").addEventListener("click", () => closeModal(modal));
-    modal.addEventListener("click", e => { if (e.target === modal) closeModal(modal); });
+    modal.querySelector("#surprise-modal-close").addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeModal(modal);
+    });
+    modal.addEventListener("click", e => {
+      if (e.target === modal || !e.target.closest(".surprise-modal-box")) {
+        closeModal(modal);
+      }
+    });
   }
 
   let pool = [];
@@ -4511,6 +4477,10 @@ async function initSurpriseMe() {
   }
 
   async function spinReel() {
+    if (surpriseSpinInterval) {
+      clearInterval(surpriseSpinInterval);
+      surpriseSpinInterval = null;
+    }
     const posterWrap = $("#surprise-poster-wrap");
     const posterImg = $("#surprise-poster");
     const titleEl = $("#surprise-title");
@@ -4528,12 +4498,18 @@ async function initSurpriseMe() {
       if (titleEl) titleEl.textContent = "Failed to load pool";
       if (overviewEl) overviewEl.textContent = "Check your connection and try again.";
       if (respinBtn) respinBtn.disabled = false;
+      if (posterWrap) posterWrap.classList.remove("spinning");
       return;
     }
 
     let ticks = 0;
-    const maxTicks = 18;
-    const interval = setInterval(() => {
+    const maxTicks = 16;
+    surpriseSpinInterval = setInterval(() => {
+      if (!modal.classList.contains("open")) {
+        clearInterval(surpriseSpinInterval);
+        surpriseSpinInterval = null;
+        return;
+      }
       ticks++;
       const randomCandidate = items[Math.floor(Math.random() * items.length)];
       if (posterImg && randomCandidate.poster_path) {
@@ -4543,7 +4519,8 @@ async function initSurpriseMe() {
       if (titleEl) titleEl.textContent = randomCandidate.title || randomCandidate.name || "Untitled";
 
       if (ticks >= maxTicks) {
-        clearInterval(interval);
+        clearInterval(surpriseSpinInterval);
+        surpriseSpinInterval = null;
         selectedTitle = items[Math.floor(Math.random() * items.length)];
         const kind = mediaType(selectedTitle, selectedTitle.media_type || "movie");
         const titleName = selectedTitle.title || selectedTitle.name || "Untitled";
@@ -4570,17 +4547,18 @@ async function initSurpriseMe() {
           playBtn.onclick = () => {
             closeModal(modal);
             const targetPath = kind === "tv" ? `${routeUrl("tv")}?id=${selectedTitle.id}` : `${routeUrl("movie")}?id=${selectedTitle.id}`;
-            const bg = selectedTitle.backdrop_path ? `${IMG_ORIG}${selectedTitle.backdrop_path}` : (posterUrl(selectedTitle.poster_path) || "");
+            const bg = selectedTitle.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${selectedTitle.backdrop_path}` : (posterUrl(selectedTitle.poster_path) || "");
             navigateWithLoader(targetPath, bg, titleName);
           };
         }
 
         if (respinBtn) respinBtn.disabled = false;
       }
-    }, 90);
+    }, 85);
   }
 
-  surpriseBtn.addEventListener("click", () => {
+  surpriseBtn.addEventListener("click", e => {
+    e.preventDefault();
     openModal(modal);
     spinReel();
   });
@@ -4969,7 +4947,7 @@ function initSettingsPage() {
         : p.name;
       btn.addEventListener("click", () => {
         setProvider(p.id);
-        $$(".settings-provider").forEach(b => b.classList.remove("active"));
+        providerBox.querySelectorAll(".settings-provider").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
         toast(`Stream provider set to ${p.name}`);
       });
@@ -5197,12 +5175,16 @@ async function initListPage() {
       renderListGrid();
     } else if (currentTab === "history") {
       const prog = Progress.get();
-      const progList = Object.values(prog || {}).sort((a, b) => b.lastUpdated - a.lastUpdated);
+      const progList = Object.values(prog || {})
+        .filter(i => i && (i.id || i.mediaId))
+        .sort((a, b) => (b.savedAt || b.lastUpdated || 0) - (a.savedAt || a.lastUpdated || 0));
       if (!progList.length) { emptyState("No watch history", "Start watching titles and they will appear here."); return; }
       grid.textContent = ""; skeletons(Math.min(progList.length, 12)).forEach(s => grid.appendChild(s));
-      const settled = await Promise.allSettled(progList.map(i =>
-        tmdb(i.mediaType === "tv" ? `/tv/${i.mediaId}` : `/movie/${i.mediaId}`).then(d => ({ ...d, _type: i.mediaType, _progress: i.progress }))
-      ));
+      const settled = await Promise.allSettled(progList.map(i => {
+        const mType = (i.mediaType || i.type) === "tv" ? "tv" : "movie";
+        const mId = i.id || i.mediaId;
+        return tmdb(`/${mType}/${mId}`).then(d => ({ ...d, _type: mType, _progress: i.progress }));
+      }));
       historyItems = dedupeItems(settled.filter(r => r.status === "fulfilled").map(r => r.value));
       renderListGrid();
     } else if (currentTab === "folders") {
@@ -5344,19 +5326,19 @@ async function initListPage() {
         modal.id = "folder-modal";
         modal.className = "modal-overlay";
         modal.innerHTML = `
-          <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="folder-modal-title">
-            <h2 id="folder-modal-title" style="margin-bottom:12px;font-size:1.4rem">Create New Folder</h2>
-            <input type="text" id="folder-name-input" placeholder="e.g. Anime, Action, Watch with Friends" class="auth-input" style="width:100%;box-sizing:border-box" />
-            <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
-              <button type="button" class="btn-play" id="folder-cancel" style="background:var(--bg-3);color:var(--text)">Cancel</button>
-              <button type="button" class="btn-play" id="folder-create">Create</button>
+          <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="folder-modal-title" style="width:min(380px,92vw);padding:24px;border-radius:20px;background:var(--bg-1);border:1px solid var(--border-2)">
+            <h2 id="folder-modal-title" style="margin:0 0 14px;font-size:1.25rem;font-weight:800">Create New Folder</h2>
+            <input type="text" id="folder-name-input" placeholder="e.g. Anime, Sci-Fi, Weekend Watch" style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid var(--border-2);background:var(--bg-2);color:var(--text);font-size:0.95rem;outline:none" />
+            <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+              <button type="button" class="btn-ghost" id="folder-cancel" style="padding:10px 18px">Cancel</button>
+              <button type="button" class="btn-play" id="folder-create" style="padding:10px 20px">Create</button>
             </div>
           </div>
         `;
         document.body.appendChild(modal);
-        modal.addEventListener("click", e => { if(e.target === modal) closeModal(modal); });
-        modal.querySelector("#folder-cancel").addEventListener("click", () => modal.style.display = "none");
-        modal.querySelector("#folder-create").addEventListener("click", () => {
+        modal.addEventListener("click", e => { if (e.target === modal) closeModal(modal); });
+        modal.querySelector("#folder-cancel").addEventListener("click", () => closeModal(modal));
+        const submitFolder = () => {
           const inp = modal.querySelector("#folder-name-input");
           const val = inp.value.trim();
           if (val) {
@@ -5365,11 +5347,17 @@ async function initListPage() {
             if (currentTab === "folders") loadData();
           }
           closeModal(modal);
+        };
+        modal.querySelector("#folder-create").addEventListener("click", submitFolder);
+        modal.querySelector("#folder-name-input").addEventListener("keydown", e => {
+          if (e.key === "Enter") { e.preventDefault(); submitFolder(); }
         });
       }
       modal.querySelector("#folder-name-input").value = "";
-      modal.style.display = "flex";
-      modal.querySelector("#folder-name-input").focus();
+      openModal(modal);
+      if (!isMobile() && !isTouch()) {
+        setTimeout(() => modal.querySelector("#folder-name-input")?.focus(), 60);
+      }
     });
   }
 
@@ -5634,13 +5622,27 @@ function openKeyboardShortcutsModal() {
 }
 
 function initGlobalShortcuts() {
+  if (window.__orcShortcutsBound) return;
+  window.__orcShortcutsBound = true;
   document.addEventListener("keydown", e => {
-    const tag = document.activeElement?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable) return;
-    if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+    if (e.key === "Escape") {
+      closeModal();
+      closeTrailer();
+      closePersonModal();
+      closePopup();
+      $(".instant-search-dropdown").forEach(d => d.remove());
+      return;
+    }
+    const tag = document.activeElement?.tagName?.toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable) return;
+    if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
-      const s = $("#search-input") || $(".ep-search-input");
-      if (s) { s.focus(); s.select(); }
+      const s = $("#main-search-input") || $("#search-input") || $(".ep-search-input");
+      if (s) {
+        if (!isMobile()) { s.focus(); s.select?.(); }
+      } else {
+        location.href = routeUrl("search");
+      }
     } else if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       openKeyboardShortcutsModal();
