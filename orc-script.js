@@ -3658,7 +3658,7 @@ function renderDevLogAnnouncement() {
     <div class="devlog-title">New Osiris Watch Branding, Detail Ambient Bleed & Instant Cache</div>
     <div class="devlog-body">
       <p>Refreshed Osiris Watch branding across the entire experience alongside seamless alpha-masked Movie & TV detail heroes with dynamic pixel-sampled ambient color bleed.</p>
-      <p>Upgraded Discover with Fibre 4.5 catalog-verified AI Search and customizable WebGL shader backdrops (defaulting to Rings locked to your accent color).</p>
+      <p>Upgraded Discover with Some random gpt model catalog-verified AI Search and customizable WebGL shader backdrops (defaulting to Rings locked to your accent color).</p>
       <p>Added persistent cross-page catalog caching, hover/touch prefetching, and instant card-to-detail hydration for zero-wait navigation on mobile and desktop.</p>
     </div>
     <div class="devlog-foot">
