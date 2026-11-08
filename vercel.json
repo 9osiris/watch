@@ -40,6 +40,18 @@
   ],
   "redirects": [
     {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "osiris.rocks" }],
+      "destination": "https://watch.osiris.rocks/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.osiris.rocks" }],
+      "destination": "https://watch.osiris.rocks/:path*",
+      "permanent": true
+    },
+    {
       "source": "/index.html",
       "destination": "/",
       "permanent": true

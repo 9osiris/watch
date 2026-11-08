@@ -7,17 +7,17 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Discover & Search Movies & TV Shows | Osiris Watch</title>
   <meta name="description" content="Search and discover thousands of free movies and TV shows on Osiris Watch. Filter by genre, release year, vote score, and trend popularity.">
-  <link rel="canonical" href="https://www.osiris.rocks/search.html">
+  <link rel="canonical" href="https://watch.osiris.rocks/search">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SearchResultsPage",
     "name": "Search & Discover — Osiris Watch",
-    "url": "https://www.osiris.rocks/search.html",
+    "url": "https://watch.osiris.rocks/search",
     "isPartOf": {
       "@type": "WebSite",
       "name": "Osiris Watch",
-      "url": "https://www.osiris.rocks/"
+      "url": "https://watch.osiris.rocks/"
     }
   }
   </script>
@@ -33,6 +33,7 @@
   <link rel="dns-prefetch" href="https://image.tmdb.org">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="orc-styles.css">
+  <link rel="stylesheet" href="ai-search.css">
 </head>
 <body class="search-page">
 
@@ -43,11 +44,13 @@
       <div class="discover-header-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
         <h1 style="font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:0">Discover</h1>
         <div style="display:flex;align-items:center;gap:10px">
-          <select id="media-type-select" class="list-sort-select" aria-label="Media Type">
+          <select id="media-type-select" class="list-sort-select" aria-label="Search mode">
             <option value="all" selected>Both</option>
             <option value="movie">Movies</option>
             <option value="tv">Series</option>
+            <option value="ai">AI Search (Experimental)</option>
           </select>
+          <button type="button" id="ai-search-mode" class="filter-chip filter-chip-ai" data-filter="ai" aria-pressed="false">AI Search</button>
           <button type="button" id="surprise-me-btn" class="glass-chip" style="gap:6px;cursor:pointer">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>
             Surprise Me
@@ -59,7 +62,24 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input type="text" id="main-search-input" placeholder="Search titles, actors, keywords…" autocomplete="off" aria-label="Search titles, actors, and keywords">
         <button type="button" id="search-clear" style="display:none;background:none;border:none;color:var(--text-dim);padding:4px;cursor:pointer" aria-label="Clear">✕</button>
+        <button type="button" id="ai-search-submit" class="glass-chip ai-search-submit" hidden>Ask AI</button>
       </div>
+      <p id="ai-search-help" class="ai-search-help" hidden>Describe your ideal watch, then choose <strong>Ask AI</strong> or press Enter. Explicit constraints are checked against catalog facts.</p>
+      <section id="ai-search-panel" class="ai-search-panel" aria-label="AI search options" hidden>
+        <div class="ai-search-panel-heading"><span id="ai-search-model" class="ai-model-badge">GPT-OSS 20B</span><span>Understand the request. Verify the titles. Rank the matches.</span></div>
+        <div class="ai-search-options">
+          <label>Include <select id="ai-search-media" class="list-sort-select"><option value="all">Movies &amp; series</option><option value="movie">Movies</option><option value="tv">Series</option></select></label>
+          <label>Prefer <select id="ai-search-sort" class="list-sort-select"><option value="relevance">Best match</option><option value="rating">Higher ratings</option><option value="recent">Recent releases</option><option value="hidden-gems">Hidden gems</option></select></label>
+          <label class="ai-watched-option"><input type="checkbox" id="ai-search-hide-watched"> Hide watched titles</label>
+          <button type="button" id="ai-search-cancel" class="glass-chip" hidden>Cancel search</button>
+        </div>
+        <div id="ai-search-examples" class="ai-search-examples" role="group" aria-label="Example AI requests">
+          <button type="button" class="glass-chip" data-ai-query="Thoughtful sci-fi like Arrival, no horror">Thoughtful sci-fi, no horror</button>
+          <button type="button" class="glass-chip" data-ai-query="Crime thrillers released in the 1990s">1990s crime thrillers</button>
+          <button type="button" class="glass-chip" data-ai-query="Feel-good movies under 100 minutes">A short feel-good movie</button>
+          <button type="button" class="glass-chip" data-ai-query="Mystery series with a small-town setting">Small-town mystery series</button>
+        </div>
+      </section>
 
       <div class="discover-filters-bar" style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;align-items:center">
         <select id="filter-genre" class="list-sort-select" aria-label="Filter by Genre">
@@ -110,8 +130,14 @@
 
       <div id="search-recent" class="search-recent" hidden></div>
 
-      <p class="search-status" id="search-status"></p>
+      <p class="search-status" id="search-status" role="status" aria-live="polite"></p>
+      <section id="ai-results-summary" class="ai-results-summary" aria-label="AI search interpretation" hidden></section>
       <div class="search-grid" id="search-results"></div>
+      <div id="ai-result-actions" class="ai-result-actions" hidden>
+        <button type="button" id="ai-search-more" class="btn-ghost">Show more matches</button>
+        <button type="button" id="ai-search-refresh" class="btn-ghost">Find different picks</button>
+      </div>
+      <section id="ai-refinements" class="ai-refinements" aria-label="Refine AI search" hidden></section>
     </main>
 
     <footer class="page-foot">
@@ -123,6 +149,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="ai-search-catalog.js"></script>
+  <script src="ai-search-ui.js"></script>
   <script src="orc-script.js"></script>
 </body>
 </html>

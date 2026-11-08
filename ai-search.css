@@ -1,0 +1,52 @@
+/* AI discovery styles, scoped to the search page. */
+.search-page.is-ai-search .search-input-wrap { max-width: 900px; }
+.search-page .discover-header-row > div { flex-wrap: wrap; }
+.search-page #ai-search-mode { white-space: nowrap; }
+.ai-search-panel { max-width: 900px; padding: 18px; margin: 0 0 24px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, var(--bg-1)), var(--bg-1)); }
+.ai-search-panel-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; font-size: .82rem; color: var(--text-2); }
+.ai-model-badge { display: inline-flex; padding: 4px 8px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); font-size: .68rem; font-weight: 800; letter-spacing: .035em; }
+.ai-search-options { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; }
+.ai-search-options label { display: inline-flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--text-2); }
+.ai-search-options .list-sort-select { max-width: 100%; font-size: .8rem; }
+.ai-watched-option input { accent-color: var(--accent); width: 16px; height: 16px; }
+.ai-search-examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.ai-search-examples .glass-chip, .ai-search-options .glass-chip { min-height: 36px; height: auto; padding: 8px 12px; font-size: .78rem; cursor: pointer; white-space: normal; text-align: left; }
+.ai-results-summary { padding: 18px 20px; margin: 0 0 20px; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-1); }
+.ai-summary-title { margin: 0 0 10px; font-size: 1.02rem; line-height: 1.5; font-weight: 700; color: var(--text); }
+.ai-constraint-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-constraint-chip { padding: 4px 9px; border-radius: var(--pill); background: var(--accent-soft); color: var(--text); font-size: .73rem; line-height: 1.4; }
+.ai-summary-meta { font-size: .77rem; line-height: 1.6; color: var(--text-2); margin: 12px 0 0; }
+.ai-search-notes { margin-top: 10px; color: var(--text-2); font-size: .77rem; line-height: 1.6; }
+.ai-search-notes summary { cursor: pointer; color: var(--text); }
+.ai-search-notes ul { margin: 6px 0 0; padding-left: 18px; }
+.search-page.is-ai-search .search-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); align-items: stretch; }
+.ai-result { min-width: 0; display: flex; flex-direction: column; border-radius: var(--radius); overflow: hidden; background: var(--bg-1); border: 1px solid var(--border); }
+.ai-result .media-card { width: 100%; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.ai-card-explanation { padding: 12px; flex: 1; }
+.ai-match-label { display: block; font-size: .61rem; font-weight: 700; color: var(--accent); letter-spacing: .015em; }
+.ai-card-reason { font-size: .76rem; line-height: 1.55; color: var(--text-2); margin: 6px 0 0; overflow-wrap: anywhere; }
+.ai-card-runtime { display: block; margin-top: 7px; color: var(--text-3); font-size: .72rem; }
+.ai-result-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 26px 0 0; }
+.ai-result-actions button, .ai-retry { min-height: 44px; cursor: pointer; }
+.ai-retry { margin-top: 18px; }
+.ai-refinements { margin: 24px 0 0; }
+.ai-refinement-label { font-size: .8rem; color: var(--text-2); margin-bottom: 10px; }
+.ai-refinement-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-refinement { max-width: 100%; height: auto; min-height: 40px; padding: 9px 13px; font-size: .78rem; line-height: 1.5; white-space: normal; text-align: left; cursor: pointer; }
+.ai-empty p { max-width: 600px; margin: 8px auto 0; line-height: 1.7; }
+#ai-search-panel[hidden], #ai-search-cancel[hidden], #ai-search-examples[hidden], #ai-results-summary[hidden], #ai-result-actions[hidden], #ai-refinements[hidden], #ai-search-more[hidden] { display: none !important; }
+.ai-search-panel button:focus-visible, .ai-result-actions button:focus-visible, .ai-refinement:focus-visible, #ai-search-mode:focus-visible, .ai-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 640px) {
+  .ai-search-panel { padding: 14px; }
+  .ai-search-options { gap: 12px; }
+  .ai-search-options > label { flex-wrap: wrap; }
+  .search-page.is-ai-search .search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ai-results-summary { padding: 14px; }
+  .ai-card-explanation { padding: 10px; }
+  .ai-match-label { font-size: .59rem; }
+  .ai-card-reason { font-size: .73rem; }
+  .ai-search-examples .glass-chip { max-width: 100%; }
+}
+@media (max-width: 340px) {
+  .search-page.is-ai-search .search-grid { grid-template-columns: minmax(0, 1fr); }
+}

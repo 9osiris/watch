@@ -35,10 +35,17 @@ const CLEAN_ROUTE_PATHS = {
 };
 
 function routeUrl(route, params = "") {
-  const base = APP_ROUTES[route] || route || "/";
+  const base = CLEAN_ROUTE_PATHS[route] || APP_ROUTES[route] || route || "/";
   if (!params) return base;
   const query = params instanceof URLSearchParams ? params.toString() : String(params).replace(/^\?/, "");
   return query ? `${base}?${query}` : base;
+}
+
+function authRedirectUrl() {
+  const origin = ["osiris.rocks", "www.osiris.rocks"].includes(window.location.hostname)
+    ? "https://watch.osiris.rocks"
+    : window.location.origin;
+  return new URL(routeUrl("settings"), origin).href;
 }
 
 function pagePathMatches(pathname, route) {
@@ -390,16 +397,17 @@ const TMDB_CACHE_TTL = 10 * 60 * 1000;
 const _tmdbCache = new Map();
 
 function tmdb(path, retries = 1, opts = {}) {
+  if (opts.signal?.aborted) return Promise.reject(Object.assign(new Error("Search cancelled"), { name: "AbortError" }));
   const now = Date.now();
   const cached = _tmdbCache.get(path);
-  if (cached && (now - cached.time < TMDB_CACHE_TTL)) {
+  if (!opts.signal && cached && (now - cached.time < TMDB_CACHE_TTL)) {
     return cached.req;
   }
 
   const req = (async () => {
     let finalPath = path;
     const hideAdult = SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
-    const isSearchOrDiscover = pagePathMatches(finalPath, "search") || finalPath.startsWith("/discover");
+    const isSearchOrDiscover = finalPath.startsWith("/search/") || finalPath.startsWith("/discover/");
     if (hideAdult && isSearchOrDiscover && !finalPath.includes("include_adult=")) {
       const pSep = finalPath.includes("?") ? "&" : "?";
       finalPath = `${finalPath}${pSep}include_adult=false`;
@@ -410,8 +418,11 @@ function tmdb(path, retries = 1, opts = {}) {
       attempts++;
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 12000);
+      const forwardAbort = () => ctrl.abort();
+      opts.signal?.addEventListener("abort", forwardAbort, { once: true });
+      if (opts.signal?.aborted) ctrl.abort();
       try {
-        const res = await fetch(`${TMDB_BASE}${finalPath}${sep}api_key=${TMDB_KEY}`, { signal: opts.signal || ctrl.signal });
+        const res = await fetch(`${TMDB_BASE}${finalPath}${sep}api_key=${TMDB_KEY}`, { signal: ctrl.signal });
         if (res.status === 429) { toast("TMDB Rate limit exceeded. Please wait a moment."); throw new Error("TMDB Rate Limit 429"); }
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
         return await res.json();
@@ -420,9 +431,12 @@ function tmdb(path, retries = 1, opts = {}) {
         await new Promise(r => setTimeout(r, 600));
       } finally {
         clearTimeout(timer);
+        opts.signal?.removeEventListener("abort", forwardAbort);
       }
     }
   })();
+
+  if (opts.signal) return req;
 
   req.catch(() => _tmdbCache.delete(path));
 
@@ -1037,7 +1051,10 @@ const SupabaseSync = {
     const { data, error } = await client.auth.signUp({
       email,
       password,
-      options: { data: { username: uname, joined_at: joinedAt, bio: "" } }
+      options: {
+        emailRedirectTo: authRedirectUrl(),
+        data: { username: uname, joined_at: joinedAt, bio: "" }
+      }
     });
     if (error) throw error;
     if (data?.user?.user_metadata) {
@@ -1214,7 +1231,7 @@ const SupabaseSync = {
     const client = getSupabaseClient();
     if (!client) throw new Error("Supabase client is not initialized.");
     const { data, error } = await client.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}${routeUrl("settings")}`
+      redirectTo: authRedirectUrl()
     });
     if (error) throw error;
     return data;
@@ -3087,7 +3104,7 @@ function setMetaTags(title, desc, img) {
   if (img) ogImg.setAttribute("content", img);
 }
 
-function initInstantSearch(inputEl) {
+function initInstantSearch(inputEl, isEnabled = () => true) {
   if (!inputEl || inputEl.dataset.instantBound) return;
   inputEl.dataset.instantBound = "1";
   let timer = null;
@@ -3096,16 +3113,19 @@ function initInstantSearch(inputEl) {
   const closeDropdown = () => {
     dropdown?.remove();
     dropdown = null;
+    inputEl.setAttribute("aria-expanded", "false");
   };
 
   inputEl.addEventListener("input", () => {
     const q = inputEl.value.trim();
     clearTimeout(timer);
-    if (!q || q.length < 2) { closeDropdown(); return; }
+    if (!isEnabled() || !q || q.length < 2) { closeDropdown(); return; }
 
     timer = setTimeout(async () => {
+      if (!isEnabled()) { closeDropdown(); return; }
       try {
         const data = await tmdb(`/search/multi?query=${encodeURIComponent(q)}`);
+        if (!isEnabled() || inputEl.value.trim() !== q) { closeDropdown(); return; }
         const hits = (data.results || []).filter(i => (i.poster_path || i.backdrop_path) && (i.media_type === "movie" || i.media_type === "tv")).slice(0, 4);
         if (!hits.length) { closeDropdown(); return; }
 
@@ -3145,6 +3165,7 @@ function initInstantSearch(inputEl) {
   inputEl.addEventListener("keydown", e => {
     if (e.key === "Escape") closeDropdown();
   });
+  return () => { clearTimeout(timer); closeDropdown(); };
 }
 
 function initGlobalShortcuts() {
@@ -4004,25 +4025,31 @@ function initSearchPage() {
   const grid = $("#search-results");
   const recentBox = $("#search-recent");
   const chips = $$(".filter-chip");
-  let current = filter === "movie" || filter === "tv" ? filter : "all";
+  let current = ["movie", "tv", "ai"].includes(filter) ? filter : "all";
   let timer, lastQ = "";
   let searchPage = 1;
   let isFetchingMore = false;
   let hasMorePages = true;
 
-  if (input) initInstantSearch(input);
+  const closeInstantSearch = input ? initInstantSearch(input, () => current !== "ai") : null;
 
   initSurpriseMe();
 
   const mediaTypeSelect = $("#media-type-select");
-  if (mediaTypeSelect) {
-    if (filter === "movie" || filter === "tv") mediaTypeSelect.value = filter;
-    else mediaTypeSelect.value = "all";
-    mediaTypeSelect.addEventListener("change", () => {
-      current = mediaTypeSelect.value;
-      doSearch(lastQ || input?.value.trim() || "");
-    });
-  }
+  const aiSubmit = $("#ai-search-submit");
+  const aiHelp = $("#ai-search-help");
+  const filtersBar = $(".discover-filters-bar");
+  mediaTypeSelect?.addEventListener("change", () => selectSearchMode(mediaTypeSelect.value));
+  const aiController = window.OsirisAISearchUI && input && status && grid ? window.OsirisAISearchUI.create({
+    input, status, grid,
+    requestCatalog: (path, opts) => tmdb(path, 1, opts),
+    renderCard: buildCard,
+    hideAdult: () => SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0",
+    hideWatched: () => SETTINGS.get(SETTINGS.hideWatchedKey) === "1",
+    exclude: hide => hide ? Progress.getAll().filter(item => item.progress >= 95 && Number.isSafeInteger(Number(item.id)))
+      .map(item => `${item.mediaType === "tv" || item.type === "tv" ? "tv" : "movie"}_${item.id}`) : [],
+    onQuery: q => { input.value = q; if (clear) clear.style.display = q ? "flex" : "none"; doSearch(q); }
+  }) : null;
 
   function setBusy(busy) {
     if (!status) return;
@@ -4033,7 +4060,7 @@ function initSearchPage() {
   function renderRecent() {
     if (!recentBox || !input) return;
     const q = input.value.trim();
-    if (q || genreId) { recentBox.hidden = true; return; }
+    if (current === "ai" || q || genreId) { recentBox.hidden = true; return; }
     const recent = RecentSearches.get();
     if (!recent.length) { recentBox.hidden = true; return; }
     recentBox.hidden = false;
@@ -4049,25 +4076,42 @@ function initSearchPage() {
     });
   }
 
-  const setPlaceholder = () => {
-    if (input) input.placeholder = current === "ai"
-      ? "Describe a vibe, plot, era, or movies like…"
-      : "Titles, actors, keywords…";
+  const syncSearchMode = () => {
+    const isAI = current === "ai";
+    if (mediaTypeSelect) mediaTypeSelect.value = current;
+    document.body.classList.toggle("is-ai-search", isAI);
+    aiController?.setEnabled(isAI);
+    chips.forEach(c => { c.classList.toggle("on", c.dataset.filter === current); c.setAttribute("aria-pressed", String(c.dataset.filter === current)); });
+    if (aiSubmit) aiSubmit.hidden = !isAI;
+    if (aiHelp) aiHelp.hidden = !isAI;
+    if (filtersBar) filtersBar.hidden = isAI;
+    if (!input) return;
+    input.placeholder = isAI ? "Describe a vibe, plot, era, or movies like…" : "Titles, actors, keywords…";
+    input.setAttribute("aria-label", isAI ? "Describe movies or TV shows you want to watch" : "Search titles, actors, and keywords");
+    if (isAI) {
+      input.setAttribute("aria-describedby", "ai-search-help");
+      input.setAttribute("maxlength", "1000");
+    } else {
+      input.removeAttribute("aria-describedby");
+      input.removeAttribute("maxlength");
+    }
   };
-  chips.forEach(c => c.classList.toggle("on", c.dataset.filter === current));
-  setPlaceholder();
-  chips.forEach(c => c.addEventListener("click", () => {
-    current = c.dataset.filter;
-    chips.forEach(x => x.classList.toggle("on", x === c));
-    setPlaceholder();
-    doSearch(lastQ || input?.value.trim() || "");
-  }));
+  function selectSearchMode(mode) {
+    clearTimeout(timer);
+    closeInstantSearch?.();
+    current = ["movie", "tv", "ai"].includes(mode) ? mode : "all";
+    syncSearchMode();
+    doSearch(input?.value.trim() || "");
+  }
+  syncSearchMode();
+  chips.forEach(c => c.addEventListener("click", () => selectSearchMode(c.dataset.filter)));
+  aiSubmit?.addEventListener("click", () => doSearch(input?.value.trim() || ""));
 
   let searchAbortController = null;
-async function doSearch(q, append = false) {
-  if (searchAbortController) searchAbortController.abort();
-  searchAbortController = new AbortController();
-  const searchOpts = { signal: searchAbortController.signal };
+  async function doSearch(q, append = false) {
+    if (searchAbortController) searchAbortController.abort();
+    searchAbortController = new AbortController();
+    const searchOpts = { signal: searchAbortController.signal };
     if (!status || !grid) return;
     if (!append) {
       searchPage = 1;
@@ -4076,7 +4120,21 @@ async function doSearch(q, append = false) {
       skeletons(12).forEach(s => grid.appendChild(s));
     }
     lastQ = q;
-    if (current === "ai") { aiSearch(q); return; }
+    if (!append) {
+      const url = new URL(location.href);
+      if (q) url.searchParams.set("q", q); else url.searchParams.delete("q");
+      if (current === "all") url.searchParams.delete("type"); else url.searchParams.set("type", current);
+      history.replaceState(null, "", url);
+    }
+    if (current === "ai") {
+      hasMorePages = false;
+      if (recentBox) recentBox.hidden = true;
+      if (q) RecentSearches.add(q);
+      if (aiController) return aiController.search(q, searchOpts);
+      status.textContent = "AI search assets are missing. Reload the page.";
+      grid.textContent = "";
+      return;
+    }
     status.classList.remove("is-busy");
 
     if (recentBox) recentBox.hidden = !!q;
@@ -4119,6 +4177,7 @@ async function doSearch(q, append = false) {
         }
       }
 
+      if (searchOpts.signal.aborted) return;
       items = dedupeItems(items);
 
       const eraVal = $("#filter-era")?.value || "all";
@@ -4168,6 +4227,7 @@ async function doSearch(q, append = false) {
         grid.appendChild(buildCard(item, item.media_type || (current === "tv" ? "tv" : "movie")));
       });
     } catch (e) {
+      if (searchOpts.signal.aborted || e.name === "AbortError") return;
       if (!append) {
         grid.innerHTML = `<div class="no-results"><p>Failed to load titles. Please check your connection.</p></div>`;
         if (status) status.textContent = "";
@@ -4177,7 +4237,7 @@ async function doSearch(q, append = false) {
 
   // Infinite Scroll Listener
   window.addEventListener("scroll", () => {
-    if (isFetchingMore || !hasMorePages) return;
+    if (current === "ai" || isFetchingMore || !hasMorePages) return;
     const scrollPos = window.innerHeight + window.scrollY;
     const threshold = document.body.offsetHeight - 700;
     if (scrollPos >= threshold) {
@@ -4197,13 +4257,20 @@ async function doSearch(q, append = false) {
   if (input && !q && !genreId) setTimeout(() => input.focus(), 120);
   if (input) {
     input.value = q;
+    if (clear) clear.style.display = q ? "flex" : "none";
     input.addEventListener("input", () => {
       if (clear) clear.style.display = input.value ? "flex" : "none";
-      if (!input.value.trim()) renderRecent();
-      if (current === "ai") { setBusy(false); return; }
-      setBusy(true);
       clearTimeout(timer);
+      if (!input.value.trim()) renderRecent();
+      if (current === "ai") { if (!input.value.trim()) doSearch(""); return; }
+      setBusy(true);
       timer = setTimeout(() => doSearch(input.value.trim()), 400);
+    });
+    input.addEventListener("keydown", e => {
+      if (e.key !== "Enter" || e.isComposing || current !== "ai") return;
+      e.preventDefault();
+      clearTimeout(timer);
+      doSearch(input.value.trim());
     });
     doSearch(q);
   }
@@ -4360,82 +4427,6 @@ async function initSurpriseMe() {
   }
 }
 
-async function aiSearch(q) {
-  const status = $("#search-status");
-  const grid = $("#search-results");
-  const recentBox = $("#search-recent");
-  if (!status || !grid) return;
-  if (recentBox) recentBox.hidden = true;
-  if (!q) {
-    status.textContent = "";
-    grid.innerHTML = `<div class="no-results ai-empty"><h3>Ask AI <span class="ai-badge">Experimental</span></h3><p>Describe what you're in the mood for. A vibe, a plot, an era, an actor, or something like Interstellar. AI will curate a shortlist.</p></div>`;
-    return;
-  }
-  RecentSearches.add(q);
-  status.innerHTML = `<span class="search-pending"><span class="spin-dot"></span> Asking AI…</span>`;
-  grid.textContent = ""; skeletons(8).forEach(s => grid.appendChild(s));
-  try {
-    const res = await fetch("/api/ai-search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: q }),
-    });
-    if (!res.ok) {
-      let msg = "AI Search is unavailable right now.";
-      try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (err) { console.warn('Caught error:', err); }
-      grid.innerHTML = `<div class="no-results"><h3>Couldn’t reach AI</h3><p>${esc(msg)}</p></div>`;
-      status.textContent = "";
-      return;
-    }
-    const data = await res.json();
-    const recs = Array.isArray(data.results) ? data.results : [];
-    if (!recs.length) {
-      grid.innerHTML = `<div class="no-results"><h3>No picks</h3><p>Try rephrasing your request.</p></div>`;
-      status.textContent = "";
-      return;
-    }
-    const resolved = await Promise.all(recs.map(async rec => {
-      try {
-        const path = rec.type === "tv" ? "/search/tv" : "/search/movie";
-        const r = await tmdb(`${path}?query=${encodeURIComponent(rec.title)}`);
-        const hits = (r.results || []).filter(i => i.poster_path);
-        if (rec.year) {
-          const y = String(rec.year);
-          const exact = hits.find(i => (i.release_date || i.first_air_date || "").startsWith(y));
-          if (exact) return { item: exact, type: rec.type };
-        }
-        return hits[0] ? { item: hits[0], type: rec.type } : null;
-      } catch (err) { console.warn('Caught error:', err); return null; }
-    }));
-    const seen = new Set();
-    const cards = resolved.filter(c => {
-      if (!c) return false;
-      const k = `${c.type}_${c.item.id}`;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    grid.textContent = "";
-    if (data.intro) {
-      const banner = document.createElement("div");
-      banner.className = "ai-intro";
-      banner.innerHTML = `<span class="ai-intro-spark">${ICONS.spark || "✦"}</span><p>${esc(data.intro)}</p>`;
-      grid.appendChild(banner);
-    }
-    if (!cards.length) {
-      const none = document.createElement("div");
-      none.className = "no-results";
-      none.innerHTML = `<p>AI suggested titles, but none were found in the catalog.</p>`;
-      grid.appendChild(none);
-    } else {
-      cards.forEach(c => grid.appendChild(buildCard(c.item, c.type)));
-    }
-    status.textContent = `${cards.length} AI picks`;
-  } catch (err) { console.warn('Caught error:', err);
-    grid.innerHTML = `<div class="no-results"><p>AI Search failed. Check your connection.</p></div>`;
-    status.textContent = "";
-  }
-}
 
 async function renderAccountSettingsSection() {
   const container = $("#settings-account-container");
@@ -5289,7 +5280,7 @@ function openWatchPartyModal(title, mediaId, mediaType) {
   if (!roomId) {
     roomId = "OSIRIS-" + Math.random().toString(36).substring(2, 8).toUpperCase();
   }
-  const partyUrl = `${window.location.origin}/${mediaType || 'movie'}.html?id=${mediaId || ''}&room=${roomId}`;
+  const partyUrl = new URL(routeUrl(mediaType === "tv" ? "tv" : "movie", new URLSearchParams({ id: mediaId || "", room: roomId })), window.location.origin).href;
 
   let modal = $("#party-modal");
   if (!modal) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v18";
+const CACHE_NAME = "orc-static-v20";
 const CLEAN_ROUTE_FALLBACKS = new Map([
   ["/movie", "/movie.html"],
   ["/tv", "/tv.html"],
@@ -20,6 +20,9 @@ const STATIC_ASSETS = [
   "/tv.html",
   "/orc-styles.css",
   "/orc-script.js",
+  "/ai-search.css",
+  "/ai-search-catalog.js",
+  "/ai-search-ui.js",
   "/manifest.json",
   "/favicon.svg",
   "/favicon.png",
@@ -51,6 +54,7 @@ self.addEventListener("fetch", event => {
 
   // Only handle local same-origin requests
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async cache => {
