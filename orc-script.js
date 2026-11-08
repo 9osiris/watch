@@ -1564,11 +1564,17 @@ const SupabaseSync = {
   }
 };
 
-SupabaseSync.init();
+const ACCOUNTS_UI_ENABLED = false;
+if (ACCOUNTS_UI_ENABLED) SupabaseSync.init();
 
 async function initAuthUI() {
   const btn = $("#topnav-account-btn");
   if (!btn) return;
+  if (!ACCOUNTS_UI_ENABLED) {
+    btn.hidden = true;
+    btn.style.display = "none";
+    return;
+  }
 
   const profile = await SupabaseSync.getProfile();
   if (profile && profile.email) {
@@ -2019,7 +2025,7 @@ function initSidebar(active) {
         <a href="${routeUrl("search")}" class="topnav-icon${active === "search" ? " active" : ""}" aria-label="Search">${ICONS.search}</a>
         <button type="button" class="topnav-icon topnav-bell-btn" id="topnav-bell-btn" aria-label="Notifications" aria-expanded="false">${ICONS.bell}</button>
         <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="topnav-icon" aria-label="Discord">${ICONS.discord}</a>
-        <button type="button" class="topnav-icon topnav-account-btn" id="topnav-account-btn" aria-label="Account">${ICONS.user}</button>
+        <button type="button" class="topnav-icon topnav-account-btn" id="topnav-account-btn" aria-label="Account" hidden style="display:none">${ICONS.user}</button>
         <button type="button" class="topnav-burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
       </div>
     </div>`;
@@ -3509,27 +3515,27 @@ function throttle(func, limit) {
   };
 }
 
-const DEVLOG_ID = "v2.9_aug2026";
+const DEVLOG_ID = "v3.0_nov2026";
 
 function renderDevLogAnnouncement() {
   if (safeGetItem("orc_devlog_dismissed") === DEVLOG_ID) return;
 
-  const card = document.createElement("a");
+  const card = document.createElement("div");
   card.className = "devlog-card";
   card.id = "devlog-card";
   card.innerHTML = `
     <div class="devlog-header">
       <div class="devlog-header-left">
-        <span>DEV LOG</span>
-        <span class="devlog-date">· AUGUST 15, 2026</span>
+        <span>UPDATE LOG</span>
+        <span class="devlog-date">· v3.0 RELEASE</span>
       </div>
       <button type="button" class="devlog-close" id="devlog-close" aria-label="Dismiss update">✕</button>
     </div>
-    <div class="devlog-title">Content Safety & Mobile Interface Polish</div>
+    <div class="devlog-title">Fibre 4.5 AI Search, Shader Backdrops & Watch Migration</div>
     <div class="devlog-body">
-      <p>Enforced automatic adult (18+) content filtering across all search results, recommendations, and browse rows.</p>
-      <p>Added Content Safety toggle setting in user preferences (enabled by default).</p>
-      <p>Fixed mobile viewport layout overlap on sub-pages (Settings, Search, My List, DMCA) and enhanced form field responsiveness.</p>
+      <p>Upgraded Discover with Fibre 4.5 catalog-verified AI Search for natural-language mood, era, runtime, cast, and exclusion prompts.</p>
+      <p>Added customizable WebGL shader backdrops (defaulting to Rings locked to your accent color) with 15 styles, speed, and film grain controls in Settings.</p>
+      <p>Completed migration to watch.osiris.rocks with clean routing, offline service worker fixes, and streamlined navigation.</p>
     </div>
     <div class="devlog-foot">
       <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="devlog-discord-link">
@@ -4587,6 +4593,14 @@ async function initSurpriseMe() {
 
 
 async function renderAccountSettingsSection() {
+  const section = $("#settings-account-section");
+  if (!ACCOUNTS_UI_ENABLED) {
+    if (section) {
+      section.hidden = true;
+      section.style.display = "none";
+    }
+    return;
+  }
   const container = $("#settings-account-container");
   if (!container) return;
 
