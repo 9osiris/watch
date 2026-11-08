@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v31";
+const CACHE_NAME = "orc-static-v32";
 const TMDB_CACHE_NAME = "orc-tmdb-runtime-v1";
 const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/dmca"]);
 const HTML_TO_CLEAN = new Map([

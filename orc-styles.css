@@ -1478,15 +1478,7 @@ select:focus {
 
 .row-track-container { position: relative; isolation: isolate; }
 .row-track-container::after {
-  content: "";
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: 56px;
-  background: linear-gradient(to right, rgba(11, 11, 13, 0), var(--bg-0, #0b0b0d) 94%);
-  pointer-events: none;
-  z-index: 4;
-  border-radius: 0 16px 16px 0;
-  transition: opacity 0.3s var(--ease);
+  display: none;
 }
 .row-track {
   display: flex; gap: 12px;
@@ -1495,26 +1487,18 @@ select:focus {
   margin-top: -16px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 40px), transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 40px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
   will-change: scroll-position;
   transform: translateZ(0);
 }
+@media (max-width: 768px) {
+  .row-track {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
 
-/* Skeleton Poster Loader */
-.skeleton-card {
-  flex: 0 0 auto;
-  width: 152px;
-  aspect-ratio: 2/3;
-  border-radius: 12px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 75%);
-  background-size: 200% 100%;
-  animation: skeletonShimmer 1.5s infinite linear;
-}
-@keyframes skeletonShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
 .grid-backdrop-mode .skeleton-card {
   width: clamp(230px, 20vw, 290px);
   aspect-ratio: 16/9;
@@ -1547,12 +1531,17 @@ select:focus {
 .retry-btn:disabled, .row-retry:disabled { opacity: 0.6; cursor: default; }
 
 /* ===== Media card ===== */
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .media-card {
   flex: 0 0 auto; width: 152px; position: relative; cursor: pointer;
   border-radius: 12px; overflow: hidden;
   background: var(--bg-1);
-  transition: transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out), opacity 0.3s;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s;
   contain: layout style paint; will-change: transform; transform: translateZ(0);
+  animation: cardFadeIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .media-card.is-watched { opacity: 0.42; filter: saturate(0.65); }
 .media-card:hover, .media-card.is-hovered {
@@ -1560,7 +1549,15 @@ select:focus {
   box-shadow: var(--shadow-2);
   z-index: 8;
 }
-.media-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--bg-2); transition: transform 0.45s var(--ease-out); }
+.media-card img {
+  width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--bg-2);
+  transition: transform 0.45s var(--ease-out), opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.media-card img.card-img { opacity: 0; }
+.media-card img.card-img.is-loaded { opacity: 1; }
+.btn-play:active, .btn-ghost:active, .filter-chip:active, .list-tab-btn:active, .provider-tab:active, .pill-nav-item:active {
+  transform: scale(0.96);
+}
 .media-card:hover img, .media-card.is-hovered img { transform: scale(1.06); }
 .media-card .no-img {
   aspect-ratio: 2/3; background: var(--bg-2);

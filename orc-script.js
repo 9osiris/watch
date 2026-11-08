@@ -938,20 +938,6 @@ function syncPageBackdrop() {
   }
 }
 
-function skeletons(count = 12) {
-  const arr = [];
-  for (let i = 0; i < count; i++) {
-    const el = document.createElement("div");
-    el.className = "media-card skeleton-card";
-    el.innerHTML = `
-      <div class="card-poster-wrap skeleton"></div>
-      <div class="skeleton-line skeleton-title skeleton"></div>
-      <div class="skeleton-line skeleton-sub skeleton"></div>
-    `;
-    arr.push(el);
-  }
-  return arr;
-}
 function providerUrl(type, id, s, e) {
   const p = PROVIDERS.find(x => x.id === getProvider()) || PROVIDERS[0];
   let url = type === "tv" ? p.tv(id, s, e) : p.movie(id);
@@ -2017,6 +2003,10 @@ function buildMobilePillNav(active) {
   `).join("");
 
   nav.querySelectorAll(".pill-nav-item").forEach(a => {
+    const key = a.dataset.navKey;
+    const prewarm = () => prewarmNavKey(key);
+    a.addEventListener("touchstart", prewarm, { passive: true, once: true });
+    a.addEventListener("mouseenter", prewarm, { passive: true, once: true });
     a.addEventListener("click", () => {
       nav.querySelectorAll(".pill-nav-item").forEach(el => el.classList.remove("active"));
       a.classList.add("active");
@@ -2050,6 +2040,16 @@ function initScrollRestoration() {
     if (y > 0) {
       setTimeout(() => window.scrollTo({ top: y, behavior: "auto" }), 60);
     }
+  }
+}
+
+function prewarmNavKey(key) {
+  if (key === "search") {
+    tmdb("/discover/movie?sort_by=popularity.desc&vote_count.gte=30&page=1").catch(() => {});
+    tmdb("/discover/tv?sort_by=popularity.desc&vote_count.gte=30&page=1").catch(() => {});
+  } else if (key === "home") {
+    tmdb("/trending/all/week").catch(() => {});
+    tmdb("/trending/all/day").catch(() => {});
   }
 }
 
@@ -2091,9 +2091,16 @@ function initSidebar(active) {
     const open = el.classList.toggle("nav-open");
     burger.setAttribute("aria-expanded", open ? "true" : "false");
   });
-  el.querySelectorAll(".topnav-link").forEach(a =>
-    a.addEventListener("click", () => el.classList.remove("nav-open"))
-  );
+  el.querySelectorAll(".topnav-link").forEach(a => {
+    const href = a.getAttribute("href") || "";
+    const key = href.includes("search") ? "search" : href === homeUrl() ? "home" : "";
+    if (key) {
+      const prewarm = () => prewarmNavKey(key);
+      a.addEventListener("mouseenter", prewarm, { passive: true, once: true });
+      a.addEventListener("touchstart", prewarm, { passive: true, once: true });
+    }
+    a.addEventListener("click", () => el.classList.remove("nav-open"));
+  });
   document.addEventListener("click", e => {
     if (el.classList.contains("nav-open") && !el.contains(e.target)) el.classList.remove("nav-open");
   });
@@ -2297,7 +2304,7 @@ function buildCard(item, type = "movie", opts = {}) {
     ${opts.rank && opts.top10Today ? `<span class="top10-today-card-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>${opts.rank}</span>` : opts.rank ? `<span class="rank">${opts.rank}</span>` : ""}
     ${prog && prog > 2 ? `<span class="progress-badge">${Math.round(prog)}%</span>` : ""}
     ${!opts.rank && (!prog || prog <= 2) && Number.isFinite(item.vote_average) && item.vote_average >= 6 ? `<span class="card-rating">★ ${(typeof item.vote_average === "number" ? item.vote_average.toFixed(1) : "")}</span>` : ""}
-    ${img ? `<img src="${esc(img)}" alt="${esc(title)}" loading="lazy" draggable="false" decoding="async" />` : `<div class="no-img-poster">${ICONS.film}<span>${esc(title)}</span></div>`}
+    ${img ? `<img class="card-img" src="${esc(img)}" alt="${esc(title)}" loading="${opts.eager ? "eager" : "lazy"}"${opts.eager ? ' fetchpriority="high"' : ""} draggable="false" decoding="async" />` : `<div class="no-img-poster">${ICONS.film}<span>${esc(title)}</span></div>`}
     ${prog ? `<div class="progress-bar"><span style="width:${Math.min(prog, 100)}%"></span></div>` : ""}
     <div class="card-quick">
       <button type="button" class="card-icon-btn save-btn${saved ? " saved" : ""}" aria-label="Save">${saved ? ICONS.check : ICONS.plus}</button>
@@ -2306,6 +2313,16 @@ function buildCard(item, type = "movie", opts = {}) {
       <div class="card-foot-title">${esc(title)}</div>
       <div class="card-foot-meta">${y ? `${y} · ` : ""}${kind === "tv" ? "Series" : "Movie"}</div>
     </div>`;
+
+  const cardImgEl = card.querySelector("img.card-img");
+  if (cardImgEl) {
+    if (cardImgEl.complete && cardImgEl.naturalWidth > 0) {
+      cardImgEl.classList.add("is-loaded");
+    } else {
+      cardImgEl.addEventListener("load", () => cardImgEl.classList.add("is-loaded"), { once: true });
+      cardImgEl.addEventListener("error", () => cardImgEl.classList.add("is-loaded"), { once: true });
+    }
+  }
 
   let _prefetched = false;
   const prefetchDetail = () => {
@@ -2534,7 +2551,11 @@ function showPopup(card, item, type) {
     });
   }
 
-  pop.querySelector(".pp-play").addEventListener("click", () => { closePopup(); location.href = href; });
+  pop.querySelector(".pp-play").addEventListener("click", () => {
+    closePopup();
+    const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
+    navigateWithLoader(href, bg, title, { id, type: kind, item });
+  });
   pop.querySelector(".pp-save").addEventListener("click", () => {
     openSaveModal({ id, type: kind, title, poster: item.poster_path }, nowSaved => {
       const btn = pop.querySelector(".pp-save");
@@ -3902,12 +3923,22 @@ async function initHomePage() {
   const gRow = document.createElement("div");
   gRow.id = "genre-row";
   gRow.className = "row-wrapper visible";
-  gRow.innerHTML = `<div class="row-header"><h2 class="row-title">${GENRES[0].name}</h2></div><div class="row-track-container"><div class="row-track"></div></div>`;
-  try {
-    const gd = await tmdb(`/discover/movie?with_genres=${GENRES[0].id}&sort_by=popularity.desc`);
-    dedupeItems(gd.results || []).slice(0, 20).forEach(it => gRow.querySelector(".row-track").appendChild(buildCard(it, "movie")));
-  } catch (err) { console.warn('Caught error:', err); }
+  gRow.innerHTML = `<div class="row-header"><h2 class="row-title">${GENRES[0].name}</h2></div><div class="row-track-container"><button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button><div class="row-track"></div><button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button></div>`;
+  const gTrack = gRow.querySelector(".row-track");
+  gTrack.append(...skeletons(8));
+  gRow.querySelector(".row-arrow.left")?.addEventListener("click", () => gTrack.scrollBy({ left: -360, behavior: "smooth" }));
+  gRow.querySelector(".row-arrow.right")?.addEventListener("click", () => gTrack.scrollBy({ left: 360, behavior: "smooth" }));
   el.prepend(gRow);
+
+  tmdb(`/discover/movie?with_genres=${GENRES[0].id}&sort_by=popularity.desc`).then(gd => {
+    const gItems = dedupeItems(gd.results || []).slice(0, 20);
+    if (gItems.length) {
+      gTrack.textContent = "";
+      gItems.forEach((it, idx) => gTrack.appendChild(buildCard(it, "movie", { eager: idx < 4 })));
+      initRowDrag(gTrack);
+      initRowKeyboard(gTrack);
+    }
+  }).catch(() => {});
 
   observeRows();
   if (main) main.style.opacity = "1";
@@ -3915,15 +3946,17 @@ async function initHomePage() {
   (async () => {
     try {
       const air = await tmdb("/tv/on_the_air");
-      const top = (air.results || []).filter(s => s.backdrop_path).slice(0, 12);
+      const top = (air.results || []).filter(s => s.backdrop_path).slice(0, 8);
       const details = await Promise.allSettled(top.map(s => tmdb(`/tv/${s.id}`)));
       const shows = details
         .filter(r => r.status === "fulfilled")
         .map(r => r.value)
         .filter(s => (s.number_of_seasons || 0) >= 2)
-        .slice(0, 10);
+        .slice(0, 8);
       const spot = buildSeasonSpotlight(shows);
-      if (spot) el.prepend(spot);
+      if (spot) {
+        gRow.after(spot);
+      }
     } catch (err) { console.warn('Caught error:', err); }
   })();
 
@@ -4285,13 +4318,17 @@ async function initTvPage() {
         if (s.season_number === season) o.selected = true;
         seasonSel.appendChild(o);
       });
-      await loadEps(season);
+      loadEps(season).then(() => {
+        const nextSeasonObj = seasons.find(s => s.season_number === season + 1);
+        if (nextSeasonObj) tmdb(`/tv/${id}/season/${season + 1}`).catch(() => {});
+      });
       seasonSel.addEventListener("change", () => {
         season = +seasonSel.value;
         episode = 1;
         const epInput = $("#ep-search-input");
         if (epInput) epInput.value = "";
-        loadEps(season).then(update);
+        update();
+        loadEps(season);
       });
     }
 
@@ -4544,8 +4581,8 @@ function initSearchPage() {
       const count = grid.querySelectorAll(".media-card").length + items.length;
       if (status) status.textContent = `${count} ${count === 1 ? "result" : "results"}`;
 
-      items.forEach(item => {
-        grid.appendChild(buildCard(item, item.media_type || (current === "tv" ? "tv" : "movie")));
+      items.forEach((item, idx) => {
+        grid.appendChild(buildCard(item, item.media_type || (current === "tv" ? "tv" : "movie"), { eager: !append && idx < 6 }));
       });
     } catch (e) {
       if (searchOpts.signal.aborted || e.name === "AbortError") return;
@@ -4585,7 +4622,7 @@ function initSearchPage() {
       if (!input.value.trim()) renderRecent();
       if (current === "ai") { if (!input.value.trim()) doSearch(""); return; }
       setBusy(true);
-      timer = setTimeout(() => doSearch(input.value.trim()), 400);
+      timer = setTimeout(() => doSearch(input.value.trim()), 220);
     });
     input.addEventListener("keydown", e => {
       if (e.key !== "Enter" || e.isComposing || current !== "ai") return;
@@ -4748,7 +4785,7 @@ async function initSurpriseMe() {
             closeModal(modal);
             const targetPath = kind === "tv" ? `${routeUrl("tv")}?id=${selectedTitle.id}` : `${routeUrl("movie")}?id=${selectedTitle.id}`;
             const bg = selectedTitle.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${selectedTitle.backdrop_path}` : (posterUrl(selectedTitle.poster_path) || "");
-            navigateWithLoader(targetPath, bg, titleName);
+            navigateWithLoader(targetPath, bg, titleName, { id: selectedTitle.id, type: kind, item: selectedTitle });
           };
         }
 
