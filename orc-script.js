@@ -585,23 +585,28 @@ function renderCardRow(sectionSel, rowSel, items, type) {
   row.textContent = "";
   items.forEach(it => row.appendChild(buildCard(it, type)));
 }
-function ensureRecommendSection(seedTitle = "") {
+function ensureRecommendSection(seedTitle = "", isWatched = false) {
   let sec = $("#recommend-section");
+  const prefixText = isWatched ? "Since you watched" : "If you watched";
   if (!sec) {
     sec = document.createElement("section");
     sec.id = "recommend-section";
     sec.style.display = "none";
     sec.innerHTML = `
       <div class="section-head syw-detail-head" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span class="syw-prefix">Since you watched</span>
+        <span class="syw-prefix" id="detail-syw-prefix">${prefixText}</span>
         <span class="syw-seed-name" id="detail-syw-name">${esc(seedTitle || "this title")}</span>
         <span class="syw-ai-badge">AI</span>
       </div>
       <div class="similar-row" id="recommend-row"></div>`;
     $("#similar-section")?.before(sec);
-  } else if (seedTitle) {
-    const nameEl = sec.querySelector("#detail-syw-name");
-    if (nameEl) nameEl.textContent = seedTitle;
+  } else {
+    const prefEl = sec.querySelector("#detail-syw-prefix") || sec.querySelector(".syw-prefix");
+    if (prefEl) prefEl.textContent = prefixText;
+    if (seedTitle) {
+      const nameEl = sec.querySelector("#detail-syw-name");
+      if (nameEl) nameEl.textContent = seedTitle;
+    }
   }
   return sec.querySelector(".similar-row");
 }
@@ -3694,7 +3699,7 @@ const AIRecommendations = (() => {
 
   async function collectSeeds() {
     const map = new Map();
-    const addSeed = (id, type, title, poster, yearStr, sourceLabel) => {
+    const addSeed = (id, type, title, poster, yearStr, sourceLabel, watched = false) => {
       if (!id) return;
       const cleanType = type === "tv" ? "tv" : "movie";
       const key = `${cleanType}_${id}`;
@@ -3705,33 +3710,44 @@ const AIRecommendations = (() => {
         title: (title || "").trim(),
         poster: poster || "",
         year: yearStr ? String(yearStr).slice(0, 4) : "",
-        sourceLabel
+        sourceLabel,
+        watched: Boolean(watched)
       });
     };
 
-    // 1. Watched / In-Progress items
+    // 1. Genuinely Watched / In-Progress items from watch history
     Progress.getAll().forEach(p => {
       const id = p.id || p.mediaId;
+      if (!id) return;
       const type = (p.mediaType || p.type) === "tv" ? "tv" : "movie";
-      addSeed(id, type, p.title || p.name || "", p.poster_path || p.poster || "", p.release_date || p.first_air_date || "", "Watched");
+      addSeed(id, type, p.title || p.name || "", p.poster_path || p.poster || "", p.release_date || p.first_air_date || "", "Watched", true);
     });
 
-    // 2. Recently viewed detail pages
-    RecentViewed.get().forEach(v => {
-      addSeed(v.id, v.mediaType, v.title, v.poster_path, v.release_date, "Watched");
-    });
+    const hasWatchedSeeds = map.size > 0;
 
-    // 3. Saved Watchlist & Folder items
+    // 2. Saved Watchlist & Folder items (unwatched unless already in Progress)
     MyList.get().forEach(m => {
-      addSeed(m.id, m.type, m.title, m.poster || m.poster_path, "", "Saved");
+      addSeed(m.id, m.type, m.title, m.poster || m.poster_path, "", "Saved", false);
     });
     Folders.get().forEach(f => {
       (f.items || []).forEach(it => {
-        addSeed(it.id, it.type, it.title, it.poster || it.poster_path, "", "Saved");
+        addSeed(it.id, it.type, it.title, it.poster || it.poster_path, "", "Saved", false);
       });
     });
 
-    let seeds = [...map.values()].slice(0, 10);
+    // 3. Recently viewed detail pages (unwatched unless already in Progress)
+    RecentViewed.get().forEach(v => {
+      addSeed(v.id, v.mediaType, v.title, v.poster_path, v.release_date, "Viewed", false);
+    });
+
+    let seeds = [...map.values()];
+    if (hasWatchedSeeds) {
+      const watchedOnly = seeds.filter(s => s.watched);
+      const others = seeds.filter(s => !s.watched);
+      seeds = [...watchedOnly, ...others].slice(0, 10);
+    } else {
+      seeds = seeds.slice(0, 10);
+    }
 
     // Hydrate any seed missing its title or poster from TMDB cache/network
     if (seeds.length) {
@@ -3757,7 +3773,7 @@ const AIRecommendations = (() => {
           .filter(it => (it.media_type === "movie" || it.media_type === "tv") && (it.title || it.name) && it.poster_path)
           .slice(0, 6)
           .forEach(it => {
-            addSeed(it.id, it.media_type, it.title || it.name, it.poster_path, it.release_date || it.first_air_date, "Featured");
+            addSeed(it.id, it.media_type, it.title || it.name, it.poster_path, it.release_date || it.first_air_date, "Popular", false);
           });
         seeds = [...map.values()].slice(0, 6);
       } catch {}
@@ -4126,7 +4142,10 @@ async function renderRecommendedForYouRow() {
   const prefixEl = wrap.querySelector(".syw-prefix");
 
   const savedSeedKey = sessionStorage.getItem("orc_syw_selected_seed");
-  let activeSeed = seeds.find(s => `${s.type}_${s.id}` === savedSeedKey) || seeds[0];
+  const watchedSeeds = seeds.filter(s => s.watched);
+  let activeSeed = seeds.find(s => `${s.type}_${s.id}` === savedSeedKey && (watchedSeeds.length === 0 || s.watched))
+    || watchedSeeds[0]
+    || seeds[0];
   let currentRequestToken = 0;
 
   const renderBundleIntoRow = (bundle, seedObj) => {
@@ -4148,7 +4167,7 @@ async function renderRecommendedForYouRow() {
     try { sessionStorage.setItem("orc_syw_selected_seed", `${seedObj.type}_${seedObj.id}`); } catch {}
     if (seedNameEl) seedNameEl.textContent = seedObj.title;
     if (prefixEl) {
-      prefixEl.textContent = seedObj.sourceLabel === "Saved" ? "Since you saved" : "Since you watched";
+      prefixEl.textContent = seedObj.watched ? "Since you watched" : "If you watched";
     }
     seedMenu.querySelectorAll(".syw-seed-opt").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.seedKey === `${seedObj.type}_${seedObj.id}`);
@@ -4686,7 +4705,26 @@ async function initMoviePage() {
       </div>`;
 
     LiquidGlass.glassify(header);
-    $("#detail-play")?.addEventListener("click", (e) => { if (e.shiftKey) return; e.preventDefault(); scrollToSelector("#player-frame"); });
+    const markMovieWatched = () => {
+      const existingProg = Progress.getItem(m.id, "movie");
+      if (!existingProg) {
+        Progress.save(m.id, "movie", {
+          id: m.id,
+          mediaType: "movie",
+          title: m.title,
+          poster_path: m.poster_path || "",
+          release_date: m.release_date || "",
+          progress: 5
+        });
+      }
+      ensureRecommendSection(m.title, true);
+    };
+    $("#detail-play")?.addEventListener("click", (e) => {
+      if (e.shiftKey) return;
+      e.preventDefault();
+      markMovieWatched();
+      scrollToSelector("#player-frame");
+    });
     if (trailer) $("#detail-trailer")?.addEventListener("click", () => openTrailer(trailer.key));
     $("#detail-share")?.addEventListener("click", () => sharePageLink(m.title));
     $("#detail-save")?.addEventListener("click", () => {
@@ -4718,7 +4756,8 @@ async function initMoviePage() {
     RecentViewed.add(m, "movie");
     renderCastRow(m.credits?.cast?.slice(0, 16) || []);
 
-    ensureRecommendSection(m.title);
+    const hasWatchedMovie = Boolean(Progress.getItem(m.id, "movie"));
+    ensureRecommendSection(m.title, hasWatchedMovie);
     const recSec = $("#recommend-section");
     const recRow = $("#recommend-row");
     if (recSec && recRow) {
@@ -4855,7 +4894,28 @@ async function initTvPage() {
       </div>`;
 
     LiquidGlass.glassify(header);
-    $("#detail-play")?.addEventListener("click", (e) => { if (e.shiftKey) return; e.preventDefault(); scrollToSelector("#player-frame"); });
+    const markShowWatched = (sNum = season, eNum = episode) => {
+      const existingProg = Progress.getItem(show.id, "tv");
+      if (!existingProg) {
+        Progress.save(show.id, "tv", {
+          id: show.id,
+          mediaType: "tv",
+          title: show.name,
+          poster_path: show.poster_path || "",
+          first_air_date: show.first_air_date || "",
+          season: sNum,
+          episode: eNum,
+          progress: 5
+        });
+      }
+      ensureRecommendSection(show.name, true);
+    };
+    $("#detail-play")?.addEventListener("click", (e) => {
+      if (e.shiftKey) return;
+      e.preventDefault();
+      markShowWatched(season, episode);
+      scrollToSelector("#player-frame");
+    });
     if (trailer) $("#detail-trailer")?.addEventListener("click", () => openTrailer(trailer.key));
     $("#detail-share")?.addEventListener("click", () => sharePageLink(show.name));
     $("#detail-save")?.addEventListener("click", () => {
@@ -4912,8 +4972,9 @@ async function initTvPage() {
             ${dur ? `<span class="ep-row-dur">${dur}</span>` : ""}`;
           el.addEventListener("click", () => {
             season = sn; episode = ep.episode_number;
-            $$(".ep-row").forEach(x => x.classList.remove("on"));
+            $(".ep-row").forEach(x => x.classList.remove("on"));
             el.classList.add("on");
+            markShowWatched(sn, ep.episode_number);
             update();
             scrollToSelector("#player-frame");
           });
@@ -4978,7 +5039,8 @@ async function initTvPage() {
     RecentViewed.add(show, "tv");
     renderCastRow(show.credits?.cast?.slice(0, 16) || []);
 
-    ensureRecommendSection(show.name);
+    const hasWatchedShow = Boolean(Progress.getItem(show.id, "tv"));
+    ensureRecommendSection(show.name, hasWatchedShow);
     const recSec = $("#recommend-section");
     const recRow = $("#recommend-row");
     if (recSec && recRow) {

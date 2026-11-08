@@ -191,6 +191,8 @@ test("detail pages use seamless alpha-mask fade, ambient color bleed, persistent
 
   assert.match(script, /const AIRecommendations =/);
   assert.match(script, /Since you watched/);
+  assert.match(script, /If you watched/);
   assert.match(styles, /\.syw-seed-name/);
   assert.match(styles, /\.syw-ai-badge/);
+  assert.doesNotMatch(styles, /#4f46e5|#818cf8|#c7d2fe|rgba\(49,\s*46,\s*129|rgba\(79,\s*70,\s*229/);
 });
