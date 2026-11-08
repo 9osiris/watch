@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v22";
+const CACHE_NAME = "orc-static-v23";
 const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/dmca"]);
 const HTML_TO_CLEAN = new Map([
   ["/index.html", "/"],
@@ -28,6 +28,7 @@ const STATIC_ASSETS = [
   "/movie",
   "/tv",
   "/orc-styles.css",
+  "/backdrop.js",
   "/orc-script.js",
   "/ai-search.css",
   "/ai-search-catalog.js",

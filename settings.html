@@ -53,6 +53,37 @@
         <div class="settings-accents" id="settings-accents"></div>
       </section>
 
+      <section class="settings-section" id="settings-backdrop-section">
+        <h2>Background backdrop</h2>
+        <p class="settings-desc">Customize the animated shader backdrop across pages. By default, the backdrop color stays locked to your accent color.</p>
+        <div class="settings-backdrop-preview-wrap">
+          <div class="settings-backdrop-preview" id="settings-backdrop-preview" aria-hidden="true"></div>
+        </div>
+        <div class="settings-backdrop-styles" id="settings-backdrop-styles" role="group" aria-label="Backdrop style"></div>
+        <div class="settings-toggle-row" style="margin-top:14px">
+          <div><strong>Match accent color</strong><span>Automatically lock the background color palette to your chosen accent color</span></div>
+          <button type="button" class="settings-toggle on" id="toggle-bg-sync-accent" aria-pressed="true"></button>
+        </div>
+        <div class="settings-bg-custom-color" id="settings-bg-custom-color-wrap" hidden>
+          <p class="settings-desc" style="margin:12px 0 10px">Custom backdrop color</p>
+          <div class="settings-accents" id="settings-bg-colors"></div>
+        </div>
+        <div class="settings-toggle-row">
+          <div><strong>Motion speed</strong><span>Adjust how fast the shader backdrop flows</span></div>
+          <div class="settings-slider-wrap">
+            <input type="range" id="settings-bg-speed" class="settings-range" min="0" max="2" step="0.1" value="0.6" aria-label="Backdrop motion speed">
+            <output id="settings-bg-speed-val" class="settings-range-val">0.6x</output>
+          </div>
+        </div>
+        <div class="settings-toggle-row">
+          <div><strong>Film grain</strong><span>Add subtle tactile texture over the gradient</span></div>
+          <div class="settings-slider-wrap">
+            <input type="range" id="settings-bg-grain" class="settings-range" min="0" max="0.35" step="0.02" value="0.08" aria-label="Backdrop film grain">
+            <output id="settings-bg-grain-val" class="settings-range-val">8%</output>
+          </div>
+        </div>
+      </section>
+
       <section class="settings-section">
         <h2>Playback</h2>
         <div class="settings-toggle-row">
@@ -115,6 +146,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="backdrop.js"></script>
   <script src="orc-script.js"></script>
 </body>
 </html>

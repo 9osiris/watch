@@ -636,23 +636,29 @@ const SETTINGS = {
   prefLangKey: "orc_pref_lang",
   layoutKey: "orc_grid_layout",
   themeKey: "orc_theme",
+  bgStyleKey: "orc_bg_style",
+  bgSyncAccentKey: "orc_bg_sync_accent",
+  bgColorKey: "orc_bg_color",
+  bgSpeedKey: "orc_bg_speed",
+  bgGrainKey: "orc_bg_grain",
   get(k, def = "") {
-    if (k === "orc_hide_adult") return safeGetItem(k, "1") ?? "1";
+    if (k === "orc_hide_adult" || k === "orc_bg_sync_accent") return safeGetItem(k, "1") ?? "1";
     return safeGetItem(k) ?? def;
   },
   set(k, v) {
     safeSetItem(k, v);
-    if (k === "orc_accent" || k === "orc_theme" || k === "orc_grid_layout") {
+    if (k === "orc_accent" || k === "orc_theme" || k === "orc_grid_layout" || k.startsWith("orc_bg_")) {
       SupabaseSync.pushUserMetadata();
     }
     if (!safeSetItem(k, v)) toast("Couldn't save setting. Storage may be full.");
   },
   toggle(k) {
-    const defVal = k === "orc_hide_adult" ? "1" : "0";
+    const defVal = (k === "orc_hide_adult" || k === "orc_bg_sync_accent") ? "1" : "0";
     const cur = safeGetItem(k, defVal);
     const on = cur === "1";
     const next = on ? "0" : "1";
     if (!safeSetItem(k, next)) toast("Couldn't save setting. Storage may be full.");
+    if (k.startsWith("orc_bg_")) SupabaseSync.pushUserMetadata();
     return !on;
   },
 };
@@ -723,6 +729,173 @@ function applyGlobalSettings() {
 
   rootEl.classList.toggle("reduce-motion", SETTINGS.get(SETTINGS.reduceMotionKey) === "1");
   rootEl.classList.toggle("grid-backdrop-mode", SETTINGS.get(SETTINGS.layoutKey) === "1");
+  syncPageBackdrop();
+}
+
+const BACKDROP_STYLES = [
+  { id: "aurora", label: "Aurora" },
+  { id: "flow", label: "Flow" },
+  { id: "mesh", label: "Mesh" },
+  { id: "silk", label: "Silk" },
+  { id: "waves", label: "Waves" },
+  { id: "mist", label: "Mist" },
+  { id: "prism", label: "Prism" },
+  { id: "rings", label: "Rings" },
+  { id: "glow", label: "Glow" },
+  { id: "swirl", label: "Swirl" },
+  { id: "sky", label: "Sky" },
+  { id: "bars", label: "Bars" },
+  { id: "stripes", label: "Stripes" },
+  { id: "forms", label: "Forms" },
+  { id: "watercolor", label: "Watercolor" },
+  { id: "none", label: "Off" },
+];
+
+function mixHex(hexA, hexB, weightB) {
+  const parse = h => {
+    const clean = String(h).replace("#", "").padEnd(6, "0");
+    return [
+      parseInt(clean.slice(0, 2), 16) || 0,
+      parseInt(clean.slice(2, 4), 16) || 0,
+      parseInt(clean.slice(4, 6), 16) || 0,
+    ];
+  };
+  const a = parse(hexA);
+  const b = parse(hexB);
+  const w = Math.max(0, Math.min(1, weightB));
+  const ch = i => Math.round(a[i] * (1 - w) + b[i] * w).toString(16).padStart(2, "0");
+  return "#" + ch(0) + ch(1) + ch(2);
+}
+
+function getBackdropBaseHex() {
+  const syncAccent = SETTINGS.get(SETTINGS.bgSyncAccentKey, "1") !== "0";
+  if (syncAccent) return getAccentHex();
+  const custom = String(SETTINGS.get(SETTINGS.bgColorKey, "") || "").replace("#", "");
+  return /^[0-9a-fA-F]{6}$/.test(custom) ? custom : getAccentHex();
+}
+
+function buildBackdropPalette(style, baseHex, isLight) {
+  const accent = "#" + String(baseHex || getAccentHex()).replace("#", "");
+  if (isLight) {
+    const paper = "#f8fafc";
+    const soft = mixHex(paper, accent, 0.18);
+    const mid = mixHex(paper, accent, 0.42);
+    const rich = mixHex("#0f172a", accent, 0.72);
+    const deep = mixHex("#0f172a", accent, 0.38);
+    if (style === "silk" || style === "prism" || style === "rings" || style === "glow" || style === "bars" || style === "forms") {
+      return [paper, soft, mid, rich, accent];
+    }
+    return [paper, soft, mid, accent, deep];
+  }
+  const night = "#090a0f";
+  const abyss = mixHex(night, accent, 0.16);
+  const deep = mixHex(night, accent, 0.36);
+  const mid = mixHex(night, accent, 0.66);
+  const bright = mixHex(accent, "#ffffff", 0.28);
+  // Respect per-style colour order from GradientBackdrop
+  switch (style) {
+    case "aurora":
+    case "sky":
+    case "waves":
+    case "mist":
+    case "stripes":
+    case "swirl":
+      // highlight/top -> dark night background
+      return [bright, accent, mid, deep, night];
+    case "silk":
+    case "prism":
+    case "rings":
+    case "glow":
+    case "bars":
+    case "forms":
+    case "watercolor":
+      // dark background first -> lit highlight last
+      return [night, abyss, deep, mid, accent, bright];
+    case "mesh":
+    case "flow":
+    default:
+      return [night, deep, accent, mid, abyss];
+  }
+}
+
+function getBackdropConfig() {
+  const rawStyle = SETTINGS.get(SETTINGS.bgStyleKey, "aurora") || "aurora";
+  const validStyle = BACKDROP_STYLES.some(s => s.id === rawStyle) ? rawStyle : "aurora";
+  const isLight = SETTINGS.get(SETTINGS.themeKey, "dark") === "light";
+  const baseHex = getBackdropBaseHex();
+  const rawSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.6"));
+  const speed = Number.isFinite(rawSpeed) ? Math.max(0, Math.min(2, rawSpeed)) : 0.6;
+  const rawGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.08"));
+  const grain = Number.isFinite(rawGrain) ? Math.max(0, Math.min(0.4, rawGrain)) : 0.08;
+  const reduceMotion = SETTINGS.get(SETTINGS.reduceMotionKey) === "1";
+  const colors = buildBackdropPalette(validStyle === "none" ? "aurora" : validStyle, baseHex, isLight);
+  return {
+    style: validStyle,
+    colors,
+    speed: reduceMotion ? 0 : speed,
+    grain,
+    animate: !reduceMotion && speed > 0,
+  };
+}
+
+let pageBackdropInstance = null;
+let settingsPreviewBackdropInstance = null;
+
+function syncPageBackdrop() {
+  if (typeof document === "undefined" || !document.body) return;
+  const cfg = getBackdropConfig();
+  let container = document.getElementById("orc-page-backdrop");
+  if (cfg.style === "none" || typeof window.GradientBackdrop === "undefined") {
+    if (pageBackdropInstance) {
+      try { pageBackdropInstance.destroy(); } catch (e) {}
+      pageBackdropInstance = null;
+    }
+    if (container) container.remove();
+  } else {
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "orc-page-backdrop";
+      container.className = "orc-page-backdrop";
+      container.setAttribute("aria-hidden", "true");
+      document.body.prepend(container);
+    }
+    const opts = {
+      style: cfg.style,
+      colors: cfg.colors,
+      speed: cfg.speed,
+      grain: cfg.grain,
+      animate: cfg.animate,
+      respectReducedMotion: true,
+    };
+    if (!pageBackdropInstance || pageBackdropInstance.el !== container) {
+      try {
+        pageBackdropInstance = window.GradientBackdrop.createBackdrop(container, opts);
+      } catch (e) {}
+    } else {
+      pageBackdropInstance.set(opts);
+    }
+  }
+
+  const previewEl = document.getElementById("settings-backdrop-preview");
+  if (previewEl && typeof window.GradientBackdrop !== "undefined") {
+    const previewStyle = cfg.style === "none" ? "aurora" : cfg.style;
+    const previewOpts = {
+      style: previewStyle,
+      colors: cfg.colors,
+      speed: cfg.speed,
+      grain: cfg.grain,
+      animate: cfg.animate,
+      respectReducedMotion: true,
+    };
+    previewEl.style.opacity = cfg.style === "none" ? "0.25" : "1";
+    if (!settingsPreviewBackdropInstance || settingsPreviewBackdropInstance.el !== previewEl) {
+      try {
+        settingsPreviewBackdropInstance = window.GradientBackdrop.createBackdrop(previewEl, previewOpts);
+      } catch (e) {}
+    } else {
+      settingsPreviewBackdropInstance.set(previewOpts);
+    }
+  }
 }
 
 function skeletons(count = 12) {
@@ -1171,6 +1344,11 @@ const SupabaseSync = {
           orc_accent: safeGetItem("orc_accent"),
           orc_theme: safeGetItem("orc_theme"),
           orc_grid_layout: safeGetItem("orc_grid_layout"),
+          orc_bg_style: safeGetItem("orc_bg_style"),
+          orc_bg_sync_accent: safeGetItem("orc_bg_sync_accent"),
+          orc_bg_color: safeGetItem("orc_bg_color"),
+          orc_bg_speed: safeGetItem("orc_bg_speed"),
+          orc_bg_grain: safeGetItem("orc_bg_grain"),
         },
         orc_recent: RecentSearches.get(),
         orc_folders: Folders.get()
@@ -4802,7 +4980,7 @@ function initSettingsPage() {
       btn.addEventListener("click", () => {
         SETTINGS.set(SETTINGS.accentKey, c.id);
         applyGlobalSettings();
-        $$(".accent-swatch").forEach(b => { b.classList.remove("active"); b.textContent = ""; });
+        accentBox.querySelectorAll(".accent-swatch").forEach(b => { b.classList.remove("active"); b.textContent = ""; });
         btn.classList.add("active");
         btn.innerHTML = ICONS.check;
         toast(`Accent set to ${c.label}`);
@@ -4810,6 +4988,104 @@ function initSettingsPage() {
       accentBox.appendChild(btn);
     });
   }
+
+  const bgStylesBox = $("#settings-backdrop-styles");
+  if (bgStylesBox) {
+    bgStylesBox.textContent = "";
+    const curStyle = SETTINGS.get(SETTINGS.bgStyleKey, "aurora") || "aurora";
+    BACKDROP_STYLES.forEach(s => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `settings-provider${curStyle === s.id ? " active" : ""}`;
+      btn.dataset.bgStyle = s.id;
+      btn.textContent = s.label;
+      btn.addEventListener("click", () => {
+        SETTINGS.set(SETTINGS.bgStyleKey, s.id);
+        bgStylesBox.querySelectorAll(".settings-provider").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        syncPageBackdrop();
+        toast(`Backdrop style set to ${s.label}`);
+      });
+      bgStylesBox.appendChild(btn);
+    });
+  }
+
+  const syncAccentToggle = $("#toggle-bg-sync-accent");
+  const customColorWrap = $("#settings-bg-custom-color-wrap");
+  const bgColorsBox = $("#settings-bg-colors");
+  const renderBgCustomSwatches = () => {
+    if (!bgColorsBox) return;
+    bgColorsBox.textContent = "";
+    const curBgColor = SETTINGS.get(SETTINGS.bgColorKey, getAccentHex()) || getAccentHex();
+    ACCENT_COLORS.forEach(c => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `accent-swatch${curBgColor === c.id ? " active" : ""}`;
+      btn.style.setProperty("--swatch", `#${c.id}`);
+      btn.title = c.label;
+      btn.innerHTML = curBgColor === c.id ? ICONS.check : "";
+      btn.addEventListener("click", () => {
+        SETTINGS.set(SETTINGS.bgColorKey, c.id);
+        bgColorsBox.querySelectorAll(".accent-swatch").forEach(b => { b.classList.remove("active"); b.textContent = ""; });
+        btn.classList.add("active");
+        btn.innerHTML = ICONS.check;
+        syncPageBackdrop();
+        toast(`Backdrop color set to ${c.label}`);
+      });
+      bgColorsBox.appendChild(btn);
+    });
+  };
+  if (syncAccentToggle) {
+    const updateSyncUI = () => {
+      const on = SETTINGS.get(SETTINGS.bgSyncAccentKey, "1") !== "0";
+      syncAccentToggle.classList.toggle("on", on);
+      syncAccentToggle.setAttribute("aria-pressed", on ? "true" : "false");
+      if (customColorWrap) customColorWrap.hidden = on;
+      if (!on) renderBgCustomSwatches();
+    };
+    updateSyncUI();
+    syncAccentToggle.addEventListener("click", () => {
+      const on = SETTINGS.toggle(SETTINGS.bgSyncAccentKey);
+      if (!on && !SETTINGS.get(SETTINGS.bgColorKey, "")) {
+        SETTINGS.set(SETTINGS.bgColorKey, getAccentHex());
+      }
+      updateSyncUI();
+      syncPageBackdrop();
+      toast(on ? "Backdrop color locked to accent" : "Custom backdrop color enabled");
+    });
+  }
+
+  const speedInput = $("#settings-bg-speed");
+  const speedOutput = $("#settings-bg-speed-val");
+  if (speedInput) {
+    const initSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.6"));
+    const sVal = Number.isFinite(initSpeed) ? initSpeed : 0.6;
+    speedInput.value = String(sVal);
+    if (speedOutput) speedOutput.textContent = `${sVal.toFixed(1)}x`;
+    speedInput.addEventListener("input", () => {
+      const v = parseFloat(speedInput.value) || 0;
+      if (speedOutput) speedOutput.textContent = `${v.toFixed(1)}x`;
+      SETTINGS.set(SETTINGS.bgSpeedKey, String(v));
+      syncPageBackdrop();
+    });
+  }
+
+  const grainInput = $("#settings-bg-grain");
+  const grainOutput = $("#settings-bg-grain-val");
+  if (grainInput) {
+    const initGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.08"));
+    const gVal = Number.isFinite(initGrain) ? initGrain : 0.08;
+    grainInput.value = String(gVal);
+    if (grainOutput) grainOutput.textContent = `${Math.round(gVal * 100)}%`;
+    grainInput.addEventListener("input", () => {
+      const v = parseFloat(grainInput.value) || 0;
+      if (grainOutput) grainOutput.textContent = `${Math.round(v * 100)}%`;
+      SETTINGS.set(SETTINGS.bgGrainKey, String(v));
+      syncPageBackdrop();
+    });
+  }
+
+  syncPageBackdrop();
 
   const themeBox = $("#settings-theme");
   if (themeBox) {

@@ -208,6 +208,70 @@ body:not(:has(.hero)):not(.detail-page) .topnav::after { opacity: 1; }
 }
 .topnav-word i { font-style: normal; font-weight: 800; color: var(--accent); }
 
+/* ===== Global Gradient Shader Backdrop ===== */
+.orc-page-backdrop {
+  position: fixed !important;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.44;
+  transition: opacity 0.35s var(--ease-out);
+}
+[data-theme="light"] .orc-page-backdrop {
+  opacity: 0.56;
+}
+body.home-page .orc-page-backdrop {
+  opacity: 0.28;
+}
+.app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+.settings-backdrop-preview-wrap {
+  margin-bottom: 16px;
+}
+.settings-backdrop-preview {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-2);
+  overflow: hidden;
+  background: var(--bg-1);
+}
+.settings-backdrop-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.settings-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 170px;
+}
+.settings-range {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.settings-range-val {
+  min-width: 40px;
+  text-align: right;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.settings-bg-custom-color[hidden] {
+  display: none !important;
+}
+
 .topnav-links {
   display: flex;
   align-items: center;

@@ -85,11 +85,14 @@ test("AI controls are accessible, new assets exist, and scripts compile", () => 
   assert.match(html, /<option value="ai">AI Search \(Experimental\)<\/option>/);
   assert.match(html, /<button type="button" id="ai-search-submit"[^>]*hidden>Ask AI<\/button>/);
   assert.match(html, /id="search-status"[^>]*role="status"/);
-  for (const name of ["ai-search-catalog.js", "ai-search-ui.js", "orc-script.js", "sw.js"]) assert.doesNotThrow(() => new vm.Script(read(name)), name);
+  for (const name of ["backdrop.js", "ai-search-catalog.js", "ai-search-ui.js", "orc-script.js", "sw.js"]) assert.doesNotThrow(() => new vm.Script(read(name)), name);
   for (const match of html.matchAll(/(?:src|href)="([^"?#]+\.(?:js|css))"/g)) if (!match[1].startsWith("http")) assert.ok(fs.existsSync(path.join(root, match[1])), match[1]);
+  assert.ok(html.indexOf('src="backdrop.js"') < html.indexOf('src="orc-script.js"'));
   assert.ok(html.indexOf('src="ai-search-catalog.js"') < html.indexOf('src="ai-search-ui.js"'));
   assert.ok(html.indexOf('src="ai-search-ui.js"') < html.indexOf('src="orc-script.js"'));
   assert.doesNotMatch(read("orc-script.js"), /async function aiSearch\(/);
+  assert.match(read("settings.html"), /id="settings-backdrop-styles"/);
+  assert.match(read("settings.html"), /id="toggle-bg-sync-accent"/);
 });
 
 test("service worker precaches AI assets, strips redirect flags on navigation, and leaves API responses to the network", async () => {
