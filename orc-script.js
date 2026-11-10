@@ -493,6 +493,23 @@ function tmdb(path, retries = 1, opts = {}) {
 
   const req = (async () => {
     let finalPath = path;
+
+    // Edge-cached Serverless TMDB Proxy (Phase 5 Item 38)
+    if (!opts.signal && typeof fetch === "function") {
+      try {
+        const queryParams = new URLSearchParams();
+        if (opts.params) {
+          Object.entries(opts.params).forEach(([k, v]) => queryParams.set(k, String(v)));
+        }
+        const proxyUrl = `/api/tmdb?path=${encodeURIComponent(finalPath)}${queryParams.toString() ? `&${queryParams.toString()}` : ""}`;
+        const proxyRes = await fetch(proxyUrl);
+        if (proxyRes.ok) {
+          return await proxyRes.json();
+        }
+      } catch (proxyErr) {
+        // Fall back seamlessly to direct TMDB key
+      }
+    }
     const hideAdult = SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
     const isSearchOrDiscover = finalPath.startsWith("/search/") || finalPath.startsWith("/discover/");
     if (hideAdult && isSearchOrDiscover && !finalPath.includes("include_adult=")) {
@@ -2374,26 +2391,35 @@ function initSidebar(active) {
 
   if (!el._scrollBound) {
     el._scrollBound = true;
-    let lastY = window.scrollY || 0;
-    const onScroll = () => {
-      const currentY = window.scrollY || 0;
+    let lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    let scrollRaf = null;
+
+    const updateScrollNav = () => {
+      const currentY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
+      const delta = currentY - lastScrollY;
       el.classList.toggle("scrolled", currentY > 12);
 
-      // Mobile: animate away wordmark when scrolling down, restore when scrolling up or at top
+      // Mobile: hide wordmark and navbar on scroll down, restore on scroll up or top
       if (isMobile()) {
-        const delta = currentY - lastY;
-        if (currentY > 60 && delta > 6) {
+        if (currentY > 40 && delta > 3) {
           el.classList.add("nav-hidden");
-        } else if (delta < -8 || currentY <= 30) {
+        } else if (delta < -3 || currentY <= 25) {
           el.classList.remove("nav-hidden");
         }
       } else {
         el.classList.remove("nav-hidden");
       }
-      lastY = currentY;
+      lastScrollY = currentY;
+      scrollRaf = null;
     };
-    window.addEventListener("scroll", throttle(onScroll, 50), { passive: true });
-    onScroll();
+
+    const queueScroll = () => {
+      if (!scrollRaf) scrollRaf = requestAnimationFrame(updateScrollNav);
+    };
+
+    window.addEventListener("scroll", queueScroll, { passive: true });
+    window.addEventListener("touchmove", queueScroll, { passive: true });
+    queueScroll();
   }
 
   if (!el._lg) {
@@ -4607,22 +4633,15 @@ function renderDevLogAnnouncement() {
   card.innerHTML = `
     <div class="devlog-header">
       <div class="devlog-header-left">
-        <span>UPDATE LOG</span>
-        <span class="devlog-date">· v3.1 RELEASE</span>
+        <span>WHAT'S NEW</span>
+        <span class="devlog-date">· v3.2 UPDATE</span>
       </div>
       <button type="button" class="devlog-close" id="devlog-close" aria-label="Dismiss update">✕</button>
     </div>
-    <div class="devlog-title">New Osiris Watch Branding, Detail Ambient Bleed & Instant Cache</div>
+    <div class="devlog-title">Cleaner design, mobile episode tracking, and faster streams</div>
     <div class="devlog-body">
-      <p>Refreshed Osiris Watch branding across the entire experience alongside seamless alpha-masked Movie & TV detail heroes with dynamic pixel-sampled ambient color bleed.</p>
-      <p>Upgraded Discover with catalog-verified AI Search and customizable WebGL shader backdrops (defaulting to Rings locked to your accent color).</p>
-      <p>Added persistent cross-page catalog caching, hover/touch prefetching, and instant card-to-detail hydration for zero-wait navigation on mobile and desktop.</p>
-    </div>
-    <div class="devlog-foot">
-      <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="devlog-discord-link">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"></path></svg>
-        Join the Discord server
-      </a>
+      <p>We refreshed the navigation with a floating frosted glass bar, added instant episode notifications on mobile, and tuned movie and TV pages so they look sharper and load faster.</p>
+      <p>Smart recommendations now look at titles you've actually watched. You can also press <kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">Ctrl+K</kbd> anywhere to search instantly.</p>
     </div>`;
 
   document.body.appendChild(card);
@@ -7600,3 +7619,368 @@ function showUndoToast(msg, onUndo, timeout = 5000) {
     t.classList.remove("show");
   }, timeout);
 }
+
+
+/* =========================================================================
+   PHASE 5-8 UX SUITE & MOBILE EPISODES CUSTOM INTEGRATION
+   ========================================================================= */
+
+// Lite Mode (Item 35)
+function isLiteMode() {
+  const manual = SETTINGS.get("orc_lite_mode", "");
+  if (manual === "1") return true;
+  if (manual === "0") return false;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+  if (navigator.connection && (navigator.connection.saveData || navigator.connection.effectiveType === "2g")) return true;
+  if (navigator.deviceMemory && navigator.deviceMemory <= 2) return true;
+  if (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) return true;
+  return false;
+}
+
+function applyLiteMode() {
+  const active = isLiteMode();
+  document.documentElement.classList.toggle("lite-mode", active);
+  const toggle = $("#settings-lite-mode");
+  if (toggle) {
+    toggle.classList.toggle("active", active);
+    toggle.setAttribute("aria-checked", active ? "true" : "false");
+  }
+}
+
+// System Theme Support (Item 40)
+function resolveEffectiveTheme() {
+  const pref = SETTINGS.get(SETTINGS.themeKey, "system");
+  if (pref === "light") return "light";
+  if (pref === "dark") return "dark";
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark";
+}
+
+// Mobile New Episodes Dedicated Sheet
+function openMobileNotificationSheet(recentEpisodes) {
+  let sheet = $("#notif-mobile-sheet");
+  if (!sheet) {
+    sheet = document.createElement("div");
+    sheet.id = "notif-mobile-sheet";
+    sheet.className = "notif-mobile-sheet";
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    sheet.setAttribute("aria-label", "New Episodes");
+    sheet.innerHTML = `
+      <div class="notif-mobile-card">
+        <div class="notif-mobile-header">
+          <div>
+            <h3 class="notif-mobile-title">New Episodes</h3>
+            <p style="font-size:0.78rem;color:var(--text-2);margin-top:2px;">Aired in the last 7 days from your watchlist</p>
+          </div>
+          <button type="button" class="notif-mobile-close" id="notif-mobile-close" aria-label="Close">✕</button>
+        </div>
+        <div class="notif-mobile-list" id="notif-mobile-list"></div>
+      </div>
+    `;
+    document.body.appendChild(sheet);
+
+    sheet.addEventListener("click", e => {
+      if (e.target === sheet || e.target.closest("#notif-mobile-close")) {
+        sheet.classList.remove("open");
+      }
+    });
+  }
+
+  const listEl = sheet.querySelector("#notif-mobile-list");
+  if (listEl) {
+    if (!recentEpisodes || !recentEpisodes.length) {
+      listEl.innerHTML = `<div class="notif-empty-state" style="padding:28px 16px;text-align:center;color:var(--text-2);font-size:0.9rem;">No new episodes this week.<br><span style="font-size:0.8rem;color:var(--text-3);margin-top:6px;display:block;">Shows in your watchlist will notify you here when new episodes drop.</span></div>`;
+    } else {
+      listEl.innerHTML = recentEpisodes.map(({ show, ep }) => {
+        const poster = show.poster ? `${IMG_W185}${show.poster}` : "/favicon.png";
+        const airDate = ep.air_date ? new Date(ep.air_date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Recent";
+        return `
+          <a href="${routeUrl("tv")}?id=${show.id}&season=${ep.season_number}&episode=${ep.episode_number}" class="notif-ep-card">
+            <img src="${poster}" class="notif-ep-thumb" alt="${esc(show.title)}" loading="lazy">
+            <div class="notif-ep-info">
+              <div class="notif-ep-show">${esc(show.title)}</div>
+              <div class="notif-ep-desc">S${ep.season_number} · E${ep.episode_number}${ep.name ? ` - ${esc(ep.name)}` : ""}</div>
+              <div class="notif-ep-time">${airDate}</div>
+            </div>
+            <span style="font-size:0.75rem;font-weight:700;color:var(--solid-fg);background:var(--solid-bg);padding:6px 12px;border-radius:999px;">Watch</span>
+          </a>
+        `;
+      }).join("");
+    }
+  }
+
+  sheet.classList.add("open");
+}
+
+// Command Palette (Ctrl+K and / hotkey) (Item A)
+function initCommandPalette() {
+  if (window._cmdPaletteInit) return;
+  window._cmdPaletteInit = true;
+
+  let backdrop = $("#cmd-palette-backdrop");
+  if (!backdrop) {
+    backdrop = document.createElement("div");
+    backdrop.id = "cmd-palette-backdrop";
+    backdrop.className = "cmd-palette-backdrop";
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+    backdrop.setAttribute("aria-label", "Command Palette");
+    backdrop.innerHTML = `
+      <div class="cmd-palette-dialog">
+        <div class="cmd-palette-input-wrap">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" class="cmd-palette-input" id="cmd-palette-input" placeholder="Search titles, switch pages, or run quick actions…" autocomplete="off">
+        </div>
+        <div class="cmd-palette-list" id="cmd-palette-list">
+          <button type="button" class="cmd-palette-item" data-action="list">📁 Go to My List</button>
+          <button type="button" class="cmd-palette-item" data-action="theme">🌓 Toggle Theme</button>
+          <button type="button" class="cmd-palette-item" data-action="surprise">🎲 Surprise Me</button>
+          <button type="button" class="cmd-palette-item" data-action="settings">⚙️ Settings</button>
+          <button type="button" class="cmd-palette-item" data-action="discord">💬 Join Discord Community</button>
+        </div>
+        <div class="cmd-palette-hint">
+          <span>Navigation: <kbd>↑</kbd> <kbd>↓</kbd> to select · <kbd>Enter</kbd> to open</span>
+          <span>Press <kbd>Esc</kbd> to dismiss</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+  }
+
+  const input = backdrop.querySelector("#cmd-palette-input");
+  const list = backdrop.querySelector("#cmd-palette-list");
+
+  const openPalette = () => {
+    backdrop.classList.add("open");
+    input.value = "";
+    renderDefaultCommands();
+    setTimeout(() => input.focus(), 50);
+  };
+
+  const closePalette = () => {
+    backdrop.classList.remove("open");
+  };
+
+  const renderDefaultCommands = () => {
+    list.innerHTML = `
+      <button type="button" class="cmd-palette-item" data-action="list">📁 Go to My List</button>
+      <button type="button" class="cmd-palette-item" data-action="theme">🌓 Toggle Theme</button>
+      <button type="button" class="cmd-palette-item" data-action="surprise">🎲 Surprise Me</button>
+      <button type="button" class="cmd-palette-item" data-action="settings">⚙️ Settings</button>
+      <button type="button" class="cmd-palette-item" data-action="discord">💬 Join Discord Community</button>
+    `;
+  };
+
+  list.addEventListener("click", e => {
+    const btn = e.target.closest(".cmd-palette-item");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const url = btn.dataset.url;
+    closePalette();
+    if (url) {
+      location.href = url;
+    } else if (action === "list") {
+      location.href = routeUrl("list");
+    } else if (action === "settings") {
+      location.href = routeUrl("settings");
+    } else if (action === "discord") {
+      window.open("https://discord.gg/yv8cVk8p4f", "_blank", "noopener");
+    } else if (action === "surprise") {
+      initSurpriseMe?.();
+    } else if (action === "theme") {
+      const cur = document.documentElement.getAttribute("data-theme") || "dark";
+      const next = cur === "light" ? "dark" : "light";
+      SETTINGS.set(SETTINGS.themeKey, next);
+      applyGlobalSettings();
+      toast(`Theme switched to ${next}`);
+    }
+  });
+
+  let searchTimer = null;
+  input.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    const q = input.value.trim();
+    if (!q) {
+      renderDefaultCommands();
+      return;
+    }
+    searchTimer = setTimeout(async () => {
+      try {
+        const res = await tmdb(`/search/multi?query=${encodeURIComponent(q)}&page=1`);
+        const hits = (res?.results || []).filter(r => (r.media_type === "movie" || r.media_type === "tv") && (r.title || r.name)).slice(0, 6);
+        if (!hits.length) {
+          list.innerHTML = `<div style="padding:14px;color:var(--text-3);font-size:0.85rem;text-align:center;">No matching titles found. Press Enter to search on Discover.</div>`;
+          return;
+        }
+        list.innerHTML = hits.map(hit => {
+          const title = hit.title || hit.name;
+          const type = hit.media_type === "tv" ? "tv" : "movie";
+          const yr = (hit.release_date || hit.first_air_date || "").slice(0, 4);
+          const url = `${routeUrl(type)}?id=${hit.id}`;
+          return `<button type="button" class="cmd-palette-item" data-url="${url}">
+            <span>🎬</span>
+            <span style="flex:1;">${esc(title)} ${yr ? `<span style="color:var(--text-3);font-size:0.8rem;">(${yr})</span>` : ""}</span>
+            <span style="font-size:0.72rem;text-transform:uppercase;color:var(--text-3);">${type}</span>
+          </button>`;
+        }).join("");
+      } catch (err) {
+        list.innerHTML = `<div style="padding:14px;color:var(--text-3);font-size:0.85rem;text-align:center;">Failed to search.</div>`;
+      }
+    }, 220);
+  });
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      const q = input.value.trim();
+      const firstItem = list.querySelector(".cmd-palette-item");
+      if (firstItem && firstItem.dataset.url) {
+        closePalette();
+        location.href = firstItem.dataset.url;
+      } else if (q) {
+        closePalette();
+        location.href = `${routeUrl("search")}?q=${encodeURIComponent(q)}`;
+      }
+    } else if (e.key === "Escape") {
+      closePalette();
+    }
+  });
+
+  backdrop.addEventListener("click", e => {
+    if (e.target === backdrop) closePalette();
+  });
+
+  // Hotkey listener: Ctrl+K, Cmd+K, or "/"
+  window.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      openPalette();
+    } else if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
+      e.preventDefault();
+      openPalette();
+    } else if (e.key === "?" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
+      e.preventDefault();
+      openKeyboardHelpSheet();
+    }
+  });
+}
+
+// Keyboard Help Sheet (Item K)
+function openKeyboardHelpSheet() {
+  let modal = $("#keyboard-help-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "keyboard-help-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+      <div class="modal-card glass-surface" style="max-width:480px;padding:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <h3 style="margin:0;font-size:1.15rem;font-weight:800;color:var(--text);">Keyboard Shortcuts</h3>
+          <button type="button" class="modal-close" style="background:none;border:none;color:var(--text-2);cursor:pointer;font-size:1.1rem;">✕</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div class="kbd-shortcut-row"><span>Open command palette / Quick search</span><div><span class="kbd-key">Ctrl</span> + <span class="kbd-key">K</span> or <span class="kbd-key">/</span></div></div>
+          <div class="kbd-shortcut-row"><span>Keyboard shortcuts help</span><span class="kbd-key">?</span></div>
+          <div class="kbd-shortcut-row"><span>Close modal or player</span><span class="kbd-key">Esc</span></div>
+          <div class="kbd-shortcut-row"><span>Toggle play / pause (in stream)</span><span class="kbd-key">Space</span></div>
+          <div class="kbd-shortcut-row"><span>Fullscreen toggle</span><span class="kbd-key">F</span></div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => {
+      if (e.target === modal || e.target.closest(".modal-close")) modal.classList.remove("open");
+    });
+  }
+  modal.classList.add("open");
+}
+
+// Mood Picker Integration (Item I)
+function initMoodPicker() {
+  const picker = $("#mood-picker");
+  if (!picker || picker._bound) return;
+  picker._bound = true;
+
+  const MOOD_PROMPTS = {
+    cozy: "Warm, cozy feel-good movies and uplifting comforting series with heart",
+    intense: "Heart-pounding thrillers, intense suspense and high-stakes mysteries",
+    funny: "Hilarious comedies, witty laugh-out-loud sitcoms and satire",
+    "mind-bending": "Mind-bending plot twists, psychological puzzles and time-travel mysteries",
+    short: "Quick breezy under 95-minute watches, tightly paced films",
+    family: "Wholesome family adventures, top-rated animated masterworks for all ages"
+  };
+
+  picker.addEventListener("click", e => {
+    const chip = e.target.closest(".mood-chip");
+    if (!chip) return;
+    const mood = chip.dataset.mood;
+    const prompt = MOOD_PROMPTS[mood] || mood;
+    location.href = `${routeUrl("search")}?q=${encodeURIComponent(prompt)}&ai=1`;
+  });
+}
+
+// Watchlist Shuffle Button (Item G)
+function initWatchlistShuffle() {
+  const shuffleBtn = $("#watchlist-shuffle-btn");
+  if (!shuffleBtn || shuffleBtn._bound) return;
+  shuffleBtn._bound = true;
+
+  shuffleBtn.addEventListener("click", () => {
+    const list = MyList.get();
+    if (!list || !list.length) {
+      toast("Your watchlist is empty. Save titles to shuffle!");
+      return;
+    }
+    const pick = list[Math.floor(Math.random() * list.length)];
+    const type = pick.type === "tv" ? "tv" : "movie";
+    toast(`Picked "${pick.title || "Title"}" for you!`);
+    setTimeout(() => {
+      location.href = `${routeUrl(type)}?id=${pick.id}`;
+    }, 600);
+  });
+}
+
+// Initialize Phase 5-8 features on DOM ready
+document.addEventListener("DOMContentLoaded", () => {
+  applyLiteMode();
+  initCommandPalette();
+  initMoodPicker();
+  initWatchlistShuffle();
+
+  // Mobile episodes integration in topnav bell button
+  const bellBtn = $("#topnav-bell-btn");
+  if (bellBtn && !bellBtn._mobileBound) {
+    bellBtn._mobileBound = true;
+    bellBtn.addEventListener("click", async e => {
+      if (isMobile()) {
+        e.stopPropagation();
+        e.preventDefault();
+        const tvShows = MyList.get().filter(it => it.type === "tv" || it.media_type === "tv");
+        const now = Date.now();
+        const weekAgo = now - 7 * 86400000;
+        const recent = [];
+        await Promise.allSettled(tvShows.slice(0, 10).map(async show => {
+          try {
+            const d = await tmdb(`/tv/${show.id}`);
+            const lastEp = d.last_episode_to_air;
+            if (lastEp && lastEp.air_date) {
+              const airTime = new Date(lastEp.air_date + "T00:00:00").getTime();
+              if (airTime >= weekAgo && airTime <= now + 86400000) {
+                recent.push({ show, ep: lastEp });
+              }
+            }
+          } catch {}
+        }));
+        openMobileNotificationSheet(recent);
+      }
+    });
+  }
+
+  // Lite Mode toggle in settings
+  const liteToggle = $("#settings-lite-mode");
+  liteToggle?.addEventListener("click", () => {
+    const cur = SETTINGS.get("orc_lite_mode", "") === "1";
+    SETTINGS.set("orc_lite_mode", cur ? "0" : "1");
+    applyLiteMode();
+    toast(cur ? "Lite mode disabled" : "Lite mode enabled");
+  });
+});

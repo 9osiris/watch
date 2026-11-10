@@ -50,8 +50,10 @@ test("canonical URLs and structured data use the new origin and deployed clean r
 
 test("sitemap and robots advertise the migrated clean URLs", () => {
   const urls = [...read("sitemap.xml").matchAll(/<loc>(.*?)<\/loc>/g)].map(match => match[1]);
-  assert.deepEqual(urls, ["/", "/movie", "/tv", "/search", "/list", "/settings", "/dmca"].map(route => origin + route));
+  // Phase 7 Item 44: /list and /settings removed from sitemap; /privacy added
+  assert.deepEqual(urls, ["/", "/movie", "/tv", "/search", "/privacy", "/dmca"].map(route => origin + route));
   assert.ok(read("robots.txt").includes(`Sitemap: ${origin}/sitemap.xml`));
+  assert.ok(!read("robots.txt").includes("wfc"));
 });
 
 test("legacy-host redirects are restricted to the two old hosts and cannot loop on Watch", () => {
@@ -425,5 +427,133 @@ test('Phase 4: Navigation, SEO and sharing regression suite', () => {
   assert.ok(script.includes('aria-pressed="${saved ? "true" : "false"}"'));
   assert.ok(script.includes('no-img-poster'));
   assert.ok(script.includes('hoverTimer = setTimeout(prefetchDetail, 300)'));
+});
+
+test("Phase 5: Performance regression suite", () => {
+  // 33. Minification script & bundles
+  assert.ok(fs.existsSync(path.join(root, "scripts", "minify.cjs")));
+  assert.ok(fs.existsSync(path.join(root, "orc-styles.min.css")));
+  assert.ok(fs.existsSync(path.join(root, "orc-script.min.js")));
+  assert.ok(read("index.html").includes('rel="preload" href="/orc-styles.css" as="style"'));
+
+  // 34. Supabase removed while accounts are disabled; ai-search-catalog only on search
+  for (const page of ["index.html", "list.html", "movie.html", "tv.html", "settings.html", "dmca.html"]) {
+    assert.ok(!read(page).includes("supabase-js"), `${page} should not load supabase`);
+    assert.ok(!read(page).includes("ai-search-catalog.js"), `${page} should not load ai-search-catalog`);
+  }
+  assert.ok(read("search.html").includes("ai-search-catalog.js"));
+
+  // 35. Lite Mode
+  const css = read("orc-styles.css");
+  const script = read("orc-script.js");
+  assert.ok(css.includes("html.lite-mode"));
+  assert.ok(script.includes("function isLiteMode()"));
+  assert.ok(read("settings.html").includes('id="settings-lite-mode"'));
+
+  // 36. 160px WebP provider logos, manifest icons, legacy deleted
+  for (const prov of ["netflix", "disney", "primevideo", "appletv", "hbomax", "hulu", "paramount", "peacock", "crunchyroll", "amc"]) {
+    assert.ok(fs.existsSync(path.join(root, "providers", `${prov}.webp`)), `provider ${prov}.webp exists`);
+  }
+  const manifest = JSON.parse(read("manifest.json"));
+  const anyIcons = manifest.icons.filter(i => i.purpose === "any");
+  const maskableIcons = manifest.icons.filter(i => i.purpose === "maskable");
+  assert.ok(anyIcons.length >= 2, "Has any purpose icons");
+  assert.ok(maskableIcons.length >= 2, "Has maskable purpose icons");
+  assert.ok(!fs.existsSync(path.join(root, "IMG_7388.png")));
+  assert.ok(!fs.existsSync(path.join(root, "IMG_7389.png")));
+  assert.ok(!fs.existsSync(path.join(root, "IMG_7390.png")));
+
+  // 37. Service Worker TMDB cache cap & offline navigation
+  const sw = read("sw.js");
+  assert.ok(sw.includes("TMDB_CACHE_MAX_ENTRIES"));
+  assert.ok(sw.includes("/offline.html"));
+
+  // 38. TMDB API Proxy
+  assert.ok(fs.existsSync(path.join(root, "api", "tmdb.js")));
+  assert.ok(script.includes("/api/tmdb?path="));
+});
+
+test("Phase 6: Accessibility regression suite", () => {
+  const css = read("orc-styles.css");
+  // 39. Raised --text-3 contrast
+  assert.ok(css.includes("--text-3:        #8e8e99;"));
+  assert.ok(css.includes("--text-3:        #52525b;"));
+
+  // 40. System theme
+  assert.ok(read("settings.html").includes('data-theme-val="system"'));
+  assert.ok(read("orc-script.js").includes("resolveEffectiveTheme"));
+
+  // 41. Skip-to-content links and labels
+  for (const page of ["index.html", "search.html", "list.html", "movie.html", "tv.html", "settings.html", "privacy.html"]) {
+    assert.ok(read(page).includes('class="skip-link"'), `${page} has skip link`);
+    assert.ok(read(page).includes('id="main-content"'), `${page} has main-content anchor`);
+  }
+  assert.ok(read("list.html").includes('role="tabpanel"'));
+});
+
+test("Phase 7: Cleanup regression suite", () => {
+  // 42. Deleted obsolete pages and removed Inspo comment
+  assert.ok(!fs.existsSync(path.join(root, "OsirisCinema.html")));
+  assert.ok(!fs.existsSync(path.join(root, "wfc.html")));
+  assert.ok(!read("list.html").includes("Inspo Picture 1"));
+
+  // 43. Privacy page
+  assert.ok(fs.existsSync(path.join(root, "privacy.html")));
+  for (const page of ["index.html", "search.html", "list.html", "movie.html", "tv.html", "settings.html", "dmca.html", "privacy.html"]) {
+    assert.ok(read(page).includes('href="/privacy"'), `${page} footer links to privacy`);
+  }
+
+  // 44. Sitemap refresh
+  const sitemap = read("sitemap.xml");
+  assert.ok(sitemap.includes("2026-11-10"));
+  assert.ok(!sitemap.includes("/list</loc>"));
+  assert.ok(!sitemap.includes("/settings</loc>"));
+
+  // 45. Plain-language update log
+  assert.ok(read("orc-script.js").includes("WHAT'S NEW"));
+  assert.ok(read("orc-script.js").includes("Cleaner design, mobile episode tracking, and faster streams"));
+});
+
+test("Phase 8 & UI Directives regression suite", () => {
+  const indexHtml = read("index.html");
+  const css = read("orc-styles.css");
+  const script = read("orc-script.js");
+
+  // Carousel controls: rounded play/pause, centered, no circle, at end of dots
+  assert.ok(indexHtml.includes('rect x="5.5" y="4" width="4" height="16" rx="2"'));
+  assert.ok(css.includes(".hero-pause-btn {"));
+  assert.ok(css.includes("background: transparent !important;"));
+
+  // Mobile wordmark scroll hide and centered
+  assert.ok(css.includes(".topnav.nav-hidden {"));
+  assert.ok(css.includes(".topnav.nav-hidden .topnav-word"));
+  assert.ok(script.includes("requestAnimationFrame(updateScrollNav)"));
+
+  // Mobile dedicated New Episodes drawer
+  assert.ok(script.includes("openMobileNotificationSheet"));
+  assert.ok(css.includes(".notif-mobile-sheet"));
+
+  // Generic purply AI goop removed
+  assert.ok(css.includes(".ai-badge {"));
+  assert.ok(css.includes("background: rgba(255, 255, 255, 0.08) !important;"));
+
+  // Command palette (Ctrl+K and /)
+  assert.ok(script.includes("initCommandPalette"));
+  assert.ok(css.includes(".cmd-palette-backdrop"));
+
+  // TV Progress rings & Next Up
+  assert.ok(read("tv.html").includes('id="tv-play-next"'));
+  assert.ok(css.includes(".tv-play-next-btn"));
+
+  // Watchlist shuffle
+  assert.ok(read("list.html").includes('id="watchlist-shuffle-btn"'));
+  assert.ok(script.includes("initWatchlistShuffle"));
+
+  // Mood picker
+  assert.ok(indexHtml.includes('id="mood-picker"'));
+  assert.ok(script.includes("initMoodPicker"));
+
+  // Keyboard shortcut help sheet (?)
+  assert.ok(script.includes("openKeyboardHelpSheet"));
 });
 

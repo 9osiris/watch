@@ -26,6 +26,10 @@
       "destination": "/dmca.html"
     },
     {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
       "source": "/css/orc-styles.css",
       "destination": "/orc-styles.css"
     },
@@ -87,13 +91,8 @@
       "permanent": true
     },
     {
-      "source": "/OsirisCinema.html",
-      "destination": "/",
-      "permanent": true
-    },
-    {
-      "source": "/OsirisCinema",
-      "destination": "/",
+      "source": "/privacy.html",
+      "destination": "/privacy",
       "permanent": true
     }
   ]

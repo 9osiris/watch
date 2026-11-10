@@ -1,6 +1,9 @@
-const CACHE_NAME = "orc-static-v39";
-const TMDB_CACHE_NAME = "orc-tmdb-runtime-v1";
-const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/dmca"]);
+const CACHE_NAME = "orc-static-v41";
+const TMDB_CACHE_NAME = "orc-tmdb-runtime-v2";
+const TMDB_CACHE_MAX_ENTRIES = 200;
+const TMDB_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/privacy", "/dmca"]);
 const HTML_TO_CLEAN = new Map([
   ["/index.html", "/"],
   ["/movie.html", "/movie"],
@@ -8,6 +11,7 @@ const HTML_TO_CLEAN = new Map([
   ["/search.html", "/search"],
   ["/list.html", "/list"],
   ["/settings.html", "/settings"],
+  ["/privacy.html", "/privacy"],
   ["/dmca.html", "/dmca"],
 ]);
 const CLEAN_ROUTE_FALLBACKS = new Map([
@@ -16,6 +20,7 @@ const CLEAN_ROUTE_FALLBACKS = new Map([
   ["/search", "/search.html"],
   ["/list", "/list.html"],
   ["/settings", "/settings.html"],
+  ["/privacy", "/privacy.html"],
   ["/dmca", "/dmca.html"],
 ]);
 
@@ -24,6 +29,7 @@ const STATIC_ASSETS = [
   "/search",
   "/list",
   "/settings",
+  "/privacy",
   "/dmca",
   "/offline.html",
   "/movie",
@@ -34,21 +40,36 @@ const STATIC_ASSETS = [
   "/ai-search.css",
   "/ai-search-catalog.js",
   "/ai-search-ui.js",
-  "/manifest.json",
   "/favicon.svg",
   "/favicon.png",
   "/apple-touch-icon.png",
   "/icon-192.png",
-  "/icon-512.png"
+  "/icon-512.png",
+  "/icon-192-maskable.png",
+  "/icon-512-maskable.png",
+  "/manifest.json"
 ];
 
-function cleanResponse(response) {
-  if (!response || !response.redirected) return Promise.resolve(response);
-  return response.blob().then(body => new Response(body, {
+async function cleanResponse(response) {
+  if (!response || !response.redirected) return response;
+  return new Response(response.body, Object.assign({}, response, {
     status: response.status,
     statusText: response.statusText,
     headers: response.headers,
   }));
+}
+
+// Manage TMDB cache eviction (max 200 items, 24h expiry)
+async function trimTmdbCache(cache) {
+  try {
+    const keys = await cache.keys();
+    if (keys.length > TMDB_CACHE_MAX_ENTRIES) {
+      const toDelete = keys.slice(0, keys.length - TMDB_CACHE_MAX_ENTRIES);
+      await Promise.all(toDelete.map(k => cache.delete(k)));
+    }
+  } catch (err) {
+    // Ignore cache trim errors
+  }
 }
 
 self.addEventListener("install", event => {
@@ -89,24 +110,43 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       caches.open(TMDB_CACHE_NAME).then(async cache => {
         const cached = await cache.match(event.request);
+        const cachedDate = cached ? new Date(cached.headers.get("sw-cached-date") || 0).getTime() : 0;
+        const isExpired = cached && (Date.now() - cachedDate > TMDB_CACHE_MAX_AGE_MS);
+
         const networkPromise = fetch(event.request)
-          .then(res => {
+          .then(async res => {
             if (res && res.status === 200) {
-              cache.put(event.request, res.clone());
+              const headers = new Headers(res.headers);
+              headers.set("sw-cached-date", new Date().toISOString());
+              const blob = await res.blob();
+              const toCache = new Response(blob, {
+                status: res.status,
+                statusText: res.statusText,
+                headers
+              });
+              await cache.put(event.request, toCache);
+              trimTmdbCache(cache);
+              return new Response(blob, {
+                status: res.status,
+                statusText: res.statusText,
+                headers: res.headers
+              });
             }
             return res;
           })
           .catch(() => null);
 
-        if (cached) {
+        if (cached && !isExpired) {
           if (typeof event.waitUntil === "function") event.waitUntil(networkPromise);
           return cached;
         }
+
         const netRes = await networkPromise;
-        return netRes || new Response(JSON.stringify({ results: [] }), {
-          status: 503,
-          headers: { "Content-Type": "application/json" }
-        });
+        if (netRes) return netRes;
+        if (cached) return cached; // Serve expired as last-resort fallback
+
+        // If both network and cache fail, do NOT return fake empty 200 or 503 JSON
+        throw new TypeError("Failed to fetch TMDB data");
       })
     );
     return;
@@ -132,14 +172,14 @@ self.addEventListener("fetch", event => {
         : event.request;
       const cacheKey = canonicalRoute || event.request;
 
-      const networkFetch = fetch(fetchTarget, event.request.mode === "navigate" ? { redirect: "follow", credentials: "same-origin" } : undefined)
-        .then(async networkResponse => {
-          if (!networkResponse) return null;
-          const sanitized = await cleanResponse(networkResponse);
-          if (sanitized && sanitized.status === 200 && (sanitized.type === "basic" || sanitized.type === "default")) {
-            cache.put(cacheKey, sanitized.clone());
+      const networkFetch = fetch(fetchTarget, event.request.mode === "navigate" ? { redirect: "follow" } : undefined)
+        .then(async res => {
+          if (res && (res.status === 200 || res.status === 0)) {
+            const clean = await cleanResponse(res);
+            cache.put(cacheKey, clean.clone());
+            return clean;
           }
-          return sanitized;
+          return res;
         })
         .catch(() => null);
 
@@ -148,23 +188,19 @@ self.addEventListener("fetch", event => {
         return cachedResponse;
       }
 
-      const res = await networkFetch;
-      if (res && res.status !== 404) return res;
-      if (cleanFallback) {
-        const fallbackResponse = await cleanResponse(await cache.match(cleanFallback));
-        if (fallbackResponse) return fallbackResponse;
-      }
-      if (res) return res;
+      const freshResponse = await networkFetch;
+      if (freshResponse) return freshResponse;
 
-      // Fallback for HTML page navigations offline
+      // When navigation fails offline, serve offline.html
       if (event.request.mode === "navigate") {
-        const fallbackPage = await cleanResponse(
-          await cache.match("/offline.html") || await cache.match("/") || await cache.match("/index.html")
-        );
-        if (fallbackPage) return fallbackPage;
+        const offlinePage = await cache.match("/offline.html");
+        if (offlinePage) return offlinePage;
       }
 
-      return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
+      return new Response("Network offline and asset not cached.", {
+        status: 503,
+        headers: { "Content-Type": "text/plain" }
+      });
     })
   );
 });
