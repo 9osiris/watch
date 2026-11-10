@@ -4344,3 +4344,104 @@ html[data-theme="light"] .skeleton-card {
   border-radius: var(--pill);
 }
 
+/* ===== Phase 3 Player & Detail Page Styles ===== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+#watch-providers-host {
+  min-height: 48px;
+}
+
+#keywords-host {
+  min-height: 44px;
+}
+
+.player-poster-splash {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  cursor: pointer;
+  z-index: 10;
+  border-radius: inherit;
+  transition: opacity 0.3s var(--ease);
+}
+.player-poster-splash::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.player-splash-play-btn {
+  position: relative;
+  z-index: 1;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent, #000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 20px var(--accent);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s;
+}
+.player-poster-splash:hover .player-splash-play-btn {
+  transform: scale(1.08);
+}
+.player-splash-play-btn svg {
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+}
+.player-splash-label {
+  position: relative;
+  z-index: 1;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.detail-error-box {
+  padding: 40px 20px;
+  text-align: center;
+  background: var(--bg-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  margin: 40px auto;
+  max-width: 480px;
+}
+.detail-error-box h2 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.detail-error-box p {
+  font-size: 0.9rem;
+  color: var(--text-2);
+  margin: 0 0 20px;
+}
+.detail-error-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+

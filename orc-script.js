@@ -1071,6 +1071,7 @@ function createPlayerIframe(src) {
   iframe.setAttribute("webkitallowfullscreen", "true");
   iframe.setAttribute("mozallowfullscreen", "true");
   iframe.setAttribute("allow", "autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; accelerometer *; gyroscope *; display-capture *");
+  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation allow-forms allow-top-navigation-by-user-activation");
   return iframe;
 }
 
@@ -4763,19 +4764,53 @@ function renderProviders(container, type, id, s, e, onChange) {
 }
 
 async function initMoviePage() {
-  const id = new URLSearchParams(location.search).get("id");
+  const rawId = new URLSearchParams(location.search).get("id");
   const header = $("#detail-header");
   const frame = $("#player-frame");
-  if (!id) { location.href = homeUrl(); return; }
+  if (!rawId || isNaN(Number(rawId)) || Number(rawId) <= 0) {
+    if (header) {
+      header.innerHTML = `
+        <div class="detail-error-box">
+          <h2>Could Not Load Details</h2>
+          <p>Invalid or missing movie ID. Please return home or search for a title.</p>
+          <div class="detail-actions">
+            <a href="${homeUrl()}" class="btn-play">Go Home</a>
+          </div>
+        </div>`;
+      LiquidGlass.glassify(header);
+    }
+    return;
+  }
+  const id = String(parseInt(rawId, 10));
   if (!header || !frame) return;
 
   initSidebar("movies");
   checkPlayLoader();
   initPlayerGuard();
 
+  let playerStarted = SETTINGS.get(SETTINGS.playOnOpenKey) === "1";
   const load = url => loadPlayerFrame(frame, url);
-  renderProviders($("#provider-bar"), "movie", id, 1, 1, load);
-  load(providerUrl("movie", id, 1, 1));
+  const startPlayer = () => {
+    playerStarted = true;
+    load(providerUrl("movie", id, 1, 1));
+  };
+
+  renderProviders($("#provider-bar"), "movie", id, 1, 1, url => {
+    playerStarted = true;
+    load(url);
+  });
+
+  if (playerStarted) {
+    load(providerUrl("movie", id, 1, 1));
+  } else {
+    frame.innerHTML = `
+      <div class="player-poster-splash" id="player-splash">
+        <button type="button" class="splash-play-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Playback</button>
+      </div>`;
+    $("#player-splash")?.addEventListener("click", () => {
+      startPlayer();
+    });
+  }
 
   const seed = consumeNavSeed(id, "movie");
   if (seed) {
@@ -4800,11 +4835,6 @@ async function initMoviePage() {
     LiquidGlass.glassify(header);
   }
 
-  const showErr = msg => {
-    if (header) header.innerHTML = `<p style="color:var(--text-muted)">${esc(msg)}</p>`;
-    if (frame) frame.innerHTML = `<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center">Could not load player.</p>`;
-  };
-
   let m;
   try {
     m = await tmdb(`/movie/${id}?append_to_response=images,credits,similar,videos,recommendations,external_ids,release_dates`);
@@ -4812,8 +4842,24 @@ async function initMoviePage() {
     try {
       m = await tmdb(`/movie/${id}`);
     } catch (err) { console.warn('Caught error:', err);
-      m = seed || { id, title: `Movie #${id}`, overview: "Select a stream provider below to start watching." };
+      m = seed || null;
     }
+  }
+
+  if (!m) {
+    if (header) {
+      header.innerHTML = `
+        <div class="detail-error-box">
+          <h2>Could Not Load Details</h2>
+          <p>Failed to retrieve movie information. Please check your connection and retry.</p>
+          <div class="detail-actions">
+            <button type="button" class="btn-play" onclick="location.reload()">Retry</button>
+            <a href="${homeUrl()}" class="btn-ghost">Go Home</a>
+          </div>
+        </div>`;
+      LiquidGlass.glassify(header);
+    }
+    return;
   }
 
   try {
@@ -4828,7 +4874,7 @@ async function initMoviePage() {
     const logos = m.images?.logos || [];
     const logoObj = logos.find(l => l.iso_639_1 === "en") || logos.find(l => !l.iso_639_1) || logos[0];
     const titleHtml = logoObj?.file_path
-      ? `<div class="detail-logo-wrap"><img src="https://image.tmdb.org/t/p/w500${logoObj.file_path}" class="detail-title-logo" alt="${esc(m.title)}" /></div>`
+      ? `<div class="detail-logo-wrap"><img src="https://image.tmdb.org/t/p/w500${logoObj.file_path}" class="detail-title-logo" alt="${esc(m.title)}" /><h1 class="sr-only">${esc(m.title)}</h1></div>`
       : `<h1 class="detail-title">${esc(m.title)}</h1>`;
 
     header.innerHTML = `
@@ -4860,6 +4906,7 @@ async function initMoviePage() {
       if (e.shiftKey) return;
       e.preventDefault();
       markMovieWatched();
+      startPlayer();
       scrollToSelector("#player-frame");
     });
     if (trailer) $("#detail-trailer")?.addEventListener("click", () => openTrailer(trailer.key));
@@ -4871,7 +4918,7 @@ async function initMoviePage() {
       });
     });
 
-    if (!frame.querySelector("iframe")) {
+    if (playerStarted && !frame.querySelector("iframe")) {
       renderProviders($("#provider-bar"), "movie", id, 1, 1, load);
       load(providerUrl("movie", id, 1, 1));
     }
@@ -4938,17 +4985,27 @@ async function initTvPage() {
   checkPlayLoader();
   initPlayerGuard();
   const params = new URLSearchParams(location.search);
-  const id = params.get("id");
-  let season = parseInt(params.get("season") || "1", 10);
-  let episode = parseInt(params.get("episode") || "1", 10);
+  const rawId = params.get("id");
   const header = $("#detail-header");
   const frame = $("#player-frame");
-  if (!id) { location.href = homeUrl(); return; }
-
-  const showErr = msg => {
-    if (header) header.innerHTML = `<p style="color:var(--text-muted)">${esc(msg)}</p>`;
-    if (frame) frame.innerHTML = `<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem">Could not load player.</p>`;
-  };
+  if (!rawId || isNaN(Number(rawId)) || Number(rawId) <= 0) {
+    if (header) {
+      header.innerHTML = `
+        <div class="detail-error-box">
+          <h2>Could Not Load Series</h2>
+          <p>Invalid or missing series ID. Please return home or search for a title.</p>
+          <div class="detail-actions">
+            <a href="${homeUrl()}" class="btn-play">Go Home</a>
+          </div>
+        </div>`;
+      LiquidGlass.glassify(header);
+    }
+    return;
+  }
+  const id = String(parseInt(rawId, 10));
+  let season = parseInt(params.get("season") || "1", 10);
+  let episode = parseInt(params.get("episode") || "1", 10);
+  let playerStarted = SETTINGS.get(SETTINGS.playOnOpenKey) === "1";
 
   const seed = consumeNavSeed(id, "tv");
   if (seed) {
@@ -4978,8 +5035,24 @@ async function initTvPage() {
     try {
       show = await tmdb(`/tv/${id}`);
     } catch (err) { console.warn('Caught error:', err);
-      show = seed ? { ...seed, seasons: [{ season_number: 1, episode_count: 24 }] } : { id, name: `TV Series #${id}`, overview: "Select season and episode below to start watching.", seasons: [{ season_number: 1, episode_count: 24 }] };
+      show = seed || null;
     }
+  }
+
+  if (!show) {
+    if (header) {
+      header.innerHTML = `
+        <div class="detail-error-box">
+          <h2>Could Not Load Series</h2>
+          <p>Failed to retrieve series information. Please check your connection and retry.</p>
+          <div class="detail-actions">
+            <button type="button" class="btn-play" onclick="location.reload()">Retry</button>
+            <a href="${homeUrl()}" class="btn-ghost">Go Home</a>
+          </div>
+        </div>`;
+      LiquidGlass.glassify(header);
+    }
+    return;
   }
 
   try {
@@ -5006,7 +5079,7 @@ async function initTvPage() {
     const logos = show.images?.logos || [];
     const logoObj = logos.find(l => l.iso_639_1 === "en") || logos.find(l => !l.iso_639_1) || logos[0];
     const titleHtml = logoObj?.file_path
-      ? `<div class="detail-logo-wrap"><img src="https://image.tmdb.org/t/p/w500${logoObj.file_path}" class="detail-title-logo" alt="${esc(show.name)}" /></div>`
+      ? `<div class="detail-logo-wrap"><img src="https://image.tmdb.org/t/p/w500${logoObj.file_path}" class="detail-title-logo" alt="${esc(show.name)}" /><h1 class="sr-only">${esc(show.name)}</h1></div>`
       : `<h1 class="detail-title">${esc(show.name)}</h1>`;
 
     if (header) header.innerHTML = `
@@ -5034,10 +5107,15 @@ async function initTvPage() {
     const markShowWatched = (sNum = season, eNum = episode) => {
       ensureRecommendSection(show.name, true);
     };
+    const startTvPlayer = () => {
+      playerStarted = true;
+      loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+    };
     $("#detail-play")?.addEventListener("click", (e) => {
       if (e.shiftKey) return;
       e.preventDefault();
       markShowWatched(season, episode);
+      startTvPlayer();
       scrollToSelector("#player-frame");
     });
     if (trailer) $("#detail-trailer")?.addEventListener("click", () => openTrailer(trailer.key));
@@ -5049,7 +5127,17 @@ async function initTvPage() {
     });
 
     const update = () => {
-      loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+      if (playerStarted) {
+        loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+      } else {
+        frame.innerHTML = `
+          <div class="player-poster-splash" id="player-splash">
+            <button type="button" class="splash-play-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play S${season} E${episode}</button>
+          </div>`;
+        $("#player-splash")?.addEventListener("click", () => {
+          startTvPlayer();
+        });
+      }
       const u = new URL(location.href);
       u.searchParams.set("season", season);
       u.searchParams.set("episode", episode);
@@ -6284,6 +6372,7 @@ function initSettingsPage() {
     });
   };
 
+  bindToggle("#toggle-play-on-open", SETTINGS.playOnOpenKey, "Play on open");
   bindToggle("#toggle-reduce-motion", SETTINGS.reduceMotionKey, "Reduce motion");
   bindToggle("#toggle-hide-watched", SETTINGS.hideWatchedKey, "Hide watched");
   bindToggle("#toggle-hide-adult", SETTINGS.hideAdultKey, "Hide adult content", "1");

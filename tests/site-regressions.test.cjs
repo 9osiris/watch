@@ -321,3 +321,35 @@ test('Phase 2: Data trust and list integrity regression suite', () => {
   assert.ok(script.includes('Storage full: could not save data.'));
 });
 
+test('Phase 3: Player and detail page integrity regression suite', () => {
+  const script = fs.readFileSync(path.resolve(__dirname, '../orc-script.js'), 'utf8');
+  const movieHtml = fs.readFileSync(path.resolve(__dirname, '../movie.html'), 'utf8');
+  const styles = fs.readFileSync(path.resolve(__dirname, '../orc-styles.css'), 'utf8');
+  const settingsHtml = fs.readFileSync(path.resolve(__dirname, '../settings.html'), 'utf8');
+
+  // 19. Autoplay gated behind play-on-open setting or play click; play button starts playback
+  assert.ok(script.includes('SETTINGS.playOnOpenKey'));
+  assert.ok(settingsHtml.includes('id="toggle-play-on-open"'));
+  assert.ok(script.includes('player-poster-splash'));
+
+  // 20. Sandbox attribute on player iframe
+  assert.ok(script.includes('iframe.setAttribute("sandbox"'));
+  assert.ok(script.includes('allow-scripts allow-same-origin allow-presentation allow-forms'));
+
+  // 21. Bad ID validation, clear error state with Retry and Go Home, never wipe player
+  assert.ok(script.includes('isNaN(Number(rawId)) || Number(rawId) <= 0'));
+  assert.ok(script.includes('detail-error-box'));
+  assert.ok(script.includes('Could Not Load Details'));
+  assert.ok(script.includes('Could Not Load Series'));
+
+  // 22. Zero ads removed from metadata
+  assert.ok(!movieHtml.includes('zero ads'));
+
+  // 23. Space reservation for providers and keywords, real h1 retained with logo
+  assert.ok(styles.includes('#watch-providers-host'));
+  assert.ok(styles.includes('min-height: 48px'));
+  assert.ok(styles.includes('#keywords-host'));
+  assert.ok(styles.includes('min-height: 44px'));
+  assert.ok(script.includes('<h1 class="sr-only">'));
+});
+
