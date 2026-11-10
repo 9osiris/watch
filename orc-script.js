@@ -494,22 +494,6 @@ function tmdb(path, retries = 1, opts = {}) {
   const req = (async () => {
     let finalPath = path;
 
-    // Edge-cached Serverless TMDB Proxy (Phase 5 Item 38)
-    if (!opts.signal && typeof fetch === "function") {
-      try {
-        const queryParams = new URLSearchParams();
-        if (opts.params) {
-          Object.entries(opts.params).forEach(([k, v]) => queryParams.set(k, String(v)));
-        }
-        const proxyUrl = `/api/tmdb?path=${encodeURIComponent(finalPath)}${queryParams.toString() ? `&${queryParams.toString()}` : ""}`;
-        const proxyRes = await fetch(proxyUrl);
-        if (proxyRes.ok) {
-          return await proxyRes.json();
-        }
-      } catch (proxyErr) {
-        // Fall back seamlessly to direct TMDB key
-      }
-    }
     const hideAdult = SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
     const isSearchOrDiscover = finalPath.startsWith("/search/") || finalPath.startsWith("/discover/");
     if (hideAdult && isSearchOrDiscover && !finalPath.includes("include_adult=")) {
@@ -520,6 +504,30 @@ function tmdb(path, retries = 1, opts = {}) {
     if (prefLang && !finalPath.includes("language=")) {
       const pSep = finalPath.includes("?") ? "&" : "?";
       finalPath = `${finalPath}${pSep}language=${encodeURIComponent(prefLang)}`;
+    }
+    // Edge-cached serverless proxy. Falls back to the direct call only when the
+    // function is missing or unreachable; real TMDB errors are not retried twice.
+    if (!opts.signal && !window._tmdbProxyOff) {
+      try {
+        const proxyRes = await fetch(`/api/tmdb?path=${encodeURIComponent(finalPath)}`);
+        if (proxyRes.headers.get("x-osiris-proxy") === "1" && proxyRes.status < 500) {
+          if (proxyRes.status === 429) { toast("TMDB Rate limit exceeded. Please wait a moment."); throw new Error("TMDB Rate Limit 429"); }
+          if (!proxyRes.ok) throw new Error(`TMDB ${proxyRes.status}`);
+          const proxied = await proxyRes.json();
+          if (proxied) {
+            if (_tmdbPersisted.size >= 65) {
+              const oldK = _tmdbPersisted.keys().next().value;
+              if (oldK) _tmdbPersisted.delete(oldK);
+            }
+            _tmdbPersisted.set(path, { data: proxied, time: Date.now() });
+            scheduleSaveTmdbCache();
+          }
+          return proxied;
+        }
+        if (proxyRes.status === 404 || proxyRes.status === 405 || proxyRes.status === 503) window._tmdbProxyOff = true;
+      } catch (proxyErr) {
+        if (/^TMDB/.test(proxyErr.message)) throw proxyErr;
+      }
     }
     const sep = finalPath.includes("?") ? "&" : "?";
     let attempts = 0;
@@ -1009,7 +1017,8 @@ function syncPageBackdrop() {
   if (typeof document === "undefined" || !document.body) return;
   const cfg = getBackdropConfig();
   let container = document.getElementById("orc-page-backdrop");
-  if (cfg.style === "none" || typeof window.GradientBackdrop === "undefined") {
+  const liteBackdropOff = typeof isLiteMode === "function" && isLiteMode();
+  if (cfg.style === "none" || liteBackdropOff || typeof window.GradientBackdrop === "undefined") {
     if (pageBackdropInstance) {
       try { pageBackdropInstance.destroy(); } catch (e) {}
       pageBackdropInstance = null;
@@ -1030,6 +1039,7 @@ function syncPageBackdrop() {
       grain: cfg.grain,
       animate: cfg.animate,
       respectReducedMotion: true,
+      ...(isMobile() ? { maxPixels: 4.5e5 } : {}),
     };
     if (!pageBackdropInstance || pageBackdropInstance.el !== container) {
       try {
@@ -2391,26 +2401,32 @@ function initSidebar(active) {
 
   if (!el._scrollBound) {
     el._scrollBound = true;
-    let lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    let lastScrollY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
+    let travel = 0;
     let scrollRaf = null;
 
     const updateScrollNav = () => {
+      scrollRaf = null;
       const currentY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
       const delta = currentY - lastScrollY;
+      lastScrollY = currentY;
       el.classList.toggle("scrolled", currentY > 12);
 
-      // Mobile: hide wordmark and navbar on scroll down, restore on scroll up or top
-      if (isMobile()) {
-        if (currentY > 40 && delta > 3) {
-          el.classList.add("nav-hidden");
-        } else if (delta < -3 || currentY <= 25) {
-          el.classList.remove("nav-hidden");
-        }
-      } else {
+      if (!isMobile()) {
         el.classList.remove("nav-hidden");
+        travel = 0;
+        return;
       }
-      lastScrollY = currentY;
-      scrollRaf = null;
+      if (currentY <= 24) {
+        travel = 0;
+        el.classList.remove("nav-hidden");
+        return;
+      }
+      if (delta === 0) return;
+      // accumulate travel in one direction so slow drags and momentum both count
+      travel = (delta > 0) === (travel > 0) ? travel + delta : delta;
+      if (travel > 14) el.classList.add("nav-hidden");
+      else if (travel < -8) el.classList.remove("nav-hidden");
     };
 
     const queueScroll = () => {
@@ -2418,7 +2434,6 @@ function initSidebar(active) {
     };
 
     window.addEventListener("scroll", queueScroll, { passive: true });
-    window.addEventListener("touchmove", queueScroll, { passive: true });
     queueScroll();
   }
 
@@ -7640,6 +7655,7 @@ function isLiteMode() {
 function applyLiteMode() {
   const active = isLiteMode();
   document.documentElement.classList.toggle("lite-mode", active);
+  if (typeof syncPageBackdrop === "function") syncPageBackdrop();
   const toggle = $("#settings-lite-mode");
   if (toggle) {
     toggle.classList.toggle("active", active);

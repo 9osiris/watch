@@ -2,12 +2,19 @@
 // Provides server-side key security and HTTP edge caching to avoid client rate limits.
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
-const TMDB_KEY = process.env.TMDB_KEY || process.env.TMDB_API_KEY || "e4f8d55ff703f8e560b2fc377ae5ee26";
+const TMDB_KEY = process.env.TMDB_KEY || process.env.TMDB_API_KEY || "";
 
 module.exports = async (req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.setHeader("Allow", "GET, HEAD");
     return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
+  res.setHeader("x-osiris-proxy", "1");
+  if (!TMDB_KEY) {
+    // No server-side key configured: tell the client to use its direct fallback.
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(503).json({ error: "TMDB key is not configured on the server." });
   }
 
   const { path, ...restParams } = req.query || {};

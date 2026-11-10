@@ -526,8 +526,17 @@ test("Phase 8 & UI Directives regression suite", () => {
 
   // Mobile wordmark scroll hide and centered
   assert.ok(css.includes(".topnav.nav-hidden {"));
-  assert.ok(css.includes(".topnav.nav-hidden .topnav-word"));
+  assert.ok(css.includes("transform: translateY(calc(-100% - var(--safe-top, 0px) - 8px)) !important;"));
   assert.ok(script.includes("requestAnimationFrame(updateScrollNav)"));
+
+  // Safari memory guard: no per-card backdrop-filter layers on touch, no view-transition snapshots on touch
+  assert.ok(css.includes("Safari / touch memory guard"));
+  assert.ok(css.includes("@media (hover: hover) and (min-width: 769px) {\n  @view-transition {"));
+
+  // TMDB proxy must never ship a made-up key and must announce itself so the client does not double-fetch
+  const tmdbApi = read("api/tmdb.js");
+  assert.ok(!tmdbApi.includes("e4f8d55ff703f8e560b2fc377ae5ee26"));
+  assert.ok(tmdbApi.includes('"x-osiris-proxy"'));
 
   // Mobile dedicated New Episodes drawer
   assert.ok(script.includes("openMobileNotificationSheet"));

@@ -72,8 +72,10 @@
   outline-offset: 3px !important;
 }
 
-@view-transition {
-  navigation: auto;
+@media (hover: hover) and (min-width: 769px) {
+  @view-transition {
+    navigation: auto;
+  }
 }
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -4608,35 +4610,32 @@ html[data-theme="light"] .skeleton-card {
 
 
 /* =========================================================================
-   NEW MOBILE NAVBAR REDESIGN & SCROLL FADE
-   (Desktop / PC navigation remains 100% standard full-width)
+   MOBILE NAVIGATION, CAROUSEL CONTROLS AND SAFARI MEMORY GUARDS
+   (desktop / PC navigation is untouched)
    ========================================================================= */
 
 @media (max-width: 768px) {
-  /* Mobile Top Bar: Centered Wordmark & Smooth Scroll Fade */
+  /* ----- Top bar: centered wordmark, slides in/out from above ----- */
   .topnav {
     background: transparent !important;
     box-shadow: none !important;
-    backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     pointer-events: none;
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+    opacity: 1 !important;
+    will-change: transform;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) !important;
   }
   .topnav::before,
-  .topnav::after {
-    display: none !important;
-  }
+  .topnav::after { display: none !important; }
   .topnav-inner {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
     position: relative;
     justify-content: center !important;
-    text-align: center;
     height: var(--nav-h);
     padding: 0 var(--gutter);
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
     pointer-events: none;
   }
   .topnav-logo {
@@ -4644,140 +4643,180 @@ html[data-theme="light"] .skeleton-card {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    gap: 8px;
     margin: 0 auto;
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-  .topnav-logo img,
-  .nav-logo-icon {
-    width: 22px;
-    height: 22px;
-    color: var(--accent);
   }
   .topnav-word {
     font-size: 1.15rem;
-    font-weight: 800;
     letter-spacing: -0.015em;
     text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+  .topnav.nav-hidden {
+    transform: translateY(calc(-100% - var(--safe-top, 0px) - 8px)) !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+  }
+  .topnav.nav-hidden .topnav-actions { pointer-events: none !important; }
+
+  /* Bell + Discord: bare icons, no bubble */
   .topnav-actions {
     position: absolute;
-    right: var(--gutter);
+    right: calc(var(--gutter) - 8px);
     top: 50%;
     transform: translateY(-50%);
     display: flex !important;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     pointer-events: auto !important;
     z-index: 10;
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  .topnav-actions .topnav-icon[aria-label="Discord"],
-  .topnav-actions .topnav-icon.topnav-bell-btn,
+  .topnav-actions .topnav-icon[aria-label="Search"] { display: none !important; }
+  .topnav-actions .topnav-icon,
+  .topnav-actions .topnav-bell-btn,
   .topnav-actions #topnav-bell-btn {
     display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
     pointer-events: auto !important;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     color: var(--text);
   }
-  .topnav-actions .topnav-icon[aria-label="Search"] {
-    display: none !important;
+  .topnav-actions .topnav-icon svg { width: 22px; height: 22px; }
+
+  /* ----- Hero carousel: dots + pause button centered as one group ----- */
+  .hero-carousel-controls {
+    left: 50% !important;
+    right: auto !important;
+    bottom: 26px !important;
+    width: max-content;
+    transform: translateX(-50%) !important;
+    justify-content: center;
+    gap: 10px;
   }
-  .topnav.nav-hidden {
-    transform: translateY(calc(-100% - var(--safe-top, 0px) - 12px)) !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-  .topnav.nav-hidden .topnav-logo,
-  .topnav.nav-hidden .topnav-word,
-  .topnav.nav-hidden .topnav-actions {
-    opacity: 0 !important;
-    transform: translateY(-10px) scale(0.92) !important;
-    pointer-events: none !important;
+  .hero-carousel-controls .hero-dots {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    gap: 6px;
   }
 
-  /* Redesigned Mobile Bottom Navigation Bar */
+  /* ----- Bottom dock: uniform 1px outline, no selected-item bubble ----- */
   .mobile-pill-nav {
-    position: fixed;
     left: 50%;
     bottom: calc(14px + var(--safe-bottom, 0px));
     transform: translateX(-50%);
-    z-index: 500;
     display: flex;
     align-items: center;
-    justify-content: space-around;
-    gap: 6px;
-    padding: 6px 10px;
+    justify-content: space-evenly;
+    gap: 0 !important;
+    padding: 0 6px !important;
     height: 60px;
     width: min(348px, calc(100vw - 28px));
     border-radius: 9999px !important;
-    background: rgba(13, 14, 20, 0.84) !important;
-    backdrop-filter: blur(28px) saturate(1.5) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(1.5) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    box-shadow:
-      0 16px 40px rgba(0, 0, 0, 0.65),
-      inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+    background: rgba(13, 14, 20, 0.9) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.5) !important;
+    backdrop-filter: blur(24px) saturate(1.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) !important;
   }
+  .mobile-pill-nav::before,
+  .mobile-pill-nav::after { display: none !important; }
   .mobile-pill-nav.nav-hidden {
     transform: translate(-50%, 140%) !important;
-    opacity: 0 !important;
+    opacity: 1 !important;
     pointer-events: none !important;
   }
   .pill-nav-item {
-    position: relative;
     flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 48px;
-    border-radius: 999px;
+    gap: 4px;
+    height: 100%;
+    padding: 0;
+    text-align: center;
+    border-radius: 0;
+    background: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
     color: rgba(255, 255, 255, 0.58);
-    text-decoration: none;
-    transition: color 0.2s var(--ease), background 0.2s, transform 0.15s;
-    -webkit-tap-highlight-color: transparent;
-    gap: 3px;
+  }
+  .pill-nav-item::before,
+  .pill-nav-item::after,
+  .pill-nav-item.active::before,
+  .pill-nav-item.active::after {
+    display: none !important;
+    content: none !important;
   }
   .pill-nav-item.active {
+    background: none !important;
+    box-shadow: none !important;
     color: #ffffff !important;
-    background: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   }
   .pill-nav-ico {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     line-height: 1;
+    background: none !important;
   }
-  .pill-nav-ico svg {
-    width: 20px;
-    height: 20px;
-    stroke-width: 2;
-    transition: stroke 0.2s, filter 0.2s;
-  }
+  .pill-nav-ico svg { width: 21px; height: 21px; stroke-width: 2; }
+  .pill-nav-item.active .pill-nav-ico svg { stroke: var(--accent); filter: none; }
   .pill-nav-label {
     display: block;
+    width: 100%;
+    text-align: center;
     font-size: 0.64rem;
     font-weight: 700;
     line-height: 1;
     letter-spacing: -0.01em;
   }
-  .pill-nav-item.active .pill-nav-ico svg {
-    stroke: var(--accent);
-    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
+  .pill-nav-item:active { transform: scale(0.94); }
+}
+
+/* Safari / touch memory guard: the home page used to keep about 200 live
+   backdrop-filter layers (card badges, save buttons, row arrows, pills) which
+   exhausts GPU memory on iOS and triggers "a problem repeatedly occurred".
+   Touch and small screens use flat translucent fills instead. */
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
+  .row-arrow,
+  .card-rating,
+  .card-icon-btn,
+  .card-ai-badge,
+  .spotlight-badge,
+  .top10-today-card-badge,
+  .hero-badge-pill,
+  .hero-play-btn,
+  .hero-dual-pill,
+  .genre-pill,
+  .topnav-links,
+  .devlog-card,
+  .lg-surface,
+  .lg-fallback .lg-surface {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
-  .pill-nav-item:active {
-    transform: scale(0.92);
+  .card-rating,
+  .card-icon-btn,
+  .card-ai-badge,
+  .spotlight-badge,
+  .top10-today-card-badge {
+    background-color: rgba(12, 12, 16, 0.72) !important;
   }
+  .devlog-card { background-color: rgba(18, 18, 24, 0.96) !important; }
 }
 
 /* ===== Skip-to-content Link (Item 41) ===== */
@@ -4819,8 +4858,6 @@ html.lite-mode .liquid-glass-svg {
   inset: 0;
   z-index: 700;
   background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -4832,6 +4869,8 @@ html.lite-mode .liquid-glass-svg {
 .cmd-palette-backdrop.open {
   opacity: 1;
   visibility: visible;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .cmd-palette-dialog {
   width: 100%;
@@ -5019,7 +5058,6 @@ html.lite-mode .liquid-glass-svg {
   flex-direction: column;
   justify-content: flex-end;
   background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.28s var(--ease), visibility 0.28s;
@@ -5027,6 +5065,8 @@ html.lite-mode .liquid-glass-svg {
 .notif-mobile-sheet.open {
   opacity: 1;
   visibility: visible;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .notif-mobile-card {
   background: rgba(16, 17, 22, 0.96);
