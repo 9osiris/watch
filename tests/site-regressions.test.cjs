@@ -549,10 +549,6 @@ test("Phase 8 & UI Directives regression suite", () => {
   assert.ok(read("list.html").includes('id="watchlist-shuffle-btn"'));
   assert.ok(script.includes("initWatchlistShuffle"));
 
-  // Mood picker
-  assert.ok(indexHtml.includes('id="mood-picker"'));
-  assert.ok(script.includes("initMoodPicker"));
-
   // Keyboard shortcut help sheet (?)
   assert.ok(script.includes("openKeyboardHelpSheet"));
 });

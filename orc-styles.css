@@ -4606,122 +4606,14 @@ html[data-theme="light"] .skeleton-card {
 }
 
 
-/* ===== Redesigned Cinematic Floating Capsule Navbar ===== */
-.topnav {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: calc(var(--nav-h) + var(--safe-top));
-  padding-top: var(--safe-top);
-  z-index: 400;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
-  pointer-events: auto;
-}
-.topnav-inner {
-  width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-  height: var(--nav-h);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 0 var(--gutter);
-  transition: background 0.3s var(--ease), border-color 0.3s, box-shadow 0.3s, height 0.3s;
-}
 
-/* Floating capsule look on scroll or inner pages */
-.topnav.scrolled .topnav-inner,
-body:not(:has(.hero)):not(.detail-page) .topnav-inner {
-  background: rgba(13, 14, 18, 0.76);
-  backdrop-filter: blur(28px) saturate(1.4);
-  -webkit-backdrop-filter: blur(28px) saturate(1.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  height: 52px;
-  padding: 0 18px;
-}
-html[data-theme="light"] .topnav.scrolled .topnav-inner,
-html[data-theme="light"] body:not(:has(.hero)):not(.detail-page) .topnav-inner {
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(15, 23, 42, 0.08);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-}
+/* =========================================================================
+   NEW MOBILE NAVBAR REDESIGN & SCROLL FADE
+   (Desktop / PC navigation remains 100% standard full-width)
+   ========================================================================= */
 
-.topnav-logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  transition: opacity 0.2s;
-}
-.topnav-logo:hover { opacity: 0.85; }
-.nav-logo-icon { width: 22px; height: 22px; color: var(--accent); }
-.topnav-word {
-  font-size: 1.06rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.topnav-word i { font-style: normal; font-weight: 800; color: var(--accent); }
-
-.topnav-links {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-right: auto;
-}
-.topnav-link {
-  position: relative;
-  padding: 7px 14px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-2);
-  border-radius: var(--pill);
-  transition: color 0.2s, background 0.25s, transform 0.2s;
-}
-.topnav-link:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-.topnav-link.active {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-html[data-theme="light"] .topnav-link.active {
-  background: rgba(15, 23, 42, 0.08);
-}
-
-.topnav-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.topnav-icon {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-2);
-  background: transparent;
-  transition: color 0.2s, background 0.2s, transform 0.2s;
-}
-.topnav-icon:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-  transform: scale(1.05);
-}
-
-/* Mobile Wordmark Centered & Scroll Fade */
 @media (max-width: 768px) {
+  /* Mobile Top Bar: Centered Wordmark & Smooth Scroll Fade */
   .topnav {
     background: transparent !important;
     box-shadow: none !important;
@@ -4729,6 +4621,10 @@ html[data-theme="light"] .topnav-link.active {
     -webkit-backdrop-filter: none !important;
     pointer-events: none;
     transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .topnav::before,
+  .topnav::after {
+    display: none !important;
   }
   .topnav-inner {
     background: transparent !important;
@@ -4745,12 +4641,22 @@ html[data-theme="light"] .topnav-link.active {
   }
   .topnav-logo {
     pointer-events: auto !important;
+    display: inline-flex !important;
+    align-items: center;
     justify-content: center;
+    gap: 8px;
     margin: 0 auto;
     transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+  .topnav-logo img,
+  .nav-logo-icon {
+    width: 22px;
+    height: 22px;
+    color: var(--accent);
+  }
   .topnav-word {
     font-size: 1.15rem;
+    font-weight: 800;
     letter-spacing: -0.015em;
     text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
     transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -4762,7 +4668,7 @@ html[data-theme="light"] .topnav-link.active {
     transform: translateY(-50%);
     display: flex !important;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     pointer-events: auto !important;
     z-index: 10;
     transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -4772,6 +4678,17 @@ html[data-theme="light"] .topnav-link.active {
   .topnav-actions #topnav-bell-btn {
     display: inline-flex !important;
     pointer-events: auto !important;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text);
+  }
+  .topnav-actions .topnav-icon[aria-label="Search"] {
+    display: none !important;
   }
   .topnav.nav-hidden {
     transform: translateY(calc(-100% - var(--safe-top, 0px) - 12px)) !important;
@@ -4782,11 +4699,86 @@ html[data-theme="light"] .topnav-link.active {
   .topnav.nav-hidden .topnav-word,
   .topnav.nav-hidden .topnav-actions {
     opacity: 0 !important;
-    transform: translateY(-8px) scale(0.94) !important;
+    transform: translateY(-10px) scale(0.92) !important;
     pointer-events: none !important;
   }
-}
 
+  /* Redesigned Mobile Bottom Navigation Bar */
+  .mobile-pill-nav {
+    position: fixed;
+    left: 50%;
+    bottom: calc(14px + var(--safe-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 6px;
+    padding: 6px 10px;
+    height: 60px;
+    width: min(348px, calc(100vw - 28px));
+    border-radius: 9999px !important;
+    background: rgba(13, 14, 20, 0.84) !important;
+    backdrop-filter: blur(28px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.5) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow:
+      0 16px 40px rgba(0, 0, 0, 0.65),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .mobile-pill-nav.nav-hidden {
+    transform: translate(-50%, 140%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  .pill-nav-item {
+    position: relative;
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.58);
+    text-decoration: none;
+    transition: color 0.2s var(--ease), background 0.2s, transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    gap: 3px;
+  }
+  .pill-nav-item.active {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  .pill-nav-ico {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  .pill-nav-ico svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    transition: stroke 0.2s, filter 0.2s;
+  }
+  .pill-nav-label {
+    display: block;
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .pill-nav-item.active .pill-nav-ico svg {
+    stroke: var(--accent);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
+  }
+  .pill-nav-item:active {
+    transform: scale(0.92);
+  }
+}
 
 /* ===== Skip-to-content Link (Item 41) ===== */
 .skip-link {
@@ -5123,35 +5115,7 @@ html.lite-mode .liquid-glass-svg {
   font-weight: 600;
 }
 
-/* ===== Mood Picker Chips (Item I) ===== */
-.mood-picker-section {
-  padding: 8px 0 20px;
-}
-.mood-picker-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px var(--gutter) 12px;
-  scrollbar-width: none;
-}
-.mood-chip {
-  padding: 7px 15px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-2);
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
-}
-.mood-chip:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  transform: translateY(-1px);
-}
+
 
 /* ===== Keyboard Shortcut Help Modal (Item K) ===== */
 .kbd-shortcut-row {

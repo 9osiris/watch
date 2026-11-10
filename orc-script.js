@@ -7943,7 +7943,6 @@ function initWatchlistShuffle() {
 document.addEventListener("DOMContentLoaded", () => {
   applyLiteMode();
   initCommandPalette();
-  initMoodPicker();
   initWatchlistShuffle();
 
   // Mobile episodes integration in topnav bell button
