@@ -283,3 +283,41 @@ test('Phase 1: Broken features regression suite', () => {
   assert.ok(script.includes('importAndMergeUserData'));
 });
 
+test('Phase 2: Data trust and list integrity regression suite', () => {
+  const script = fs.readFileSync(path.resolve(__dirname, '../orc-script.js'), 'utf8');
+  const listHtml = fs.readFileSync(path.resolve(__dirname, '../list.html'), 'utf8');
+
+  // 12. List renders from stored data and caps concurrency at 6
+  assert.ok(script.includes('enrichItemsConcurrently(stored'));
+  assert.ok(script.includes(', 6)'));
+  assert.ok(script.includes('updateWatchlistBadge()'));
+  assert.ok(script.includes('renderHomeMyListRow()'));
+
+  // 13. Confirm dialogs and undo toasts for clear list and clear continue watching
+  assert.ok(script.includes('showConfirmModal("Clear Continue Watching?"'));
+  assert.ok(script.includes('showConfirmModal("Clear My List?"'));
+  assert.ok(script.includes('showUndoToast'));
+
+  // 14. Sort select replaces newest chip; aria-selected updated on tab change
+  assert.ok(listHtml.includes('id="list-sort-select"'));
+  assert.ok(script.includes('t.setAttribute("aria-selected", String(isAct))'));
+
+  // 15. Folders have keyboard support, rename, delete, and remove from folder
+  assert.ok(script.includes('folder-rename-btn'));
+  assert.ok(script.includes('folder-delete-btn'));
+  assert.ok(script.includes('Folders.removeItem'));
+
+  // 16. MyList string ID comparison
+  assert.ok(script.includes('String(i.id) === String(id)'));
+  assert.ok(script.includes('String(x.id) === String(item.id)'));
+
+  // 17. Local date parsing, season 0 as Specials, re-enable play
+  assert.ok(script.includes('s.season_number === 0 ? "Specials" :'));
+  assert.ok(script.includes('parts.length === 3'));
+  assert.ok(script.includes('playBtn.removeAttribute("disabled")'));
+
+  // 18. Storage quota clears TMDB_STORAGE_KEY and toasts on failure
+  assert.ok(script.includes('localStorage.removeItem(TMDB_STORAGE_KEY)'));
+  assert.ok(script.includes('Storage full: could not save data.'));
+});
+

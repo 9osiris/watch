@@ -69,12 +69,19 @@
           <button type="button" class="filter-chip on" data-type="all">All</button>
           <button type="button" class="filter-chip" data-type="movie">Movies</button>
           <button type="button" class="filter-chip" data-type="tv">Series</button>
-          <button type="button" class="filter-chip" data-type="recent">⇅ Newest</button>
         </div>
-        <button type="button" class="btn-new-folder" id="btn-new-folder">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M12 11v6M9 14h6"/></svg>
-          New Folder
-        </button>
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+          <select id="list-sort-select" class="list-sort-select" aria-label="Sort List">
+            <option value="recent">Recently Added</option>
+            <option value="release">Release Date</option>
+            <option value="rating">Rating</option>
+            <option value="title">Title (A-Z)</option>
+          </select>
+          <button type="button" class="btn-new-folder" id="btn-new-folder" style="display:none">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M12 11v6M9 14h6"/></svg>
+            New Folder
+          </button>
+        </div>
       </div>
 
       <p class="search-status" id="list-status"></p>

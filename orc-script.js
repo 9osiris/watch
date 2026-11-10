@@ -249,15 +249,23 @@ function safeSetItem(key, val) {
       localStorage.setItem(key, typeof val === "string" ? val : JSON.stringify(val));
     } catch (e) {
       if (e.name === 'QuotaExceededError') {
-        console.warn('Storage quota exceeded. Clearing old items.');
-        localStorage.removeItem('orc_tmdb_cache'); // Try to free up space
-        localStorage.setItem(key, typeof val === "string" ? val : JSON.stringify(val));
+        console.warn('Storage quota exceeded. Clearing persistent TMDB cache.');
+        try { localStorage.removeItem(TMDB_STORAGE_KEY); } catch {}
+        try { sessionStorage.removeItem(TMDB_STORAGE_KEY); } catch {}
+        try {
+          localStorage.setItem(key, typeof val === "string" ? val : JSON.stringify(val));
+        } catch (retryErr) {
+          toast("Storage full: could not save data.");
+          return false;
+        }
       } else {
         throw e;
       }
     }
     return true;
-  } catch (err) { console.warn('Caught error:', err);
+  } catch (err) {
+    console.warn('Caught storage error:', err);
+    toast("Storage unavailable: could not save data.");
     return false;
   }
 }
@@ -1934,11 +1942,39 @@ function closeModal(target = ".modal-overlay") {
   releaseModalFocus();
 }
 
+
+function updateWatchlistBadge() {
+  const count = MyList.get().length;
+  const wlCountEl = $("#watchlist-count");
+  if (wlCountEl) wlCountEl.textContent = count;
+  renderHomeMyListRow();
+}
+
+function renderHomeMyListRow() {
+  const mlRow = $(".my-list-wrapper");
+  if (!mlRow) return;
+  const list = MyList.get();
+  const mlTrack = mlRow.querySelector(".row-track");
+  if (!mlTrack) return;
+  if (!list.length) {
+    mlRow.remove();
+    return;
+  }
+  mlTrack.textContent = "";
+  list.slice(0, 20).forEach(it => {
+    mlTrack.appendChild(buildCard(it, it.type || "movie", { eager: true }));
+  });
+}
+
 const MyList = {
   key: "orc_mylist",
   get() { try { return JSON.parse(safeGetItem(this.key) || "[]"); } catch { return []; } },
   has(id, t) { return this.get().some(i => String(i.id) === String(id) && i.type === t); },
-  save(list) { safeSetItem(this.key, JSON.stringify(list)); idbSet(this.key, list); },
+  save(list) {
+    safeSetItem(this.key, JSON.stringify(list));
+    idbSet(this.key, list);
+    if (typeof updateWatchlistBadge === "function") updateWatchlistBadge();
+  },
   toggle(item) {
     const list = this.get();
     const i = list.findIndex(x => String(x.id) === String(item.id) && x.type === item.type);
@@ -1981,11 +2017,26 @@ const Folders = {
   removeFolder(id) {
     this.save(this.get().filter(f => f.id !== id));
   },
+  renameFolder(id, newName) {
+    const list = this.get();
+    const f = list.find(x => x.id === id);
+    if (f) {
+      f.name = newName.trim();
+      this.save(list);
+    }
+  },
+  removeItem(folderId, itemId, itemType) {
+    const list = this.get();
+    const folder = list.find(f => f.id === folderId);
+    if (!folder) return;
+    folder.items = (folder.items || []).filter(x => !(String(x.id) === String(itemId) && x.type === itemType));
+    this.save(list);
+  },
   toggleItem(folderId, item) {
     const list = this.get();
     const folder = list.find(f => f.id === folderId);
     if (!folder) return;
-    const i = folder.items.findIndex(x => x.id === item.id && x.type === item.type);
+    const i = (folder.items || []).findIndex(x => String(x.id) === String(item.id) && x.type === item.type);
     if (i >= 0) folder.items.splice(i, 1);
     else folder.items.unshift(item);
     this.save(list);
@@ -5031,7 +5082,16 @@ async function initTvPage() {
           el.type = "button";
           el.className = `ep-row${ep.episode_number === episode && sn === season ? " on" : ""}`;
           el.dataset.ep = ep.episode_number;
-          const air = ep.air_date ? new Date(ep.air_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+          let air = "";
+          if (ep.air_date) {
+            const parts = ep.air_date.split("-");
+            if (parts.length === 3) {
+              const localD = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+              air = localD.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            } else {
+              air = ep.air_date;
+            }
+          }
           const dur = ep.runtime ? `${ep.runtime}m` : "";
           el.innerHTML = `
             <span class="ep-row-num">${ep.episode_number}</span>
@@ -5078,7 +5138,7 @@ async function initTvPage() {
       seasons.forEach(s => {
         const o = document.createElement("option");
         o.value = s.season_number;
-        o.textContent = `Season ${s.season_number}`;
+        o.textContent = s.season_number === 0 ? "Specials" : `Season ${s.season_number}`;
         if (s.season_number === season) o.selected = true;
         seasonSel.appendChild(o);
       });
@@ -5091,6 +5151,8 @@ async function initTvPage() {
         episode = 1;
         const epInput = $("#ep-search-input");
         if (epInput) epInput.value = "";
+        const playBtn = $("#detail-play");
+        if (playBtn) playBtn.removeAttribute("disabled");
         update();
         loadEps(season);
       });
@@ -6263,12 +6325,26 @@ function initSettingsPage() {
   });
 
   $("#clear-progress")?.addEventListener("click", () => {
-    safeRemoveItem(Progress.key);
-    toast("Continue watching cleared");
+    showConfirmModal("Clear Continue Watching?", "Are you sure you want to remove all titles from continue watching?", () => {
+      const prev = Progress.get();
+      safeRemoveItem(Progress.key);
+      showUndoToast("Continue watching cleared", () => {
+        Progress.saveAll(prev);
+        toast("Continue watching restored");
+      });
+    });
   });
+
   $("#clear-list")?.addEventListener("click", () => {
-    safeRemoveItem(MyList.key);
-    toast("My List cleared");
+    showConfirmModal("Clear My List?", "Are you sure you want to remove all saved titles from your watchlist?", () => {
+      const prev = MyList.get();
+      safeRemoveItem(MyList.key);
+      if (typeof updateWatchlistBadge === "function") updateWatchlistBadge();
+      showUndoToast("My List cleared", () => {
+        MyList.save(prev);
+        toast("My List restored");
+      });
+    });
   });
   $("#reset-splash")?.addEventListener("click", () => {
     sessionStorage.removeItem("orc_splash");
@@ -6299,90 +6375,255 @@ async function initListPage() {
   let currentSort = "recent";
   let currentFolderId = null;
 
+  // Concurrency-capped enricher (max 6 parallel requests)
+  async function enrichItemsConcurrently(items, mapFn, concurrency = 6) {
+    const results = new Array(items.length);
+    let index = 0;
+    const workers = new Array(Math.min(concurrency, items.length)).fill(0).map(async () => {
+      while (index < items.length) {
+        const i = index++;
+        results[i] = await mapFn(items[i]);
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  }
+
+  const syncControlsUI = () => {
+    const filterRow = $("#list-filter-chips");
+    const newFolderBtn = $("#btn-new-folder");
+    const sortSelect = $("#list-sort-select");
+
+    // Hide or show type chips, sort select, and New Folder button according to active tab
+    if (filterRow) filterRow.style.display = (currentTab === "watchlist" || currentTab === "history" || currentTab === "folder_items") ? "" : "none";
+    if (sortSelect) sortSelect.style.display = (currentTab === "watchlist" || currentTab === "history" || currentTab === "folder_items") ? "" : "none";
+    if (newFolderBtn) newFolderBtn.style.display = currentTab === "folders" ? "" : "none";
+
+    // Update aria-selected on tab buttons
+    $$(".list-tab-btn").forEach(t => {
+      const isAct = t.dataset.tab === currentTab || (currentTab === "folder_items" && t.dataset.tab === "folders");
+      t.classList.toggle("active", isAct);
+      t.setAttribute("aria-selected", String(isAct));
+    });
+  };
+
   const loadData = async () => {
+    syncControlsUI();
+
     if (currentTab === "watchlist") {
-      if (!rawList.length) { emptyState("Your watchlist is empty", "Add movies and series using the + icon on their cards."); return; }
-      grid.textContent = ""; skeletons(Math.min(rawList.length, 12)).forEach(s => grid.appendChild(s));
-      const settled = await Promise.allSettled(rawList.map(i =>
-        tmdb(i.type === "tv" ? `/tv/${i.id}` : `/movie/${i.id}`).then(d => ({ ...d, _type: i.type }))
-      ));
-      loadedItems = dedupeItems(settled.filter(r => r.status === "fulfilled").map(r => r.value));
+      const stored = MyList.get();
+      if (!stored.length) {
+        emptyState("Your watchlist is empty", "Add movies and series using the + icon on their cards.");
+        if (wlCount) wlCount.textContent = "0";
+        return;
+      }
+      if (wlCount) wlCount.textContent = stored.length;
+
+      // Render stored data immediately so user never waits with an empty screen
+      loadedItems = stored.map(s => ({
+        id: s.id,
+        _type: s.type || (s.title ? "movie" : "tv"),
+        title: s.title || s.name || "Untitled",
+        name: s.name || s.title || "Untitled",
+        poster_path: s.poster || s.poster_path || "",
+        backdrop_path: s.backdrop_path || "",
+        release_date: s.release_date || "",
+        first_air_date: s.first_air_date || "",
+        vote_average: s.vote_average || 0
+      }));
       renderListGrid();
+
+      // Enrich in background with max concurrency 6; never drop item on network failure
+      enrichItemsConcurrently(stored, async (i) => {
+        try {
+          const detail = await tmdb(i.type === "tv" ? `/tv/${i.id}` : `/movie/${i.id}`);
+          return { ...detail, _type: i.type || "movie" };
+        } catch {
+          return {
+            id: i.id,
+            _type: i.type || "movie",
+            title: i.title || "Untitled",
+            poster_path: i.poster || i.poster_path || ""
+          };
+        }
+      }, 6).then(enriched => {
+        loadedItems = dedupeItems(enriched);
+        renderListGrid();
+      });
+
     } else if (currentTab === "history") {
       const prog = Progress.get();
       const progList = Object.values(prog || {})
         .filter(i => i && (i.id || i.mediaId))
         .sort((a, b) => (b.savedAt || b.lastUpdated || 0) - (a.savedAt || a.lastUpdated || 0));
-      if (!progList.length) { emptyState("No watch history", "Start watching titles and they will appear here."); return; }
-      grid.textContent = ""; skeletons(Math.min(progList.length, 12)).forEach(s => grid.appendChild(s));
-      const settled = await Promise.allSettled(progList.map(i => {
-        const mType = (i.mediaType || i.type) === "tv" ? "tv" : "movie";
-        const mId = i.id || i.mediaId;
-        return tmdb(`/${mType}/${mId}`).then(d => ({ ...d, _type: mType, _progress: i.progress }));
+
+      if (!progList.length) {
+        emptyState("No watch history", "Start watching titles and they will appear here.");
+        return;
+      }
+
+      // Render stored progress records immediately
+      historyItems = progList.map(p => ({
+        id: p.id || p.mediaId,
+        _type: (p.mediaType || p.type) === "tv" ? "tv" : "movie",
+        title: p.title || p.name || "Untitled",
+        name: p.name || p.title || "Untitled",
+        poster_path: p.poster_path || p.poster || "",
+        _progress: p.progress || 0,
+        savedAt: p.savedAt || 0
       }));
-      historyItems = dedupeItems(settled.filter(r => r.status === "fulfilled").map(r => r.value));
       renderListGrid();
+
+      // Enrich history details with concurrency 6 without dropping on error
+      enrichItemsConcurrently(progList, async (p) => {
+        const mType = (p.mediaType || p.type) === "tv" ? "tv" : "movie";
+        const mId = p.id || p.mediaId;
+        try {
+          const d = await tmdb(`/${mType}/${mId}`);
+          return { ...d, _type: mType, _progress: p.progress, savedAt: p.savedAt };
+        } catch {
+          return {
+            id: mId,
+            _type: mType,
+            title: p.title || "Untitled",
+            poster_path: p.poster_path || "",
+            _progress: p.progress,
+            savedAt: p.savedAt
+          };
+        }
+      }, 6).then(enriched => {
+        historyItems = dedupeItems(enriched);
+        renderListGrid();
+      });
+
     } else if (currentTab === "folders") {
       const fList = Folders.get();
-      if (!fList.length) { emptyState("No folders yet", "Create custom collections to organize your favorite titles."); return; }
+      if (!fList.length) {
+        emptyState("No folders yet", "Create custom collections to organize your favorite titles.");
+        return;
+      }
       grid.textContent = "";
       if (status) status.textContent = `${fList.length} ${fList.length === 1 ? "folder" : "folders"}`;
+
       fList.forEach(f => {
         const c = document.createElement("div");
         c.className = "folder-card";
-        c.style = "background:var(--bg-2);border-radius:12px;padding:24px;cursor:pointer;display:flex;flex-direction:column;align-items:center;text-align:center;transition:transform 0.2s, background 0.2s;box-shadow:0 4px 12px rgba(0,0,0,0.1)";
-        c.onmouseover = () => { c.style.background = "var(--bg-3)"; c.style.transform = "scale(1.02)"; };
-        c.onmouseout = () => { c.style.background = "var(--bg-2)"; c.style.transform = "scale(1)"; };
+        c.setAttribute("role", "button");
+        c.setAttribute("tabindex", "0");
+        c.setAttribute("aria-label", `Folder: ${f.name}, ${f.items.length} items`);
+        c.style = "position:relative;background:var(--bg-2);border-radius:16px;padding:22px;cursor:pointer;display:flex;flex-direction:column;align-items:center;text-align:center;transition:transform 0.2s var(--ease), background 0.2s var(--ease);box-shadow:0 4px 14px rgba(0,0,0,0.12);border:1px solid var(--border-2);outline:none";
+
         c.innerHTML = `
           <div style="color:var(--accent);margin-bottom:12px">${ICONS.list}</div>
-          <h3 style="font-size:1.1rem;margin-bottom:4px;color:var(--text)">${esc(f.name)}</h3>
-          <p style="font-size:0.85rem;color:var(--text-2)">${f.items.length} ${f.items.length === 1 ? "item" : "items"}</p>
+          <h3 style="font-size:1.1rem;margin-bottom:6px;color:var(--text);font-weight:800">${esc(f.name)}</h3>
+          <p style="font-size:0.85rem;color:var(--text-2);margin:0 0 14px">${f.items.length} ${f.items.length === 1 ? "item" : "items"}</p>
+          <div style="display:flex;gap:6px;margin-top:auto" class="folder-actions-row">
+            <button type="button" class="btn-ghost folder-rename-btn" style="padding:6px 12px;font-size:0.78rem" title="Rename folder">Rename</button>
+            <button type="button" class="btn-ghost folder-delete-btn" style="padding:6px 12px;font-size:0.78rem;color:#ef4444" title="Delete folder">Delete</button>
+          </div>
         `;
-        c.addEventListener("click", () => {
+
+        // Card click / enter / space navigation
+        const openFolder = () => {
           currentFolderId = f.id;
           currentTab = "folder_items";
           loadData();
+        };
+
+        c.addEventListener("click", e => {
+          if (e.target.closest(".folder-rename-btn, .folder-delete-btn")) return;
+          openFolder();
         });
+
+        c.addEventListener("keydown", e => {
+          if (e.target.closest(".folder-rename-btn, .folder-delete-btn")) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openFolder();
+          }
+        });
+
+        // Rename folder
+        c.querySelector(".folder-rename-btn")?.addEventListener("click", e => {
+          e.stopPropagation();
+          const newName = prompt("Rename folder to:", f.name);
+          if (newName && newName.trim() && newName.trim() !== f.name) {
+            Folders.renameFolder(f.id, newName);
+            toast("Folder renamed");
+            loadData();
+          }
+        });
+
+        // Delete folder
+        c.querySelector(".folder-delete-btn")?.addEventListener("click", e => {
+          e.stopPropagation();
+          showConfirmModal("Delete Folder?", `Delete folder "${f.name}" and all organized contents?`, () => {
+            Folders.removeFolder(f.id);
+            toast("Folder deleted");
+            loadData();
+          });
+        });
+
         grid.appendChild(c);
       });
+
     } else if (currentTab === "folder_items") {
       const fList = Folders.get();
       const folder = fList.find(f => f.id === currentFolderId);
       if (!folder) { currentTab = "folders"; return loadData(); }
-      
-      const backBtn = document.createElement("button");
-      backBtn.className = "btn-play";
-      backBtn.style = "margin-bottom:20px;background:var(--bg-2);color:var(--text)";
-      backBtn.innerHTML = "← Back to Folders";
-      backBtn.onclick = () => { currentTab = "folders"; currentFolderId = null; loadData(); };
 
-      if (!folder.items.length) { 
-        emptyState(`Folder: ${esc(folder.name)}`, "This folder is empty."); 
-        grid.prepend(backBtn);
-        return; 
+      const headerBar = document.createElement("div");
+      headerBar.style = "grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap";
+      headerBar.innerHTML = `
+        <button type="button" class="btn-play folder-back-btn" style="padding:8px 16px;background:var(--bg-2);color:var(--text);font-size:0.88rem">← Back to Folders</button>
+        <h2 style="font-size:1.25rem;font-weight:800;margin:0">${esc(folder.name)}</h2>
+      `;
+
+      headerBar.querySelector(".folder-back-btn")?.addEventListener("click", () => {
+        currentTab = "folders";
+        currentFolderId = null;
+        loadData();
+      });
+
+      if (!folder.items.length) {
+        emptyState(`Folder: ${esc(folder.name)}`, "This folder is currently empty.");
+        grid.prepend(headerBar);
+        return;
       }
 
-      grid.textContent = ""; 
-      grid.appendChild(backBtn);
-      
-      const wrapper = document.createElement("div");
-      wrapper.style.display = "contents";
-      skeletons(Math.min(folder.items.length, 12)).forEach(s => wrapper.appendChild(s));
-      grid.appendChild(wrapper);
+      // Render stored folder items immediately
+      loadedItems = folder.items.map(i => ({
+        id: i.id,
+        _type: i.type || "movie",
+        title: i.title || "Untitled",
+        name: i.title || "Untitled",
+        poster_path: i.poster || i.poster_path || ""
+      }));
+      renderListGrid(headerBar);
 
-      const settled = await Promise.allSettled(folder.items.map(i =>
-        tmdb(i.type === "tv" ? `/tv/${i.id}` : `/movie/${i.id}`).then(d => ({ ...d, _type: i.type }))
-      ));
-      loadedItems = dedupeItems(settled.filter(r => r.status === "fulfilled").map(r => r.value));
-      
-      wrapper.remove();
-      renderListGrid(backBtn);
+      // Enrich folder items concurrently
+      enrichItemsConcurrently(folder.items, async (i) => {
+        try {
+          const d = await tmdb(i.type === "tv" ? `/tv/${i.id}` : `/movie/${i.id}`);
+          return { ...d, _type: i.type || "movie" };
+        } catch {
+          return {
+            id: i.id,
+            _type: i.type || "movie",
+            title: i.title || "Untitled",
+            poster_path: i.poster || i.poster_path || ""
+          };
+        }
+      }, 6).then(enriched => {
+        loadedItems = dedupeItems(enriched);
+        renderListGrid(headerBar);
+      });
     }
   };
 
   const renderListGrid = (prependedEl = null) => {
     if (currentTab === "folders") return;
-    
+
     let items = currentTab === "history" ? [...historyItems] : [...loadedItems];
     if (currentType === "movie" || currentType === "tv") {
       items = items.filter(it => (it._type || (it.title ? "movie" : "tv")) === currentType);
@@ -6393,15 +6634,16 @@ async function initListPage() {
     } else if (currentSort === "title") {
       items.sort((a, b) => (a.title || a.name || "").localeCompare(b.title || b.name || ""));
     } else if (currentSort === "release") {
-      items.sort((a, b) => ((b.release_date || b.first_air_date || "")).localeCompare(a.release_date || a.first_air_date || ""));
+      items.sort((a, b) => (b.release_date || b.first_air_date || "").localeCompare(a.release_date || a.first_air_date || ""));
     }
 
-    if (status && currentTab !== "folder_items") status.textContent = `${items.length} ${items.length === 1 ? "title" : "titles"}`;
-    else if (status && currentTab === "folder_items") {
+    if (status && currentTab !== "folder_items") {
+      status.textContent = `${items.length} ${items.length === 1 ? "title" : "titles"}`;
+    } else if (status && currentTab === "folder_items") {
       const folder = Folders.get().find(f => f.id === currentFolderId);
       status.textContent = folder ? `Folder: ${folder.name} (${items.length})` : "";
     }
-    
+
     grid.textContent = "";
     if (prependedEl) grid.appendChild(prependedEl);
 
@@ -6412,8 +6654,32 @@ async function initListPage() {
       grid.appendChild(emptyDiv);
       return;
     }
+
     items.forEach(it => {
       const card = buildCard(it, it._type === "tv" ? "tv" : "movie");
+
+      // In folder view: add "Remove from folder" action
+      if (currentTab === "folder_items") {
+        const quick = card.querySelector(".card-quick");
+        if (quick) {
+          const rmFolderBtn = document.createElement("button");
+          rmFolderBtn.type = "button";
+          rmFolderBtn.className = "card-icon-btn cw-remove-btn";
+          rmFolderBtn.title = "Remove from folder";
+          rmFolderBtn.setAttribute("aria-label", "Remove from folder");
+          rmFolderBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+          rmFolderBtn.addEventListener("click", e => {
+            e.preventDefault();
+            e.stopPropagation();
+            Folders.removeItem(currentFolderId, it.id, it._type);
+            card.remove();
+            toast("Removed from folder");
+            loadData();
+          });
+          quick.appendChild(rmFolderBtn);
+        }
+      }
+
       if (currentTab === "history" && it._progress) {
         const pbar = document.createElement("div");
         pbar.className = "card-progress-bar";
@@ -6424,27 +6690,22 @@ async function initListPage() {
     });
   };
 
+  // Wire tab buttons
   const tabs = $$(".list-tab-btn");
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
-      tabs.forEach(t => t.classList.remove("active"));
-      tab.classList.add("active");
       currentTab = tab.dataset.tab;
+      currentFolderId = null;
       loadData();
     });
   });
 
+  // Wire filter chips
   const filterRow = $("#list-filter-chips");
   if (filterRow) {
     filterRow.querySelectorAll(".filter-chip").forEach(chip => {
       chip.addEventListener("click", () => {
-        if (chip.dataset.type === "recent") {
-           currentSort = currentSort === "recent" ? "release" : "recent";
-           chip.classList.toggle("on", currentSort === "release");
-           renderListGrid();
-           return;
-        }
-        filterRow.querySelectorAll(".filter-chip:not([data-type='recent'])").forEach(c => c.classList.remove("on"));
+        filterRow.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("on"));
         chip.classList.add("on");
         currentType = chip.dataset.type || "all";
         renderListGrid();
@@ -6452,6 +6713,17 @@ async function initListPage() {
     });
   }
 
+  // Wire sort dropdown (Item 14)
+  const sortSelect = $("#list-sort-select");
+  if (sortSelect) {
+    sortSelect.value = currentSort;
+    sortSelect.addEventListener("change", e => {
+      currentSort = e.target.value;
+      renderListGrid();
+    });
+  }
+
+  // Wire New Folder button
   const newFolderBtn = $("#btn-new-folder");
   if (newFolderBtn) {
     newFolderBtn.addEventListener("click", () => {
@@ -6956,4 +7228,62 @@ function importAndMergeUserData(file) {
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
+}
+
+
+function showConfirmModal(title, msg, onConfirm) {
+  let modal = $("#confirm-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "confirm-modal";
+    modal.className = "modal-overlay";
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => {
+      if (e.target === modal || e.target.closest(".confirm-cancel-btn")) closeModal(modal);
+    });
+  }
+  modal.innerHTML = `
+    <div class="modal-content" role="dialog" aria-modal="true" style="width:min(360px,92vw);padding:24px;border-radius:20px;background:var(--bg-1);border:1px solid var(--border-2);text-align:center">
+      <h3 style="margin:0 0 10px;font-size:1.15rem;font-weight:800;color:var(--text)">${esc(title)}</h3>
+      <p style="margin:0 0 20px;font-size:0.88rem;color:var(--text-2);line-height:1.4">${esc(msg)}</p>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button type="button" class="btn-ghost confirm-cancel-btn" style="flex:1;min-height:42px">Cancel</button>
+        <button type="button" class="btn-play confirm-ok-btn" style="flex:1;min-height:42px;background:#ef4444;color:#fff">Clear</button>
+      </div>
+    </div>
+  `;
+  modal.querySelector(".confirm-ok-btn")?.addEventListener("click", () => {
+    closeModal(modal);
+    onConfirm();
+  });
+  openModal(modal);
+}
+
+function showUndoToast(msg, onUndo, timeout = 5000) {
+  let t = $(".toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.className = "toast";
+    t.setAttribute("role", "status");
+    t.setAttribute("aria-live", "polite");
+    document.body.appendChild(t);
+  }
+  t.classList.toggle("toast-mobile", isMobile());
+  t.innerHTML = `<span>${esc(msg)}</span><button type="button" class="toast-undo-btn" style="margin-left:14px;background:none;border:none;color:var(--accent);font-weight:800;cursor:pointer;padding:2px 6px">Undo</button>`;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+
+  const undoBtn = t.querySelector(".toast-undo-btn");
+  let undone = false;
+  undoBtn?.addEventListener("click", () => {
+    if (undone) return;
+    undone = true;
+    clearTimeout(t._timer);
+    t.classList.remove("show");
+    onUndo();
+  }, { once: true });
+
+  t._timer = setTimeout(() => {
+    t.classList.remove("show");
+  }, timeout);
 }
