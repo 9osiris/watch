@@ -2990,22 +2990,25 @@ body.theater-mode .player-wrap {
   .page-foot { margin-bottom: calc(78px + var(--safe-bottom)); }
   .back-top { bottom: calc(90px + var(--safe-bottom)); }
 
-  /* Clean Mobile Floating Glass Pill Nav Bar (Icons Only, Zero Selection Bubble) */
+  /* Clean Mobile Floating Glass Pill Nav Bar with Visible Labels (Item 25) */
+  .topnav-burger {
+    display: none !important;
+  }
   .mobile-pill-nav {
     position: fixed;
     left: 50%;
-    bottom: calc(16px + var(--safe-bottom, 0px));
+    bottom: calc(14px + var(--safe-bottom, 0px));
     transform: translateX(-50%);
     z-index: 500;
     display: flex;
     align-items: center;
     justify-content: space-around;
     gap: 4px;
-    padding: 4px 10px;
-    height: 48px;
-    width: min(280px, calc(100vw - 32px));
+    padding: 6px 12px;
+    height: 56px;
+    width: min(340px, calc(100vw - 24px));
     border-radius: 9999px !important;
-    background: rgba(14, 14, 20, 0.82) !important;
+    background: rgba(14, 14, 20, 0.88) !important;
     backdrop-filter: blur(24px) saturate(1.6) !important;
     -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
     border: 1px solid rgba(255, 255, 255, 0.16) !important;
@@ -3025,14 +3028,16 @@ body.theater-mode .player-wrap {
     position: relative;
     flex: 1 1 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 40px;
+    height: 46px;
     border-radius: 9999px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.6);
     text-decoration: none;
     transition: color 0.2s var(--ease), transform 0.12s var(--ease);
     -webkit-tap-highlight-color: transparent;
+    gap: 3px;
   }
   .pill-nav-item.active {
     color: var(--accent) !important;
@@ -3041,19 +3046,27 @@ body.theater-mode .player-wrap {
     display: flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
   }
   .pill-nav-ico svg {
-    width: 22px;
-    height: 22px;
+    width: 19px;
+    height: 19px;
     stroke-width: 2;
     transition: stroke 0.2s, filter 0.2s;
+  }
+  .pill-nav-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.01em;
   }
   .pill-nav-item.active .pill-nav-ico svg {
     stroke: var(--accent);
     filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
   }
   .pill-nav-item:active {
-    transform: scale(0.90);
+    transform: scale(0.92);
   }
   @keyframes pillNavIn { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
 }
@@ -4445,3 +4458,96 @@ html[data-theme="light"] .skeleton-card {
   justify-content: center;
 }
 
+
+
+/* ===== Hero Carousel Controls (Item 31) ===== */
+.hero-carousel-controls {
+  position: absolute;
+  bottom: 32px;
+  right: var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 4;
+}
+.hero-carousel-controls .hero-dots {
+  position: static;
+  bottom: auto;
+  right: auto;
+  transform: none;
+}
+.hero-pause-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+  padding: 0;
+}
+.hero-pause-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+  transform: scale(1.08);
+}
+.hero-pause-btn svg {
+  display: block;
+}
+
+
+/* ===== Accessible Card Links & Controls (Item 32) ===== */
+.card-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+  outline: none;
+}
+.media-card .card-quick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+.no-img-poster {
+  aspect-ratio: 2/3;
+  width: 100%;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  border-radius: var(--radius);
+}
+.no-img-poster svg {
+  width: 32px;
+  height: 32px;
+  opacity: 0.6;
+}
+
+/* ===== Infinite Scroll End of Results & Retry (Item 29) ===== */
+.end-of-results {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+}
+.end-of-results p {
+  margin: 0 0 10px;
+}
+.infinite-error-row {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 24px 16px;
+}

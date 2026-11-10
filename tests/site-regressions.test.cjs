@@ -353,3 +353,77 @@ test('Phase 3: Player and detail page integrity regression suite', () => {
   assert.ok(script.includes('<h1 class="sr-only">'));
 });
 
+test('Phase 4: Navigation, SEO and sharing regression suite', () => {
+  const script = fs.readFileSync(path.resolve(__dirname, '../orc-script.js'), 'utf8');
+  const styles = fs.readFileSync(path.resolve(__dirname, '../orc-styles.css'), 'utf8');
+  const indexHtml = fs.readFileSync(path.resolve(__dirname, '../index.html'), 'utf8');
+  const searchHtml = fs.readFileSync(path.resolve(__dirname, '../search.html'), 'utf8');
+  const movieHtml = fs.readFileSync(path.resolve(__dirname, '../movie.html'), 'utf8');
+  const tvHtml = fs.readFileSync(path.resolve(__dirname, '../tv.html'), 'utf8');
+  const listHtml = fs.readFileSync(path.resolve(__dirname, '../list.html'), 'utf8');
+  const notFoundHtml = fs.readFileSync(path.resolve(__dirname, '../404.html'), 'utf8');
+  const metaApiExists = fs.existsSync(path.resolve(__dirname, '../api/meta.js'));
+
+  // 24. Nav links pre-rendered in static HTML across pages
+  for (const [name, html] of [
+    ['index.html', indexHtml],
+    ['search.html', searchHtml],
+    ['movie.html', movieHtml],
+    ['tv.html', tvHtml],
+    ['list.html', listHtml]
+  ]) {
+    assert.ok(html.includes('<nav class="topnav-links" aria-label="Primary">'), `${name} has static topnav-links`);
+    assert.ok(html.includes('href="/" class="topnav-link'), `${name} has home link`);
+    assert.ok(html.includes('href="/search" class="topnav-link'), `${name} has discover link`);
+    assert.ok(html.includes('href="/list" class="topnav-link'), `${name} has list link`);
+    assert.ok(html.includes('href="/settings" class="topnav-link'), `${name} has settings link`);
+  }
+
+  // 25. Mobile: visible labels under bottom bar icons, bookmark icon for My List, hidden burger
+  assert.ok(script.includes('pill-nav-label'));
+  assert.ok(script.includes('ICONS.bookmark'));
+  assert.ok(styles.includes('.topnav-burger {\n    display: none !important;'));
+
+  // 26. Scroll restore only on back/forward navigation using performance and pageshow
+  assert.ok(script.includes('performance.getEntriesByType("navigation")'));
+  assert.ok(script.includes('pageshow'));
+  assert.ok(script.includes('waitForContentThenScroll'));
+
+  // 27. /movie and /tv fallback redirects
+  assert.ok(script.includes('location.replace(routeUrl("search") + "?type=movie")'));
+  assert.ok(script.includes('location.replace(routeUrl("search") + "?type=tv")'));
+  assert.ok(movieHtml.includes('content="0;url=/search?type=movie"'));
+  assert.ok(tvHtml.includes('content="0;url=/search?type=tv"'));
+
+  // 28. Per-title meta serverless endpoint, setMetaTags helper, and 404 page
+  assert.ok(metaApiExists);
+  assert.ok(script.includes('function setMetaTags('));
+  assert.ok(notFoundHtml.includes('Lost in the Catalog'));
+  assert.ok(notFoundHtml.includes('404'));
+
+  // 29. Infinite scroll: end-of-results message, error retry row, and back-to-top
+  assert.ok(script.includes('end-of-results'));
+  assert.ok(script.includes('back-to-top-btn'));
+  assert.ok(script.includes('infinite-error-row'));
+  assert.ok(script.includes('retry-infinite-btn'));
+
+  // 30. Discover: merged AI controls, All Years label, URL filter reflection
+  assert.ok(!searchHtml.includes('id="ai-search-mode"'));
+  assert.ok(searchHtml.includes('<option value="all">All Years</option>'));
+  assert.ok(script.includes('syncFiltersToUrl'));
+
+  // 31. Hero carousel pause button, focus & hidden pause, no aria-live on title
+  assert.ok(indexHtml.includes('id="hero-pause-btn"'));
+  assert.ok(!indexHtml.includes('id="hero-title" aria-live="polite"'));
+  assert.ok(script.includes('initHeroPauseControls'));
+  assert.ok(script.includes('document.addEventListener("visibilitychange"'));
+
+  // 32. Cards: container div (no button inside link), unique save aria-label, aria-pressed, placeholder tile, 300ms hover prefetch
+  assert.ok(script.includes('document.createElement("div")'));
+  assert.ok(script.includes('card-link'));
+  assert.ok(script.includes('aria-label="Save ${esc(title)}"'));
+  assert.ok(script.includes('aria-pressed="${saved ? "true" : "false"}"'));
+  assert.ok(script.includes('no-img-poster'));
+  assert.ok(script.includes('hoverTimer = setTimeout(prefetchDetail, 300)'));
+});
+

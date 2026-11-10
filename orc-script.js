@@ -94,6 +94,7 @@ const ICONS = {
   tv: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M8 22h8M12 19v3"/></svg>`,
   trend: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 17l6-6 4 4 8-9"/><path d="M14 6h7v7"/></svg>`,
   list: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>`,
+  bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>`,
@@ -2168,7 +2169,7 @@ function buildMobilePillNav(active) {
   const items = [
     { href: homeUrl(), label: "Home", icon: ICONS.home, key: "home" },
     { href: routeUrl("search"), label: "Discover", icon: ICONS.search, key: "search" },
-    { href: routeUrl("list"), label: "My List", icon: ICONS.list, key: "list" },
+    { href: routeUrl("list"), label: "My List", icon: ICONS.bookmark, key: "list" },
     { href: routeUrl("settings"), label: "Settings", icon: ICONS.settings, key: "settings" },
   ];
 
@@ -2180,6 +2181,7 @@ function buildMobilePillNav(active) {
   nav.innerHTML = items.map(it => `
     <a href="${it.href}" data-nav-key="${it.key}" class="pill-nav-item${active === it.key ? " active" : ""}" aria-label="${it.label}"${active === it.key ? ' aria-current="page"' : ""}>
       <span class="pill-nav-ico">${it.icon}</span>
+      <span class="pill-nav-label">${it.label}</span>
     </a>
   `).join("");
 
@@ -2211,17 +2213,34 @@ function initScrollRestoration() {
   window._scrollRestored = true;
   const pageKey = `orc_scroll_${location.pathname}${location.search}`;
 
-  window.addEventListener("beforeunload", () => {
+  window.addEventListener("pagehide", () => {
     try { sessionStorage.setItem(pageKey, String(window.scrollY)); } catch (err) { console.warn('Caught error:', err); }
   });
 
-  const savedY = sessionStorage.getItem(pageKey);
-  if (savedY && !isNaN(savedY)) {
+  window.addEventListener("pageshow", e => {
+    const navEntries = performance.getEntriesByType("navigation");
+    const isBackForward = e.persisted || (navEntries.length > 0 && navEntries[0].type === "back_forward") ||
+      (window.performance && window.performance.navigation && window.performance.navigation.type === 2);
+
+    if (!isBackForward) return;
+
+    const savedY = sessionStorage.getItem(pageKey);
+    if (!savedY || isNaN(savedY)) return;
     const y = parseInt(savedY, 10);
-    if (y > 0) {
-      setTimeout(() => window.scrollTo({ top: y, behavior: "auto" }), 60);
-    }
-  }
+    if (y <= 0) return;
+
+    let attempts = 0;
+    const waitForContentThenScroll = () => {
+      attempts++;
+      const hasContent = document.querySelector(".media-card, .ep-row, .detail-actions, .list-grid, .search-grid .media-card");
+      if (hasContent || attempts > 25) {
+        window.scrollTo({ top: y, behavior: "auto" });
+      } else {
+        setTimeout(waitForContentThenScroll, 50);
+      }
+    };
+    waitForContentThenScroll();
+  });
 }
 
 function prewarmNavKey(key) {
@@ -2234,6 +2253,55 @@ function prewarmNavKey(key) {
   }
 }
 
+function setMetaTags({ title, description, image, url } = {}) {
+  if (title) {
+    document.title = `${title} — ${BRAND}`;
+    let ogTitle = document.querySelector('meta[property="og:title"]');
+    if (!ogTitle) {
+      ogTitle = document.createElement("meta");
+      ogTitle.setAttribute("property", "og:title");
+      document.head.appendChild(ogTitle);
+    }
+    ogTitle.setAttribute("content", `${title} — ${BRAND}`);
+  }
+  if (description) {
+    let descMeta = document.querySelector('meta[name="description"]');
+    if (!descMeta) {
+      descMeta = document.createElement("meta");
+      descMeta.setAttribute("name", "description");
+      document.head.appendChild(descMeta);
+    }
+    descMeta.setAttribute("content", description);
+    let ogDesc = document.querySelector('meta[property="og:description"]');
+    if (!ogDesc) {
+      ogDesc = document.createElement("meta");
+      ogDesc.setAttribute("property", "og:description");
+      document.head.appendChild(ogDesc);
+    }
+    ogDesc.setAttribute("content", description);
+  }
+  if (image) {
+    let ogImg = document.querySelector('meta[property="og:image"]');
+    if (!ogImg) {
+      ogImg = document.createElement("meta");
+      ogImg.setAttribute("property", "og:image");
+      document.head.appendChild(ogImg);
+    }
+    ogImg.setAttribute("content", image);
+  }
+  if (url) {
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) canonical.setAttribute("href", url);
+    let ogUrl = document.querySelector('meta[property="og:url"]');
+    if (!ogUrl) {
+      ogUrl = document.createElement("meta");
+      ogUrl.setAttribute("property", "og:url");
+      document.head.appendChild(ogUrl);
+    }
+    ogUrl.setAttribute("content", url);
+  }
+}
+
 function initSidebar(active) {
   const el = $("#topnav") || $("#sidebar");
   if (!el) return;
@@ -2241,27 +2309,45 @@ function initSidebar(active) {
   const link = (href, label, act) =>
     `<a href="${href}" class="topnav-link${act ? " active" : ""}">${label}</a>`;
 
-  el.className = "topnav";
-  el.id = "topnav";
-  el.innerHTML = `
-    <div class="topnav-inner">
-      <a href="${homeUrl()}" class="topnav-logo" aria-label="Osiris Watch home">
-        <span class="topnav-word">Osiris<i>Watch</i></span>
-      </a>
-      <nav class="topnav-links" aria-label="Primary">
-        ${link(homeUrl(), "Home", active === "home")}
-        ${link(routeUrl("search"), "Discover", active === "search" || active === "movies" || active === "tv")}
-        ${link(routeUrl("list"), "My List", active === "list")}
-        ${link(routeUrl("settings"), "Settings", active === "settings")}
-      </nav>
-      <div class="topnav-actions">
-        <a href="${routeUrl("search")}" class="topnav-icon${active === "search" ? " active" : ""}" aria-label="Search">${ICONS.search}</a>
-        <button type="button" class="topnav-icon topnav-bell-btn" id="topnav-bell-btn" aria-label="Notifications" aria-expanded="false">${ICONS.bell}</button>
-        <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="topnav-icon" aria-label="Discord">${ICONS.discord}</a>
-        <button type="button" class="topnav-icon topnav-account-btn" id="topnav-account-btn" aria-label="Account" hidden style="display:none">${ICONS.user}</button>
-        <button type="button" class="topnav-burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
-      </div>
-    </div>`;
+  const existingNav = el.querySelector(".topnav-links");
+  if (!existingNav) {
+    el.className = "topnav";
+    el.id = "topnav";
+    el.innerHTML = `
+      <div class="topnav-inner">
+        <a href="${homeUrl()}" class="topnav-logo" aria-label="Osiris Watch home">
+          <span class="topnav-word">Osiris<i>Watch</i></span>
+        </a>
+        <nav class="topnav-links" aria-label="Primary">
+          ${link(homeUrl(), "Home", active === "home")}
+          ${link(routeUrl("search"), "Discover", active === "search" || active === "movies" || active === "tv")}
+          ${link(routeUrl("list"), "My List", active === "list")}
+          ${link(routeUrl("settings"), "Settings", active === "settings")}
+        </nav>
+        <div class="topnav-actions">
+          <a href="${routeUrl("search")}" class="topnav-icon${active === "search" ? " active" : ""}" aria-label="Search">${ICONS.search}</a>
+          <button type="button" class="topnav-icon topnav-bell-btn" id="topnav-bell-btn" aria-label="Notifications" aria-expanded="false">${ICONS.bell}</button>
+          <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="topnav-icon" aria-label="Discord">${ICONS.discord}</a>
+          <button type="button" class="topnav-icon topnav-account-btn" id="topnav-account-btn" aria-label="Account" hidden style="display:none">${ICONS.user}</button>
+          <button type="button" class="topnav-burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+        </div>
+      </div>`;
+  } else {
+    el.querySelectorAll(".topnav-link").forEach(a => {
+      const href = a.getAttribute("href") || "";
+      let isAct = false;
+      if (active === "home" && (href === "/" || href.endsWith("index.html") || href === homeUrl())) isAct = true;
+      else if ((active === "search" || active === "movies" || active === "tv") && href.includes("search")) isAct = true;
+      else if (active === "list" && href.includes("list")) isAct = true;
+      else if (active === "settings" && href.includes("settings")) isAct = true;
+      a.classList.toggle("active", isAct);
+    });
+    el.querySelectorAll(".topnav-actions .topnav-icon").forEach(a => {
+      if (a.getAttribute("href")?.includes("search")) {
+        a.classList.toggle("active", active === "search");
+      }
+    });
+  }
 
   initAuthUI();
   initNotificationDropdown();
@@ -2489,26 +2575,24 @@ function buildCard(item, type = "movie", opts = {}) {
   const watched = prog && prog >= 95;
   const y = year(item.release_date || item.first_air_date);
 
-  const card = document.createElement("a");
+  const card = document.createElement("div");
   card.className = `media-card${watched && SETTINGS.get(SETTINGS.hideWatchedKey) === "1" ? " is-watched" : ""}`;
-  card.tabIndex = 0;
-  card.setAttribute("role", "link");
-  card.href = href;
-  card.setAttribute("aria-label", title);
   const aiRec = item._aiRec || null;
   card.innerHTML = `
-    ${opts.rank && opts.top10Today ? `<span class="top10-today-card-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>${opts.rank}</span>` : opts.rank ? `<span class="rank">${opts.rank}</span>` : ""}
-    ${prog && prog > 2 ? `<span class="progress-badge">${Math.round(prog)}%</span>` : aiRec?.matchPct ? `<span class="card-ai-badge">${aiRec.rankedByAI ? "AI · " : ""}${aiRec.matchPct}% Match</span>` : ""}
-    ${!opts.rank && (!prog || prog <= 2) && Number.isFinite(item.vote_average) && item.vote_average >= 6 ? `<span class="card-rating">★ ${(typeof item.vote_average === "number" ? item.vote_average.toFixed(1) : "")}</span>` : ""}
-    ${img ? `<img class="card-img" src="${esc(img)}" alt="${esc(title)}" loading="${opts.eager ? "eager" : "lazy"}"${opts.eager ? ' fetchpriority="high"' : ""} draggable="false" decoding="async" />` : `<div class="no-img-poster">${ICONS.film}<span>${esc(title)}</span></div>`}
-    ${prog ? `<div class="progress-bar"><span style="width:${Math.min(prog, 100)}%"></span></div>` : ""}
+    <a class="card-link" href="${href}" aria-label="${esc(title)}">
+      ${opts.rank && opts.top10Today ? `<span class="top10-today-card-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>${opts.rank}</span>` : opts.rank ? `<span class="rank">${opts.rank}</span>` : ""}
+      ${prog && prog > 2 ? `<span class="progress-badge">${Math.round(prog)}%</span>` : aiRec?.matchPct ? `<span class="card-ai-badge">${aiRec.rankedByAI ? "AI · " : ""}${aiRec.matchPct}% Match</span>` : ""}
+      ${!opts.rank && (!prog || prog <= 2) && Number.isFinite(item.vote_average) && item.vote_average >= 6 ? `<span class="card-rating">★ ${(typeof item.vote_average === "number" ? item.vote_average.toFixed(1) : "")}</span>` : ""}
+      ${img ? `<img class="card-img" src="${esc(img)}" alt="${esc(title)}" loading="${opts.eager ? "eager" : "lazy"}"${opts.eager ? ' fetchpriority="high"' : ""} draggable="false" decoding="async" />` : `<div class="no-img-poster">${ICONS.film}<span>${esc(title)}</span></div>`}
+      ${prog ? `<div class="progress-bar"><span style="width:${Math.min(prog, 100)}%"></span></div>` : ""}
+      <div class="card-foot">
+        <div class="card-foot-title">${esc(title)}</div>
+        <div class="card-foot-meta">${y ? `${y} · ` : ""}${kind === "tv" ? "Series" : "Movie"}</div>
+        ${aiRec?.reason ? `<div class="card-foot-ai-reason">${esc(aiRec.reason)}</div>` : ""}
+      </div>
+    </a>
     <div class="card-quick">
-      <button type="button" class="card-icon-btn save-btn${saved ? " saved" : ""}" aria-label="Save">${saved ? ICONS.check : ICONS.plus}</button>
-    </div>
-    <div class="card-foot">
-      <div class="card-foot-title">${esc(title)}</div>
-      <div class="card-foot-meta">${y ? `${y} · ` : ""}${kind === "tv" ? "Series" : "Movie"}</div>
-      ${aiRec?.reason ? `<div class="card-foot-ai-reason">${esc(aiRec.reason)}</div>` : ""}
+      <button type="button" class="card-icon-btn save-btn${saved ? " saved" : ""}" aria-label="Save ${esc(title)}" aria-pressed="${saved ? "true" : "false"}">${saved ? ICONS.check : ICONS.plus}</button>
     </div>`;
 
   const cardImgEl = card.querySelector("img.card-img");
@@ -2535,6 +2619,13 @@ function buildCard(item, type = "movie", opts = {}) {
     }
   };
 
+  let hoverTimer = null;
+  card.addEventListener("mouseenter", () => {
+    hoverTimer = setTimeout(prefetchDetail, 300);
+  }, { passive: true });
+  card.addEventListener("mouseleave", () => {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+  }, { passive: true });
   card.addEventListener("touchstart", prefetchDetail, { passive: true, once: true });
 
   card.addEventListener("click", e => {
@@ -3300,11 +3391,55 @@ function pickHeroItems(results) {
   return picks;
 }
 
+let heroUserPaused = false;
+let heroHovered = false;
+
 function startHeroTimer() {
-  if (prefersReducedMotion() || heroSlides.length < 2) return;
+  if (heroUserPaused || heroHovered || prefersReducedMotion() || heroSlides.length < 2) return;
   clearInterval(heroTimer);
   heroTimer = setInterval(() => setHeroSlide((heroIndex + 1) % heroSlides.length, true), HERO_INTERVAL);
 }
+
+function stopHeroTimer() {
+  clearInterval(heroTimer);
+}
+
+function initHeroPauseControls() {
+  const pauseBtn = $("#hero-pause-btn");
+  if (!pauseBtn) return;
+  const updateBtn = () => {
+    pauseBtn.setAttribute("aria-label", heroUserPaused ? "Play carousel" : "Pause carousel");
+    pauseBtn.setAttribute("title", heroUserPaused ? "Play carousel" : "Pause carousel");
+    const pauseIco = pauseBtn.querySelector(".icon-pause");
+    const playIco = pauseBtn.querySelector(".icon-play");
+    if (pauseIco) pauseIco.style.display = heroUserPaused ? "none" : "block";
+    if (playIco) playIco.style.display = heroUserPaused ? "block" : "none";
+  };
+  pauseBtn.addEventListener("click", () => {
+    heroUserPaused = !heroUserPaused;
+    if (heroUserPaused) stopHeroTimer();
+    else startHeroTimer();
+    updateBtn();
+  });
+  updateBtn();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopHeroTimer();
+  } else if (!heroUserPaused && !heroHovered) {
+    startHeroTimer();
+  initHeroPauseControls();
+  const heroSection = $(".hero");
+  if (heroSection && !heroSection._focusBound) {
+    heroSection._focusBound = true;
+    heroSection.addEventListener("focusin", () => stopHeroTimer());
+    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
+    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
+    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+  }
+  }
+});
 
 function buildHeroDots() {
   const dots = $("#hero-dots");
@@ -3320,6 +3455,15 @@ function buildHeroDots() {
       clearInterval(heroTimer);
       setHeroSlide(i, true);
       startHeroTimer();
+  initHeroPauseControls();
+  const heroSection = $(".hero");
+  if (heroSection && !heroSection._focusBound) {
+    heroSection._focusBound = true;
+    heroSection.addEventListener("focusin", () => stopHeroTimer());
+    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
+    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
+    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+  }
     });
   });
   restartDotFill(0);
@@ -3374,6 +3518,15 @@ function initHeroCarousel(slides) {
   buildHeroDots();
   loadHero(slides[0]);
   startHeroTimer();
+  initHeroPauseControls();
+  const heroSection = $(".hero");
+  if (heroSection && !heroSection._focusBound) {
+    heroSection._focusBound = true;
+    heroSection.addEventListener("focusin", () => stopHeroTimer());
+    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
+    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
+    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+  }
   slides.slice(1, 3).forEach(s => {
     if (s.backdrop_path) {
       const pre = new Image();
@@ -3814,6 +3967,15 @@ function initHeroSwipe() {
         setHeroSlide((heroIndex - 1 + heroSlides.length) % heroSlides.length, true);
       }
       startHeroTimer();
+  initHeroPauseControls();
+  const heroSection = $(".hero");
+  if (heroSection && !heroSection._focusBound) {
+    heroSection._focusBound = true;
+    heroSection.addEventListener("focusin", () => stopHeroTimer());
+    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
+    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
+    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+  }
     }
     touchStartX = 0;
     touchStartY = 0;
@@ -4765,9 +4927,13 @@ function renderProviders(container, type, id, s, e, onChange) {
 
 async function initMoviePage() {
   const rawId = new URLSearchParams(location.search).get("id");
+  if (!rawId) {
+    location.replace(routeUrl("search") + "?type=movie");
+    return;
+  }
   const header = $("#detail-header");
   const frame = $("#player-frame");
-  if (!rawId || isNaN(Number(rawId)) || Number(rawId) <= 0) {
+  if (isNaN(Number(rawId)) || Number(rawId) <= 0) {
     if (header) {
       header.innerHTML = `
         <div class="detail-error-box">
@@ -4863,7 +5029,7 @@ async function initMoviePage() {
   }
 
   try {
-    document.title = `${m.title} — ${BRAND}`;
+    setMetaTags({ title: m.title, description: m.overview, image: m.poster_path ? `${IMG_W500}${m.poster_path}` : "", url: `${siteOrigin}/movie?id=${m.id}` });
     if (m.backdrop_path) applyDetailBackdrop(m.backdrop_path);
 
     const saved = MyList.has(m.id, "movie");
@@ -4986,9 +5152,13 @@ async function initTvPage() {
   initPlayerGuard();
   const params = new URLSearchParams(location.search);
   const rawId = params.get("id");
+  if (!rawId) {
+    location.replace(routeUrl("search") + "?type=tv");
+    return;
+  }
   const header = $("#detail-header");
   const frame = $("#player-frame");
-  if (!rawId || isNaN(Number(rawId)) || Number(rawId) <= 0) {
+  if (isNaN(Number(rawId)) || Number(rawId) <= 0) {
     if (header) {
       header.innerHTML = `
         <div class="detail-error-box">
@@ -5056,7 +5226,7 @@ async function initTvPage() {
   }
 
   try {
-    document.title = `${show.name} — ${BRAND}`;
+    setMetaTags({ title: show.name, description: show.overview, image: show.poster_path ? `${IMG_W500}${show.poster_path}` : "", url: `${siteOrigin}/tv?id=${show.id}` });
     if (show.backdrop_path) applyDetailBackdrop(show.backdrop_path);
 
     const saved = MyList.has(show.id, "tv");
@@ -5400,7 +5570,7 @@ function initSearchPage() {
   aiSubmit?.addEventListener("click", () => doSearch(input?.value.trim() || ""));
 
   let searchAbortController = null;
-  async function doSearch(q, append = false) {
+  async function doSearch(q, append = false, targetPage = 1) {
     if (searchAbortController) searchAbortController.abort();
     searchAbortController = new AbortController();
     const searchOpts = { signal: searchAbortController.signal };
@@ -5410,13 +5580,12 @@ function initSearchPage() {
       hasMorePages = true;
       grid.textContent = "";
       skeletons(12).forEach(s => grid.appendChild(s));
+    } else {
+      searchPage = targetPage;
     }
     lastQ = q;
     if (!append) {
-      const url = new URL(location.href);
-      if (q) url.searchParams.set("q", q); else url.searchParams.delete("q");
-      if (current === "all") url.searchParams.delete("type"); else url.searchParams.set("type", current);
-      history.replaceState(null, "", url);
+      syncFiltersToUrl(q);
     }
     if (current === "ai") {
       hasMorePages = false;
@@ -5599,31 +5768,86 @@ function initSearchPage() {
       items.forEach((item, idx) => {
         grid.appendChild(buildCard(item, item.media_type || (current === "tv" ? "tv" : "movie"), { eager: !append && idx < 6 }));
       });
+
+      if (!hasMorePages) appendEndOfResults();
+      return true;
     } catch (e) {
-      if (searchOpts.signal.aborted || e.name === "AbortError") return;
+      if (searchOpts.signal.aborted || e.name === "AbortError") return false;
       if (!append) {
         grid.innerHTML = `<div class="no-results"><p>Failed to load titles. Please check your connection.</p></div>`;
         if (status) status.textContent = "";
+      } else {
+        if (!$(".infinite-error-row")) {
+          const errRow = document.createElement("div");
+          errRow.className = "infinite-error-row";
+          errRow.innerHTML = `<p style="color:var(--text-muted);font-size:0.9rem">Failed to load more results.</p><button type="button" class="btn-ghost retry-infinite-btn" style="margin-top:8px">Retry</button>`;
+          errRow.querySelector(".retry-infinite-btn")?.addEventListener("click", () => {
+            errRow.remove();
+            doSearch(lastQ || input?.value.trim() || "", true, searchPage);
+          });
+          grid.appendChild(errRow);
+        }
       }
+      return false;
     }
   }
 
+  const appendEndOfResults = () => {
+    if (!$(".end-of-results") && !hasMorePages) {
+      const endEl = document.createElement("div");
+      endEl.className = "end-of-results";
+      endEl.innerHTML = `<p>You've reached the end of the results.</p><button type="button" class="btn-ghost back-to-top-btn">Back to top ↑</button>`;
+      endEl.querySelector(".back-to-top-btn")?.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+      grid.appendChild(endEl);
+    }
+  };
+
+  const syncFiltersToUrl = (query = input?.value.trim() || "") => {
+    const u = new URL(location.href);
+    if (query) u.searchParams.set("q", query); else u.searchParams.delete("q");
+    if (current && current !== "all") u.searchParams.set("type", current); else u.searchParams.delete("type");
+    const genre = $("#filter-genre")?.value;
+    if (genre && genre !== "all") u.searchParams.set("genre", genre); else u.searchParams.delete("genre");
+    const provider = $("#filter-provider")?.value;
+    if (provider && provider !== "all") u.searchParams.set("provider", provider); else u.searchParams.delete("provider");
+    const era = $("#filter-era")?.value;
+    if (era && era !== "all") u.searchParams.set("era", era); else u.searchParams.delete("era");
+    const rating = $("#filter-rating")?.value;
+    if (rating && rating !== "all") u.searchParams.set("rating", rating); else u.searchParams.delete("rating");
+    const sort = $("#filter-sort")?.value;
+    if (sort && sort !== "pop") u.searchParams.set("sort", sort); else u.searchParams.delete("sort");
+    history.replaceState(null, "", u);
+  };
+
+  // Sync initial dropdown states from URL parameters (Item 30)
+  const initialEra = params.get("era");
+  if (initialEra && $("#filter-era")) $("#filter-era").value = initialEra;
+  const initialRating = params.get("rating");
+  if (initialRating && $("#filter-rating")) $("#filter-rating").value = initialRating;
+  const initialSort = params.get("sort");
+  if (initialSort && $("#filter-sort")) $("#filter-sort").value = initialSort;
+
   // Infinite Scroll Listener
   window.addEventListener("scroll", () => {
-    if (current === "ai" || isFetchingMore || !hasMorePages) return;
+    if (current === "ai" || isFetchingMore || !hasMorePages || $(".infinite-error-row")) return;
     const scrollPos = window.innerHeight + window.scrollY;
-    const threshold = document.body.offsetHeight - 700;
+    const threshold = document.body.offsetHeight - 750;
     if (scrollPos >= threshold) {
       isFetchingMore = true;
-      searchPage++;
-      doSearch(lastQ || input?.value.trim() || "", true).finally(() => {
+      const nextPage = searchPage + 1;
+      doSearch(lastQ || input?.value.trim() || "", true, nextPage).finally(() => {
         isFetchingMore = false;
       });
     }
   }, { passive: true });
 
   ["#filter-genre", "#filter-provider", "#filter-era", "#filter-rating", "#filter-sort"].forEach(sel => {
-    $(sel)?.addEventListener("change", () => doSearch(input?.value.trim() || ""));
+    $(sel)?.addEventListener("change", () => {
+      syncFiltersToUrl(input?.value.trim() || "");
+      doSearch(input?.value.trim() || "");
+    });
   });
 
   if (genreId && $("#filter-genre")) {

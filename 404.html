@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>404 — Page Not Found | Osiris Watch</title>
+  <meta name="robots" content="noindex, follow">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="alternate icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="orc-styles.css">
+  <style>
+    .not-found-wrap {
+      min-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px var(--gutter);
+      gap: 16px;
+    }
+    .not-found-code {
+      font-size: clamp(5rem, 15vw, 9rem);
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--accent-glow);
+    }
+    .not-found-title {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 700;
+      margin: 0;
+      color: var(--text);
+    }
+    .not-found-desc {
+      max-width: 460px;
+      color: var(--text-muted);
+      font-size: 0.96rem;
+      line-height: 1.5;
+      margin: 0;
+    }
+    .not-found-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body class="page-404">
+  <header class="topnav" id="topnav">
+    <div class="topnav-inner">
+      <a href="/" class="topnav-logo" aria-label="Osiris Watch home">
+        <span class="topnav-word">Osiris<i>Watch</i></span>
+      </a>
+      <nav class="topnav-links" aria-label="Primary">
+        <a href="/" class="topnav-link">Home</a>
+        <a href="/search" class="topnav-link">Discover</a>
+        <a href="/list" class="topnav-link">My List</a>
+        <a href="/settings" class="topnav-link">Settings</a>
+      </nav>
+      <div class="topnav-actions">
+        <a href="/search" class="topnav-icon" aria-label="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <main class="not-found-wrap" id="main-content">
+      <div class="not-found-code">404</div>
+      <h1 class="not-found-title">Lost in the Catalog</h1>
+      <p class="not-found-desc">The title or page you are looking for has been moved, removed, or never existed.</p>
+      <div class="not-found-actions">
+        <a href="/" class="btn-play">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          Go Home
+        </a>
+        <a href="/search" class="btn-ghost">Search Catalog</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
