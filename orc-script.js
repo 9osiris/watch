@@ -56,19 +56,19 @@ function pagePathMatches(pathname, route) {
 }
 
 const PROVIDERS = [
-  { id: "cinesrc", name: "CineSrc (Recommended)",
+  { id: "cinesrc", name: "CineSrc (Recommended)", tracksProgress: false,
     movie: id => `https://cinesrc.st/embed/movie/${id}?color=%23${ACCENT}&autoplay=true`,
     tv: (id, s, e) => `https://cinesrc.st/embed/tv/${id}?s=${s}&e=${e}&color=%23${ACCENT}&autoplay=true` },
-  { id: "vidking", name: "VidKing",
+  { id: "vidking", name: "VidKing", tracksProgress: true,
     movie: id => `https://www.vidking.net/embed/movie/${id}?color=${ACCENT}&autoPlay=true`,
     tv: (id, s, e) => `https://www.vidking.net/embed/tv/${id}/${s}/${e}?color=${ACCENT}&autoPlay=true&nextEpisode=true&episodeSelector=true` },
-  { id: "vidsrc", name: "VidSrc",
+  { id: "vidsrc", name: "VidSrc", tracksProgress: false,
     movie: id => `https://vidsrc-embed.ru/embed/movie/${id}?autoplay=1`,
     tv: (id, s, e) => `https://vidsrc-embed.ru/embed/tv/${id}/${s}/${e}?autoplay=1` },
-  { id: "vidsrc2", name: "VidSrc 2",
+  { id: "vidsrc2", name: "VidSrc 2", tracksProgress: false,
     movie: id => `https://vidsrc-embed.su/embed/movie/${id}?autoplay=1`,
     tv: (id, s, e) => `https://vidsrc-embed.su/embed/tv/${id}/${s}/${e}?autoplay=1` },
-  { id: "111movies", name: "111Movies",
+  { id: "111movies", name: "111Movies", tracksProgress: false,
     movie: id => `https://111movies.com/movie/${id}`,
     tv: (id, s, e) => `https://111movies.com/tv/${id}/${s}/${e}` },
 ];
@@ -129,10 +129,56 @@ function initNotificationDropdown() {
       </div>
       <div class="notif-popover-divider"></div>
       <div class="notif-popover-body" id="notif-popover-body">
-        <div class="notif-empty-state">No new episodes this week</div>
+        <div class="notif-empty-state"><span class="spin-dot"></span> Checking watchlist…</div>
       </div>
     `;
     document.body.appendChild(popover);
+  }
+
+  let notifsLoaded = false;
+  async function loadWatchlistEpisodes() {
+    if (notifsLoaded) return;
+    notifsLoaded = true;
+    const body = $("#notif-popover-body");
+    if (!body) return;
+    const tvShows = MyList.get().filter(it => it.type === "tv" || it.media_type === "tv");
+    if (!tvShows.length) {
+      body.innerHTML = `<div class="notif-empty-state">No TV shows in your watchlist yet.</div>`;
+      return;
+    }
+
+    const now = Date.now();
+    const weekAgo = now - 7 * 86400000;
+    const recent = [];
+
+    await Promise.allSettled(tvShows.slice(0, 10).map(async show => {
+      try {
+        const d = await tmdb(`/tv/${show.id}`);
+        const lastEp = d.last_episode_to_air;
+        if (lastEp && lastEp.air_date) {
+          const airTime = new Date(lastEp.air_date + "T00:00:00").getTime();
+          if (airTime >= weekAgo && airTime <= now + 86400000) {
+            recent.push({ show, ep: lastEp });
+          }
+        }
+      } catch {}
+    }));
+
+    if (!recent.length) {
+      body.innerHTML = `<div class="notif-empty-state">No new episodes this week</div>`;
+      return;
+    }
+
+    body.innerHTML = recent.map(({ show, ep }) => `
+      <a href="${routeUrl("tv")}?id=${show.id}&season=${ep.season_number}&episode=${ep.episode_number}" class="notif-item">
+        <div class="notif-thumb">${show.poster_path ? `<img src="${esc(IMG_W300 + show.poster_path)}" alt="${esc(show.title || '')}" />` : ""}</div>
+        <div class="notif-info">
+          <div class="notif-title">${esc(show.title || show.name || "Series")}</div>
+          <div class="notif-ep">S${ep.season_number} E${ep.episode_number} · ${esc(ep.name || 'New Episode')}</div>
+          <div class="notif-date">${ep.air_date}</div>
+        </div>
+      </a>
+    `).join("");
   }
 
   const togglePopover = (show) => {
@@ -152,6 +198,7 @@ function initNotificationDropdown() {
   bellBtn.addEventListener("click", e => {
     e.stopPropagation();
     togglePopover();
+    if (popover.classList.contains("is-open")) loadWatchlistEpisodes();
   });
 
   document.addEventListener("click", e => {
@@ -442,6 +489,11 @@ function tmdb(path, retries = 1, opts = {}) {
     if (hideAdult && isSearchOrDiscover && !finalPath.includes("include_adult=")) {
       const pSep = finalPath.includes("?") ? "&" : "?";
       finalPath = `${finalPath}${pSep}include_adult=false`;
+    }
+    const prefLang = SETTINGS.get(SETTINGS.prefLangKey, "en");
+    if (prefLang && !finalPath.includes("language=")) {
+      const pSep = finalPath.includes("?") ? "&" : "?";
+      finalPath = `${finalPath}${pSep}language=${encodeURIComponent(prefLang)}`;
     }
     const sep = finalPath.includes("?") ? "&" : "?";
     let attempts = 0;
@@ -1885,11 +1937,11 @@ function closeModal(target = ".modal-overlay") {
 const MyList = {
   key: "orc_mylist",
   get() { try { return JSON.parse(safeGetItem(this.key) || "[]"); } catch { return []; } },
-  has(id, t) { return this.get().some(i => i.id === id && i.type === t); },
+  has(id, t) { return this.get().some(i => String(i.id) === String(id) && i.type === t); },
   save(list) { safeSetItem(this.key, JSON.stringify(list)); idbSet(this.key, list); },
   toggle(item) {
     const list = this.get();
-    const i = list.findIndex(x => x.id === item.id && x.type === item.type);
+    const i = list.findIndex(x => String(x.id) === String(item.id) && x.type === item.type);
     let added = false;
     if (i >= 0) {
       list.splice(i, 1);
@@ -1959,6 +2011,11 @@ const Progress = {
     all[`${type}_${id}`] = item;
     this.saveAll(all);
     SupabaseSync.pushProgressItem(item).catch(() => {});
+  },
+  remove(id, type) {
+    const all = this.get();
+    delete all[`${type}_${id}`];
+    this.saveAll(all);
   },
 };
 
@@ -2429,7 +2486,7 @@ function buildCard(item, type = "movie", opts = {}) {
   card.addEventListener("touchstart", prefetchDetail, { passive: true, once: true });
 
   card.addEventListener("click", e => {
-    if (e.target.closest(".save-btn")) {
+    if (e.target.closest(".save-btn") || e.target.closest(".cw-remove-btn")) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -3608,7 +3665,7 @@ async function renderContinueWatchingRow() {
   const items = Progress.getAll();
   if (!items || !items.length) return;
 
-  const validItems = items.filter(it => it && (it.id || it.mediaId) && it.progress > 1 && it.progress < 98);
+  const validItems = items.filter(it => it && (it.id || it.mediaId) && it.progress > 1 && it.progress < 95);
   if (!validItems.length) return;
 
   const wrap = document.createElement("div");
@@ -3637,7 +3694,28 @@ async function renderContinueWatchingRow() {
     }
     track.textContent = "";
     loaded.forEach(({ d, type, progress }) => {
-      track.appendChild(buildCard(d, type, { progressValue: progress }));
+      const cardEl = buildCard(d, type, { progressValue: progress });
+      const quick = cardEl.querySelector(".card-quick");
+      if (quick) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "card-icon-btn cw-remove-btn";
+        removeBtn.setAttribute("aria-label", "Remove from Continue Watching");
+        removeBtn.title = "Remove from Continue Watching";
+        removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+        removeBtn.addEventListener("click", e => {
+          e.preventDefault();
+          e.stopPropagation();
+          Progress.remove(d.id, type);
+          cardEl.remove();
+          if (!track.querySelector(".media-card")) {
+            wrap.remove();
+          }
+          toast("Removed from Continue Watching");
+        });
+        quick.appendChild(removeBtn);
+      }
+      track.appendChild(cardEl);
     });
     initRowDrag(track);
     initRowKeyboard(track);
@@ -4431,8 +4509,8 @@ async function initHomePage() {
   chanRow.querySelectorAll(".channel-card").forEach(btn => {
     btn.addEventListener("click", () => {
       const pid = btn.dataset.providerId;
-      const ptype = btn.dataset.providerType;
-      location.href = `${routeUrl("search")}?type=${ptype}&provider=${pid}`;
+      // Search across both movie and tv with provider filter
+      location.href = `${routeUrl("search")}?type=all&provider=${pid}`;
     });
   });
   initRowDrag(ctrack);
@@ -4618,12 +4696,14 @@ function renderProviders(container, type, id, s, e, onChange) {
   PROVIDERS.forEach((p, i) => {
     const btn = document.createElement("button");
     btn.className = `provider-tab${getProvider() === p.id ? " active" : ""}`;
-    btn.innerHTML = i === 0
-      ? `${p.name}<span class="provider-rec" aria-label="Recommended">★</span>`
-      : p.name;
+    const recBadge = i === 0 ? `<span class="provider-rec" aria-label="Recommended">★</span>` : "";
+    const trackBadge = p.tracksProgress
+      ? `<span class="provider-track-badge on" title="Progress tracking supported">Tracking ON</span>`
+      : `<span class="provider-track-badge off" title="External provider - no progress events">Tracking OFF</span>`;
+    btn.innerHTML = `${p.name}${recBadge}${trackBadge}`;
     btn.addEventListener("click", () => {
       setProvider(p.id);
-      $$(".provider-tab").forEach(b => b.classList.remove("active"));
+      $(".provider-tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       onChange(providerUrl(type, id, s, e));
     });
@@ -4723,17 +4803,6 @@ async function initMoviePage() {
 
     LiquidGlass.glassify(header);
     const markMovieWatched = () => {
-      const existingProg = Progress.getItem(m.id, "movie");
-      if (!existingProg) {
-        Progress.save(m.id, "movie", {
-          id: m.id,
-          mediaType: "movie",
-          title: m.title,
-          poster_path: m.poster_path || "",
-          release_date: m.release_date || "",
-          progress: 5
-        });
-      }
       ensureRecommendSection(m.title, true);
     };
     $("#detail-play")?.addEventListener("click", (e) => {
@@ -4912,19 +4981,6 @@ async function initTvPage() {
 
     LiquidGlass.glassify(header);
     const markShowWatched = (sNum = season, eNum = episode) => {
-      const existingProg = Progress.getItem(show.id, "tv");
-      if (!existingProg) {
-        Progress.save(show.id, "tv", {
-          id: show.id,
-          mediaType: "tv",
-          title: show.name,
-          poster_path: show.poster_path || "",
-          first_air_date: show.first_air_date || "",
-          season: sNum,
-          episode: eNum,
-          progress: 5
-        });
-      }
       ensureRecommendSection(show.name, true);
     };
     $("#detail-play")?.addEventListener("click", (e) => {
@@ -4989,9 +5045,12 @@ async function initTvPage() {
             ${dur ? `<span class="ep-row-dur">${dur}</span>` : ""}`;
           el.addEventListener("click", () => {
             season = sn; episode = ep.episode_number;
-            $(".ep-row").forEach(x => x.classList.remove("on"));
+            $$(".ep-row").forEach(x => x.classList.remove("on"));
             el.classList.add("on");
-            markShowWatched(sn, ep.episode_number);
+            const newUrl = new URL(location.href);
+            newUrl.searchParams.set("season", String(season));
+            newUrl.searchParams.set("episode", String(episode));
+            history.replaceState(null, "", newUrl);
             update();
             scrollToSelector("#player-frame");
           });
@@ -5235,18 +5294,84 @@ function initSearchPage() {
         if (current !== "all") items = items.filter(i => (i.media_type || current) === current);
         if (data.page >= (data.total_pages || 1)) hasMorePages = false;
       } else {
-        const g = genreId || $("#filter-genre")?.value || "";
-        const gParam = (g && g !== "all") ? `&with_genres=${g}` : "";
-        const pParam = providerId ? `&with_watch_providers=${providerId}&watch_region=US` : "";
+        const rawGenre = $("#filter-genre")?.value || genreId || "";
+        const genreVal = (rawGenre && rawGenre !== "all") ? rawGenre : "";
+
+        // Map movie genre IDs to TV genre IDs when type is tv
+        const mapGenreForType = (gId, mediaType) => {
+          if (!gId) return "";
+          if (mediaType === "tv") {
+            if (gId === "28") return "10759"; // Action -> Action & Adventure
+            if (gId === "12") return "10759"; // Adventure -> Action & Adventure
+            if (gId === "14" || gId === "878") return "10765"; // Sci-Fi / Fantasy -> Sci-Fi & Fantasy
+            if (["53", "27", "10749", "99", "18", "35", "16", "80", "10751"].includes(gId)) return gId;
+            return ""; // Drop genres that do not exist for TV
+          }
+          return gId;
+        };
+
+        const PROVIDER_MAP = {
+          netflix: 8,
+          hbo: 1899,
+          disney: 337,
+          apple: 350,
+          prime: 9,
+          hulu: 15,
+          paramount: 531,
+          peacock: 386,
+          crunchyroll: 283,
+          amc: 528
+        };
+        const pKey = $("#filter-provider")?.value || providerId || "";
+        const pId = PROVIDER_MAP[pKey] || (Number.isFinite(Number(pKey)) && pKey ? pKey : "");
+        const watchRegion = SETTINGS.get("orc_watch_region", "US") || "US";
+        const pParam = pId ? `&with_watch_providers=${pId}&watch_region=${encodeURIComponent(watchRegion)}` : "";
+
         const sortVal = $("#filter-sort")?.value || "pop";
-        let sortParam = "popularity.desc";
-        if (sortVal === "rating") sortParam = "vote_average.desc";
-        if (sortVal === "newest") sortParam = "primary_release_date.desc";
+        const eraVal = $("#filter-era")?.value || "all";
+        const ratingVal = $("#filter-rating")?.value || "all";
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const buildTmdbParams = (mediaType) => {
+          let sortParam = "popularity.desc";
+          if (sortVal === "rating") sortParam = "vote_average.desc";
+          if (sortVal === "newest") sortParam = mediaType === "tv" ? "first_air_date.desc" : "primary_release_date.desc";
+
+          let p = `sort_by=${sortParam}`;
+          if (sortVal === "pop") p += "&vote_count.gte=30";
+          else if (sortVal === "rating") p += "&vote_count.gte=80";
+
+          // Exclude unreleased titles from Newest
+          if (sortVal === "newest") {
+            const dateField = mediaType === "tv" ? "first_air_date.lte" : "primary_release_date.lte";
+            p += `&${dateField}=${todayStr}`;
+          }
+
+          // Era bounds
+          const gteField = mediaType === "tv" ? "first_air_date.gte" : "primary_release_date.gte";
+          const lteField = mediaType === "tv" ? "first_air_date.lte" : "primary_release_date.lte";
+          if (eraVal === "2026") p += `&${gteField}=2026-01-01&${lteField}=2026-12-31`;
+          else if (eraVal === "2025") p += `&${gteField}=2025-01-01&${lteField}=2025-12-31`;
+          else if (eraVal === "2024") p += `&${gteField}=2024-01-01&${lteField}=2024-12-31`;
+          else if (eraVal === "2020s") p += `&${gteField}=2020-01-01`;
+          else if (eraVal === "2010s") p += `&${gteField}=2010-01-01&${lteField}=2019-12-31`;
+          else if (eraVal === "classic") p += `&${lteField}=2009-12-31`;
+
+          // Rating filter
+          if (ratingVal !== "all") {
+            p += `&vote_average.gte=${encodeURIComponent(ratingVal)}`;
+          }
+
+          const gTarget = mapGenreForType(genreVal, mediaType);
+          if (gTarget) p += `&with_genres=${gTarget}`;
+          if (pParam) p += pParam;
+          return p;
+        };
 
         if (current === "all") {
           const [movData, tvData] = await Promise.all([
-            tmdb(`/discover/movie?sort_by=${sortParam}&vote_count.gte=30${gParam}${pParam}&page=${searchPage}`, 1, searchOpts).catch(() => ({ results: [] })),
-            tmdb(`/discover/tv?sort_by=${sortParam}&vote_count.gte=30${gParam}${pParam}&page=${searchPage}`, 1, searchOpts).catch(() => ({ results: [] }))
+            tmdb(`/discover/movie?${buildTmdbParams("movie")}&page=${searchPage}`, 1, searchOpts).catch(() => ({ results: [] })),
+            tmdb(`/discover/tv?${buildTmdbParams("tv")}&page=${searchPage}`, 1, searchOpts).catch(() => ({ results: [] }))
           ]);
           const movs = (movData.results || []).map(m => ({ ...m, media_type: "movie" }));
           const tvs = (tvData.results || []).map(t => ({ ...t, media_type: "tv" }));
@@ -5254,7 +5379,7 @@ function initSearchPage() {
           if ((movData.page >= (movData.total_pages || 1)) && (tvData.page >= (tvData.total_pages || 1))) hasMorePages = false;
         } else {
           const media = current === "tv" ? "tv" : "movie";
-          const data = await tmdb(`/discover/${media}?sort_by=${sortParam}&vote_count.gte=30${gParam}${pParam}&page=${searchPage}`, 1, searchOpts);
+          const data = await tmdb(`/discover/${media}?${buildTmdbParams(media)}&page=${searchPage}`, 1, searchOpts);
           items = (data.results || []).map(i => ({ ...i, media_type: media }));
           if (data.page >= (data.total_pages || 1)) hasMorePages = false;
         }
@@ -5297,7 +5422,22 @@ function initSearchPage() {
       if (!append) grid.textContent = "";
 
       if (!items.length && !append) {
-        grid.innerHTML = `<div class="no-results"><h3>Nothing matched</h3><p>Try adjusting your search query or filters.</p></div>`;
+        grid.innerHTML = `<div class="no-results">
+          <h3>Nothing matched</h3>
+          <p>Try adjusting your search query or filters.</p>
+          <button type="button" class="btn-ghost reset-filters-btn" style="margin-top:12px;padding:8px 16px;font-size:0.86rem">Reset filters</button>
+        </div>`;
+        grid.querySelector(".reset-filters-btn")?.addEventListener("click", () => {
+          if (input) input.value = "";
+          ["#filter-genre", "#filter-provider", "#filter-era", "#filter-rating", "#filter-sort"].forEach(sel => {
+            const el = $(sel);
+            if (el) el.value = el.querySelector("option")?.value || "all";
+          });
+          const url = new URL(location.href);
+          url.search = "";
+          history.replaceState(null, "", url);
+          doSearch("");
+        });
         if (status) status.textContent = "";
         renderRecent();
         return;
@@ -5336,29 +5476,37 @@ function initSearchPage() {
     $(sel)?.addEventListener("change", () => doSearch(input?.value.trim() || ""));
   });
 
+  if (genreId && $("#filter-genre")) {
+    $("#filter-genre").value = genreId;
+  }
+  if (providerId && $("#filter-provider")) {
+    $("#filter-provider").value = providerId;
+  }
   const q = params.get("q") || "";
   if (input && !q && !genreId && !isMobile() && !isTouch()) setTimeout(() => input.focus(), 120);
   if (input) {
     input.value = q;
     if (clear) clear.style.display = q ? "flex" : "none";
     input.addEventListener("input", () => {
+      const val = input.value.trim();
       if (clear) clear.style.display = input.value ? "flex" : "none";
+      if (filtersBar) filtersBar.hidden = current === "ai" || !!val;
       clearTimeout(timer);
-      if (!input.value.trim()) renderRecent();
-      if (current === "ai") { if (!input.value.trim()) doSearch(""); return; }
+      if (!val) renderRecent();
+      if (current === "ai") { if (!val) doSearch(""); return; }
       setBusy(true);
-      timer = setTimeout(() => doSearch(input.value.trim()), 220);
+      timer = setTimeout(() => doSearch(val), 220);
     });
     input.addEventListener("keydown", e => {
       if (e.key !== "Enter" || e.isComposing || current !== "ai") return;
       e.preventDefault();
       clearTimeout(timer);
-      closeInstant?.();
+      closeInstantSearch?.();
       doSearch(input.value.trim());
     });
     doSearch(q);
   }
-  clear?.addEventListener("click", () => { input.value = ""; clear.style.display = "none"; closeInstant?.(); doSearch(""); if (!isMobile() && !isTouch()) input.focus(); });
+  clear?.addEventListener("click", () => { input.value = ""; clear.style.display = "none"; closeInstantSearch?.(); doSearch(""); if (!isMobile() && !isTouch()) input.focus(); });
   renderRecent();
 }
 
@@ -6089,6 +6237,31 @@ function initSettingsPage() {
     });
   }
 
+  $("#vault-export-json-btn")?.addEventListener("click", () => {
+    exportUserDataJSON();
+    toast("Backup JSON downloaded");
+  });
+
+  $("#vault-export-csv-btn")?.addEventListener("click", () => {
+    exportUserHistoryCSV();
+    toast("Watch history CSV downloaded");
+  });
+
+  const vaultInput = $("#vault-file-input");
+  $("#vault-import-btn")?.addEventListener("click", () => vaultInput?.click());
+  vaultInput?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await importAndMergeUserData(file);
+      toast("Backup successfully merged and restored!");
+    } catch (err) {
+      toast(err.message || "Failed to import backup");
+    } finally {
+      vaultInput.value = "";
+    }
+  });
+
   $("#clear-progress")?.addEventListener("click", () => {
     safeRemoveItem(Progress.key);
     toast("Continue watching cleared");
@@ -6645,3 +6818,142 @@ document.addEventListener("DOMContentLoaded", () => {
     if (header) header.innerHTML = `<p style="color:var(--text-muted)">Something went wrong loading this page. Try refreshing.</p>`;
   }
 });
+
+function exportUserDataJSON() {
+  const data = {
+    version: "3.2",
+    exportedAt: new Date().toISOString(),
+    watchlist: MyList.get(),
+    folders: Folders.get(),
+    progress: Progress.get(),
+    settings: {
+      accent: SETTINGS.get(SETTINGS.accentKey),
+      theme: SETTINGS.get(SETTINGS.themeKey),
+      prefLang: SETTINGS.get(SETTINGS.prefLangKey),
+      bgStyle: SETTINGS.get(SETTINGS.bgStyleKey),
+      provider: getProvider()
+    }
+  };
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `OsirisWatch_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportUserHistoryCSV() {
+  const prog = Progress.get();
+  const rows = [["Title", "Type", "Season", "Episode", "Progress %", "Saved At"]];
+
+  Object.values(prog || {}).forEach(p => {
+    rows.push([
+      `"${(p.title || p.id || 'Untitled').replace(/"/g, '""')}"`,
+      p.mediaType || "movie",
+      p.season || 1,
+      p.episode || 1,
+      `${Math.round(p.progress || 0)}%`,
+      new Date(p.savedAt || Date.now()).toISOString()
+    ]);
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `OsirisWatch_History_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function importAndMergeUserData(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error("No file selected"));
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const text = e.target.result;
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== "object") {
+          return reject(new Error("Invalid backup format: root must be an object"));
+        }
+
+        // Validate & Merge Watchlist
+        if (Array.isArray(parsed.watchlist)) {
+          const currentList = MyList.get();
+          const existingMap = new Map();
+          currentList.forEach(item => {
+            if (item && item.id) existingMap.set(`${item.type || 'movie'}_${item.id}`, item);
+          });
+          parsed.watchlist.forEach(item => {
+            if (item && item.id) {
+              const key = `${item.type || 'movie'}_${item.id}`;
+              if (!existingMap.has(key)) {
+                existingMap.set(key, item);
+              }
+            }
+          });
+          MyList.save([...existingMap.values()]);
+        }
+
+        // Validate & Merge Folders
+        if (Array.isArray(parsed.folders)) {
+          const currentFolders = Folders.get();
+          const folderMap = new Map(currentFolders.map(f => [f.id, f]));
+          parsed.folders.forEach(f => {
+            if (f && f.name && f.id) {
+              if (!folderMap.has(f.id)) {
+                folderMap.set(f.id, f);
+              } else {
+                // Merge items inside folder
+                const existingF = folderMap.get(f.id);
+                const itemKeys = new Set((existingF.items || []).map(it => `${it.type}_${it.id}`));
+                (f.items || []).forEach(it => {
+                  if (it && it.id && !itemKeys.has(`${it.type}_${it.id}`)) {
+                    existingF.items = existingF.items || [];
+                    existingF.items.push(it);
+                  }
+                });
+              }
+            }
+          });
+          Folders.save([...folderMap.values()]);
+        }
+
+        // Validate & Merge Progress
+        if (parsed.progress && typeof parsed.progress === "object" && !Array.isArray(parsed.progress)) {
+          const currentProg = Progress.get();
+          Object.keys(parsed.progress).forEach(k => {
+            const incoming = parsed.progress[k];
+            if (incoming && incoming.id && Number.isFinite(incoming.progress)) {
+              const existing = currentProg[k];
+              if (!existing || (incoming.savedAt || 0) > (existing.savedAt || 0)) {
+                currentProg[k] = incoming;
+              }
+            }
+          });
+          Progress.saveAll(currentProg);
+        }
+
+        // Apply settings if present
+        if (parsed.settings && typeof parsed.settings === "object") {
+          if (parsed.settings.accent) SETTINGS.set(SETTINGS.accentKey, parsed.settings.accent);
+          if (parsed.settings.prefLang) SETTINGS.set(SETTINGS.prefLangKey, parsed.settings.prefLang);
+          if (parsed.settings.provider) setProvider(parsed.settings.provider);
+          applyGlobalSettings();
+        }
+
+        resolve(true);
+      } catch (err) {
+        reject(new Error("Malformed JSON backup file"));
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsText(file);
+  });
+}

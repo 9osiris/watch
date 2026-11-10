@@ -121,7 +121,7 @@
           <button type="button" class="settings-toggle" id="toggle-reduce-motion" aria-pressed="false"></button>
         </div>
         <div class="settings-toggle-row" style="margin-top:14px">
-          <div><strong>Preferred audio / subtitle language</strong><span>Default language preference</span></div>
+          <div><strong>Preferred audio / subtitle language</strong><span>Default language preference across metadata and search</span></div>
           <select id="settings-pref-lang" class="list-sort-select" aria-label="Preferred Language">
             <option value="en">English</option>
             <option value="es">Spanish</option>
@@ -130,6 +130,8 @@
             <option value="ja">Japanese</option>
             <option value="pt">Portuguese</option>
           </select>
+        </div>
+        <p class="settings-note" style="margin-top:8px">Third-party stream providers serve embedded audio and subtitle tracks independently; language preferences apply to TMDB title details and supported streams.</p>
       </section>
 
       <section class="settings-section">
@@ -140,7 +142,13 @@
 
       <section class="settings-section">
         <h2>Your data</h2>
-        <p class="settings-desc">Stored locally in your browser only.</p>
+        <p class="settings-desc">Stored locally in your browser only. Backup or restore your watchlist, folders, and history anytime.</p>
+        <div class="settings-actions" style="margin-bottom:12px">
+          <button type="button" class="settings-btn" id="vault-export-json-btn">Export Backup (JSON)</button>
+          <button type="button" class="settings-btn" id="vault-export-csv-btn">Export History (CSV)</button>
+          <button type="button" class="settings-btn" id="vault-import-btn">Import Backup</button>
+          <input type="file" id="vault-file-input" accept=".json" style="display:none" aria-label="Import Backup File" />
+        </div>
         <div class="settings-actions">
           <button type="button" class="settings-btn" id="clear-progress">Clear continue watching</button>
           <button type="button" class="settings-btn" id="clear-list">Clear My List</button>

@@ -224,3 +224,62 @@ test('mobile topnav centers OsirisWatch wordmark and hides on scroll down', () =
   assert.ok(script.includes('el.classList.remove("nav-hidden");'));
 });
 
+test('Phase 1: Broken features regression suite', () => {
+  const script = fs.readFileSync(path.resolve(__dirname, '../orc-script.js'), 'utf8');
+  const searchHtml = fs.readFileSync(path.resolve(__dirname, '../search.html'), 'utf8');
+  const settingsHtml = fs.readFileSync(path.resolve(__dirname, '../settings.html'), 'utf8');
+
+  // 1. TV episode click calls $$(".ep-row")
+  assert.ok(script.includes('$$(".ep-row").forEach(x => x.classList.remove("on"))'));
+
+  // 2. AI search uses closeInstantSearch without typo
+  assert.ok(script.includes('closeInstantSearch?.()'));
+  assert.ok(!script.includes('closeInstant?.()'));
+
+  // 3. Provider filter maps all required providers
+  assert.ok(script.includes('paramount: 531'));
+  assert.ok(script.includes('peacock: 386'));
+  assert.ok(script.includes('crunchyroll: 283'));
+  assert.ok(script.includes('amc: 528'));
+  assert.ok(searchHtml.includes('value="paramount"'));
+  assert.ok(searchHtml.includes('value="peacock"'));
+  assert.ok(searchHtml.includes('value="crunchyroll"'));
+  assert.ok(searchHtml.includes('value="amc"'));
+
+  // 4. Genre filter maps Movie to TV IDs
+  assert.ok(script.includes('gId === "28"'));
+  assert.ok(script.includes('"10759"'));
+  assert.ok(script.includes('"10765"'));
+
+  // 5. Era, rating and sort filters with Newest date bounds & reset button
+  assert.ok(script.includes('first_air_date.desc'));
+  assert.ok(script.includes('primary_release_date.lte'));
+  assert.ok(script.includes('Reset filters'));
+
+  // 6. Channels search both movie & tv
+  assert.ok(script.includes('type=all&provider='));
+
+  // 7. No fake progress: 5 on play clicks; finished at >= 95 filtered out
+  assert.ok(!script.includes('progress: 5'));
+  assert.ok(script.includes('it.progress < 95'));
+  assert.ok(script.includes('cw-remove-btn'));
+
+  // 8. Progress tracking badge per provider
+  assert.ok(script.includes('provider-track-badge on'));
+  assert.ok(script.includes('provider-track-badge off'));
+
+  // 9. Preferred language wired to tmdb and annotated in settings
+  assert.ok(script.includes('language=${encodeURIComponent(prefLang)}'));
+  assert.ok(settingsHtml.includes('Third-party stream providers serve embedded audio'));
+
+  // 10. Notification bell populated with watchlist TV episodes
+  assert.ok(script.includes('loadWatchlistEpisodes'));
+  assert.ok(script.includes('last_episode_to_air'));
+
+  // 11. Backup import/export in Settings under "Your data" with merge
+  assert.ok(settingsHtml.includes('id="vault-export-json-btn"'));
+  assert.ok(settingsHtml.includes('id="vault-export-csv-btn"'));
+  assert.ok(settingsHtml.includes('id="vault-import-btn"'));
+  assert.ok(script.includes('importAndMergeUserData'));
+});
+
