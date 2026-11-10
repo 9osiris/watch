@@ -2179,7 +2179,24 @@ function initSidebar(active) {
 
   if (!el._scrollBound) {
     el._scrollBound = true;
-    const onScroll = () => el.classList.toggle("scrolled", window.scrollY > 12);
+    let lastY = window.scrollY || 0;
+    const onScroll = () => {
+      const currentY = window.scrollY || 0;
+      el.classList.toggle("scrolled", currentY > 12);
+
+      // Mobile: animate away wordmark when scrolling down, restore when scrolling up or at top
+      if (isMobile()) {
+        const delta = currentY - lastY;
+        if (currentY > 60 && delta > 6) {
+          el.classList.add("nav-hidden");
+        } else if (delta < -8 || currentY <= 30) {
+          el.classList.remove("nav-hidden");
+        }
+      } else {
+        el.classList.remove("nav-hidden");
+      }
+      lastY = currentY;
+    };
     window.addEventListener("scroll", throttle(onScroll, 50), { passive: true });
     onScroll();
   }

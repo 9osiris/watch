@@ -2951,13 +2951,38 @@ body.theater-mode .player-wrap {
   .splash-glass-word { font-size: clamp(1.4rem, 7.5vw, 1.9rem); }
   .splash-glass-logo { width: clamp(38px, 10vw, 48px); }
 
-  /* Mobile: strip the top bar chrome, keep only the OsirisWatch wordmark, never block taps on underlying controls */
+  /* Mobile: strip the top bar chrome, center OsirisWatch wordmark, animate away when scrolling down */
   .topnav-links, .topnav-burger, .topnav-actions { display: none !important; }
   .topnav::before, .topnav::after { display: none !important; }
-  .topnav { background: transparent !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; pointer-events: none !important; }
-  .topnav-inner { justify-content: flex-start; pointer-events: none !important; }
-  .topnav-logo { pointer-events: auto !important; }
-  .topnav-word { text-shadow: 0 1px 10px rgba(0,0,0,0.55); }
+  .topnav {
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    pointer-events: none !important;
+    transition: transform 0.35s var(--ease), opacity 0.35s var(--ease);
+  }
+  .topnav-inner {
+    justify-content: center !important;
+    text-align: center;
+    pointer-events: none !important;
+  }
+  .topnav-logo {
+    pointer-events: auto !important;
+    justify-content: center;
+    margin: 0 auto;
+    transition: transform 0.35s var(--ease), opacity 0.35s var(--ease);
+  }
+  .topnav-word {
+    font-size: 1.15rem;
+    letter-spacing: -0.015em;
+    text-shadow: 0 1px 10px rgba(0,0,0,0.55);
+  }
+  .topnav.nav-hidden {
+    transform: translateY(calc(-100% - var(--safe-top)));
+    opacity: 0;
+    pointer-events: none !important;
+  }
 
   /* Leave room for the floating bottom pill nav */
   .app-shell { padding-bottom: calc(84px + var(--safe-bottom)); }

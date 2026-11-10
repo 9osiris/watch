@@ -210,3 +210,17 @@ test('backdrop default settings match flow, 0.1x speed, and 22% grain', () => {
   assert.ok(html.includes('id="settings-bg-grain-val" class="settings-range-val">22%</output>'));
 });
 
+test('mobile topnav centers OsirisWatch wordmark and hides on scroll down', () => {
+  const styles = fs.readFileSync(path.resolve(__dirname, '../orc-styles.css'), 'utf8');
+  const script = fs.readFileSync(path.resolve(__dirname, '../orc-script.js'), 'utf8');
+
+  // Verify mobile styles center the brand and define nav-hidden transition
+  assert.ok(styles.includes('justify-content: center !important;'));
+  assert.ok(styles.includes('.topnav.nav-hidden {'));
+  assert.ok(styles.includes('transform: translateY(calc(-100% - var(--safe-top)));'));
+
+  // Verify mobile scroll logic toggles nav-hidden based on delta and scrollY
+  assert.ok(script.includes('el.classList.add("nav-hidden");'));
+  assert.ok(script.includes('el.classList.remove("nav-hidden");'));
+});
+
