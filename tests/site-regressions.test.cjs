@@ -196,3 +196,17 @@ test("detail pages use seamless alpha-mask fade, ambient color bleed, persistent
   assert.match(styles, /\.syw-ai-badge/);
   assert.doesNotMatch(styles, /#4f46e5|#818cf8|#c7d2fe|rgba\(49,\s*46,\s*129|rgba\(79,\s*70,\s*229/);
 });
+
+test('backdrop default settings match flow, 0.1x speed, and 22% grain', () => {
+  const script = fs.readFileSync(path.resolve(__dirname, '../orc-script.js'), 'utf8');
+  const html = fs.readFileSync(path.resolve(__dirname, '../settings.html'), 'utf8');
+
+  assert.ok(script.includes('SETTINGS.get(SETTINGS.bgStyleKey, "flow") || "flow"'));
+  assert.ok(script.includes('SETTINGS.get(SETTINGS.bgSpeedKey, "0.1")'));
+  assert.ok(script.includes('SETTINGS.get(SETTINGS.bgGrainKey, "0.22")'));
+  assert.ok(html.includes('id="settings-bg-speed" class="settings-range" min="0" max="2" step="0.1" value="0.1"'));
+  assert.ok(html.includes('id="settings-bg-grain" class="settings-range" min="0" max="0.35" step="0.02" value="0.22"'));
+  assert.ok(html.includes('id="settings-bg-speed-val" class="settings-range-val">0.1x</output>'));
+  assert.ok(html.includes('id="settings-bg-grain-val" class="settings-range-val">22%</output>'));
+});
+

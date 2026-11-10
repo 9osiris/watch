@@ -905,13 +905,13 @@ function buildBackdropPalette(style, baseHex, isLight) {
 }
 
 function getBackdropConfig() {
-  const rawStyle = SETTINGS.get(SETTINGS.bgStyleKey, "rings") || "rings";
+  const rawStyle = SETTINGS.get(SETTINGS.bgStyleKey, "flow") || "flow";
   const validStyle = BACKDROP_STYLES.some(s => s.id === rawStyle) ? rawStyle : "rings";
   const isLight = SETTINGS.get(SETTINGS.themeKey, "dark") === "light";
   const baseHex = getBackdropBaseHex();
-  const rawSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.6"));
+  const rawSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.1"));
   const speed = Number.isFinite(rawSpeed) ? Math.max(0, Math.min(2, rawSpeed)) : 0.6;
-  const rawGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0"));
+  const rawGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.22"));
   const grain = Number.isFinite(rawGrain) ? Math.max(0, Math.min(0.4, rawGrain)) : 0;
   const reduceMotion = SETTINGS.get(SETTINGS.reduceMotionKey) === "1";
   const colors = buildBackdropPalette(validStyle === "none" ? "rings" : validStyle, baseHex, isLight);
@@ -5926,7 +5926,7 @@ function initSettingsPage() {
   const bgStylesBox = $("#settings-backdrop-styles");
   if (bgStylesBox) {
     bgStylesBox.textContent = "";
-    const curStyle = SETTINGS.get(SETTINGS.bgStyleKey, "rings") || "rings";
+    const curStyle = SETTINGS.get(SETTINGS.bgStyleKey, "flow") || "flow";
     BACKDROP_STYLES.forEach(s => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -5992,7 +5992,7 @@ function initSettingsPage() {
   const speedInput = $("#settings-bg-speed");
   const speedOutput = $("#settings-bg-speed-val");
   if (speedInput) {
-    const initSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.6"));
+    const initSpeed = parseFloat(SETTINGS.get(SETTINGS.bgSpeedKey, "0.1"));
     const sVal = Number.isFinite(initSpeed) ? initSpeed : 0.6;
     speedInput.value = String(sVal);
     if (speedOutput) speedOutput.textContent = `${sVal.toFixed(1)}x`;
@@ -6007,7 +6007,7 @@ function initSettingsPage() {
   const grainInput = $("#settings-bg-grain");
   const grainOutput = $("#settings-bg-grain-val");
   if (grainInput) {
-    const initGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0"));
+    const initGrain = parseFloat(SETTINGS.get(SETTINGS.bgGrainKey, "0.22"));
     const gVal = Number.isFinite(initGrain) ? initGrain : 0;
     grainInput.value = String(gVal);
     if (grainOutput) grainOutput.textContent = `${Math.round(gVal * 100)}%`;
