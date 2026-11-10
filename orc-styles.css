@@ -2951,8 +2951,8 @@ body.theater-mode .player-wrap {
   .splash-glass-word { font-size: clamp(1.4rem, 7.5vw, 1.9rem); }
   .splash-glass-logo { width: clamp(38px, 10vw, 48px); }
 
-  /* Mobile: strip the top bar chrome, center OsirisWatch wordmark, animate away when scrolling down */
-  .topnav-links, .topnav-burger, .topnav-actions { display: none !important; }
+  /* Mobile: strip the top bar chrome, center OsirisWatch wordmark, keep Discord icon accessible */
+  .topnav-links, .topnav-burger { display: none !important; }
   .topnav::before, .topnav::after { display: none !important; }
   .topnav {
     background: transparent !important;
@@ -2963,6 +2963,7 @@ body.theater-mode .player-wrap {
     transition: transform 0.35s var(--ease), opacity 0.35s var(--ease);
   }
   .topnav-inner {
+    position: relative;
     justify-content: center !important;
     text-align: center;
     pointer-events: none !important;
@@ -2972,6 +2973,24 @@ body.theater-mode .player-wrap {
     justify-content: center;
     margin: 0 auto;
     transition: transform 0.35s var(--ease), opacity 0.35s var(--ease);
+  }
+  .topnav-actions {
+    position: absolute;
+    right: var(--gutter);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    pointer-events: auto !important;
+    z-index: 10;
+  }
+  .topnav-actions .topnav-icon[aria-label="Search"] {
+    display: none !important;
+  }
+  .topnav-actions .topnav-icon[aria-label="Discord"] {
+    display: inline-flex !important;
+    pointer-events: auto;
   }
   .topnav-word {
     font-size: 1.15rem;
