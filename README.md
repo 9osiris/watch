@@ -2,6 +2,8 @@ Open Source Movie Website.. Can find at https://watch.osiris.rocks
 
 Website may not be up for long due to risk of domain seize or host issues.
 
+And btw, this is OBVIOUSLY vibe coded don't get on my ass abt it because idrc.
+
 ## Dev Log
 - Fixed asynchronous hero transition bug where color bleed would lag behind the image load.
 - Added bulletproof CORS proxy fallback to canvas extraction.
