@@ -10,6 +10,10 @@
       "destination": "/tv.html"
     },
     {
+      "source": "/anime",
+      "destination": "/anime.html"
+    },
+    {
       "source": "/search",
       "destination": "/search.html"
     },
@@ -68,6 +72,11 @@
     {
       "source": "/tv.html",
       "destination": "/tv",
+      "permanent": true
+    },
+    {
+      "source": "/anime.html",
+      "destination": "/anime",
       "permanent": true
     },
     {

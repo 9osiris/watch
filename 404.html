@@ -47,6 +47,17 @@
       margin-top: 12px;
     }
   </style>
+  <script>
+    (function() {
+      try {
+        var t = localStorage.getItem("orc_theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+        var a = localStorage.getItem("orc_accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+        if (sessionStorage.getItem("orc_warm_nav") === "1") document.documentElement.classList.add("orc-warm-nav");
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="page-404">
   <header class="topnav" id="topnav">
@@ -57,13 +68,15 @@
       <nav class="topnav-links" aria-label="Primary">
         <a href="/" class="topnav-link">Home</a>
         <a href="/search" class="topnav-link">Discover</a>
+        <a href="/anime" class="topnav-link">Anime</a>
         <a href="/list" class="topnav-link">My List</a>
         <a href="/settings" class="topnav-link">Settings</a>
       </nav>
       <div class="topnav-actions">
-        <a href="/search" class="topnav-icon" aria-label="Search">
+        <a href="/search" class="topnav-icon" id="topnav-search-btn" aria-label="Search" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         </a>
+        <button type="button" class="topnav-icon topnav-user-btn" id="topnav-user-btn" aria-label="Account and menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
       </div>
     </div>
   </header>

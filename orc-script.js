@@ -14,24 +14,39 @@ const IMG_ORIG  = "https://image.tmdb.org/t/p/original";
 const IMG_W780  = "https://image.tmdb.org/t/p/w780";
 const BRAND     = "Osiris Watch";
 const ACCENT     = "3b82f6";
+const siteOrigin = (typeof location !== "undefined" && /^https?:/i.test(location.origin || "")) ? location.origin : "https://watch.osiris.rocks";
 
 const APP_ROUTES = {
   home: "/",
+  anime: "/anime.html",
   movie: "/movie.html",
   tv: "/tv.html",
   search: "/search.html",
   list: "/list.html",
   settings: "/settings.html",
   dmca: "/dmca.html",
+  privacy: "/privacy.html",
 };
 
 const CLEAN_ROUTE_PATHS = {
+  anime: "/anime",
   movie: "/movie",
   tv: "/tv",
   search: "/search",
   list: "/list",
   settings: "/settings",
   dmca: "/dmca",
+  privacy: "/privacy",
+};
+
+const TMDB_GENRES = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy",
+  80: "Crime", 99: "Documentary", 18: "Drama", 10751: "Family",
+  14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
+  9648: "Mystery", 10749: "Romance", 878: "Sci-Fi", 53: "Thriller",
+  10752: "War", 37: "Western", 10759: "Action", 10762: "Kids",
+  10763: "News", 10764: "Reality", 10765: "Sci-Fi", 10766: "Soap",
+  10767: "Talk", 10768: "Politics"
 };
 
 function routeUrl(route, params = "") {
@@ -96,6 +111,13 @@ const ICONS = {
   list: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>`,
   bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  history: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>`,
+  party: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  chevronDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
+  chevronRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
   back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L19 7"/></svg>`,
@@ -329,6 +351,29 @@ const SUPABASE_URL = APP_CONFIG.SUPABASE_URL;
 const SUPABASE_ANON_KEY = APP_CONFIG.SUPABASE_ANON_KEY;
 
 let supabaseClient = null;
+let _supabaseSdkPromise = null;
+function ensureSupabaseSdk() {
+  if (window.supabase) return Promise.resolve(window.supabase);
+  if (_supabaseSdkPromise) return _supabaseSdkPromise;
+  _supabaseSdkPromise = new Promise(resolve => {
+    const existing = document.querySelector('script[data-orc-supabase="1"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(window.supabase || null), { once: true });
+      existing.addEventListener("error", () => resolve(null), { once: true });
+      return;
+    }
+    const sc = document.createElement("script");
+    sc.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js";
+    sc.async = true;
+    sc.crossOrigin = "anonymous";
+    sc.dataset.orcSupabase = "1";
+    sc.onload = () => resolve(window.supabase || null);
+    sc.onerror = () => { _supabaseSdkPromise = null; resolve(null); };
+    document.head.appendChild(sc);
+  });
+  return _supabaseSdkPromise;
+}
+
 function getSupabaseClient() {
   if (window.supabase) {
     try {
@@ -338,6 +383,37 @@ function getSupabaseClient() {
   }
   return null;
 }
+
+async function getSupabaseClientAsync() {
+  await ensureSupabaseSdk();
+  return getSupabaseClient();
+}
+
+const LocalProfile = {
+  key: "orc_local_profile",
+  get() {
+    try {
+      const raw = safeGetItem(this.key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          return {
+            username: String(parsed.username || "Guest").trim().slice(0, 32) || "Guest",
+            avatarUrl: typeof parsed.avatarUrl === "string" ? parsed.avatarUrl.trim() : "",
+          };
+        }
+      }
+    } catch {}
+    return { username: "Guest", avatarUrl: "" };
+  },
+  set(partial) {
+    const next = { ...this.get(), ...(partial || {}) };
+    next.username = String(next.username || "Guest").trim().slice(0, 32) || "Guest";
+    next.avatarUrl = typeof next.avatarUrl === "string" ? next.avatarUrl.trim() : "";
+    safeSetItem(this.key, JSON.stringify(next));
+    return next;
+  }
+};
 
 // ===== Swipe-To-Dismiss Mobile Modals =====
 function initSwipeToDismissModals() {
@@ -1144,13 +1220,25 @@ function togglePlayerFullscreen() {
 
 function loadPlayerFrame(frameEl, url) {
   if (!frameEl) return;
-  frameEl.innerHTML = `<div class="spinner player-loading" style="position:absolute;top:50%;left:50%;margin:-18px 0 0 -18px" aria-hidden="true"></div>`;
+  frameEl.innerHTML = `
+    <div class="player-skel-overlay player-loading" aria-hidden="true">
+      <div class="player-skel-shimmer skel-pulse"></div>
+      <div class="player-skel-center">
+        <div class="player-skel-play skel-pulse"></div>
+        <span class="player-skel-bar skel-pulse"></span>
+      </div>
+      <div class="player-skel-controls">
+        <span class="player-skel-dot skel-pulse"></span>
+        <span class="player-skel-track skel-pulse"></span>
+        <span class="player-skel-time skel-pulse"></span>
+      </div>
+    </div>`;
   const iframe = createPlayerIframe(url);
   if (!iframe) {
     frameEl.innerHTML = `<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center">Could not load this stream source.</p>`;
     return;
   }
-  const clearLoading = () => frameEl.querySelector(".player-loading")?.remove();
+  const clearLoading = () => frameEl.querySelectorAll(".player-loading, .player-skel-overlay").forEach(n => n.remove());
   const failTimer = setTimeout(() => {
     clearLoading();
     if (!frameEl.querySelector(".player-fallback-overlay")) {
@@ -1189,6 +1277,7 @@ function loadPlayerFrame(frameEl, url) {
 let playerGuardReady = false;
 
 function initPlayerGuard() {
+  window.__orcPlayerLockUrl = location.href;
   if (playerGuardReady) return;
   playerGuardReady = true;
 
@@ -1197,13 +1286,13 @@ function initPlayerGuard() {
     if (e.button === 1 && $("#player-frame iframe")) e.preventDefault();
   }, true);
 
-  const lockUrl = location.href;
   window.addEventListener("blur", () => {
     if (isPlayerFullscreen() || !$("#player-frame iframe")) return;
     window.__orcBlurAt = Date.now();
   });
   window.addEventListener("focus", () => {
     if (!window.__orcBlurAt || isPlayerFullscreen()) return;
+    const lockUrl = window.__orcPlayerLockUrl || location.href;
     if (Date.now() - window.__orcBlurAt < 800 && location.href !== lockUrl) {
       history.replaceState(null, "", lockUrl);
     }
@@ -1236,6 +1325,24 @@ const SupabaseSync = {
     window.addEventListener("online", () => this.processOfflineQueue());
     setInterval(() => this.processOfflineQueue(), 60000);
 
+    const hasStoredAuth = (() => {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i) || "";
+          if (k.startsWith("sb-") && k.includes("auth-token")) return true;
+        }
+      } catch {}
+      return false;
+    })();
+    if (hasStoredAuth && !window.supabase) {
+      ensureSupabaseSdk().then(() => {
+        if (getSupabaseClient()) {
+          this.initializedListener = false;
+          this.init();
+          initAuthUI();
+        }
+      });
+    }
     const client = getSupabaseClient();
     if (client && client.auth) {
       try {
@@ -1356,7 +1463,7 @@ const SupabaseSync = {
   },
 
   async deleteAccount() {
-    const client = getSupabaseClient();
+    const client = await getSupabaseClientAsync();
     if (!client) throw new Error("Supabase client is not initialized.");
     const user = await this.getUser();
     if (!user) throw new Error("User is not signed in.");
@@ -1369,7 +1476,7 @@ const SupabaseSync = {
   },
 
   async getUser() {
-    const client = getSupabaseClient();
+    const client = window.supabase ? getSupabaseClient() : null;
     if (!client) return null;
     try {
       const { data: { session } } = await client.auth.getSession();
@@ -1378,7 +1485,7 @@ const SupabaseSync = {
   },
 
   async signUp(email, password, username) {
-    const client = getSupabaseClient();
+    const client = await getSupabaseClientAsync();
     if (!client) throw new Error("Supabase client is not initialized.");
     const uname = (username || email.split("@")[0]).trim();
     const joinedAt = new Date().toISOString();
@@ -1399,7 +1506,7 @@ const SupabaseSync = {
   },
 
   async signIn(email, password) {
-    const client = getSupabaseClient();
+    const client = await getSupabaseClientAsync();
     if (!client) throw new Error("Supabase client is not initialized.");
     const { data, error } = await client.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -1411,7 +1518,7 @@ const SupabaseSync = {
   },
 
   async signOut() {
-    const client = getSupabaseClient();
+    const client = await getSupabaseClientAsync();
     if (!client) return;
     try { await client.auth.signOut(); } catch (err) { console.warn('Caught error:', err); }
     safeRemoveItem("orc_local_meta");
@@ -1567,7 +1674,7 @@ const SupabaseSync = {
   },
 
   async resetPassword(email) {
-    const client = getSupabaseClient();
+    const client = await getSupabaseClientAsync();
     if (!client) throw new Error("Supabase client is not initialized.");
     const { data, error } = await client.auth.resetPasswordForEmail(email, {
       redirectTo: authRedirectUrl()
@@ -1725,10 +1832,11 @@ const SupabaseSync = {
   }
 };
 
-const ACCOUNTS_UI_ENABLED = false;
+const ACCOUNTS_UI_ENABLED = true;
 if (ACCOUNTS_UI_ENABLED) SupabaseSync.init();
 
 async function initAuthUI() {
+  if (typeof refreshUserMenuUI === "function") refreshUserMenuUI();
   const btn = $("#topnav-account-btn");
   if (!btn) return;
   if (!ACCOUNTS_UI_ENABLED) {
@@ -1760,7 +1868,7 @@ async function initAuthUI() {
   }
 }
 
-function openAuthModal() {
+function openAuthModal(initialTab = "signin") {
   let modal = $("#auth-modal");
   if (!modal) {
     modal = document.createElement("div");
@@ -1919,13 +2027,14 @@ function openAuthModal() {
 
   modal.querySelector("#auth-main-view").style.display = "flex";
   modal.querySelector("#auth-reset-view").style.display = "none";
-  modal.classList.add("open");
-  trapModalFocus(modal, "Save to Folder");
+  const wantTab = initialTab === "signup" ? "signup" : "signin";
+  const tabBtn = modal.querySelector(`.auth-tab[data-tab="${wantTab}"]`);
+  if (tabBtn) tabBtn.click();
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       modal.classList.add("open");
       trapModalFocus(modal, "Authentication");
-      setTimeout(() => modal.querySelector("#auth-email")?.focus(), 120);
+      setTimeout(() => modal.querySelector(wantTab === "signup" ? "#auth-username" : "#auth-email")?.focus(), 120);
     });
   });
 }
@@ -1947,9 +2056,9 @@ let surpriseSpinInterval = null;
 function closeModal(target = ".modal-overlay") {
   let list = [];
   if (!target) {
-    list = $(".modal-overlay");
+    list = Array.from($$(".modal-overlay"));
   } else if (typeof target === "string") {
-    list = $(target);
+    list = Array.from($$(target));
   } else if (target instanceof Element) {
     list = [target];
   } else if (Array.isArray(target) || target instanceof NodeList) {
@@ -2149,22 +2258,26 @@ function detectPage() {
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
   if ($("#player-frame") && id) return $("#ep-block") ? "tv" : "movie";
+  if ($("#anime-grid-wrap") || document.body.classList.contains("anime-page")) return "anime";
   if ($("#list-grid") || document.body.classList.contains("list-page")) return "list";
   if ($("#main-search-input") || document.body.classList.contains("search-page")) return "search";
   if ($(".settings-body") || document.body.classList.contains("settings-page")) return "settings";
+  if (document.body.classList.contains("privacy-page") || (location.pathname || "").toLowerCase().includes("privacy")) return "privacy";
   if ($(".legal-body") || document.body.classList.contains("legal-page")) return "dmca";
   if ($("#categories") || $("#hero-title") || $("#splash-screen")) return "home";
 
   const seg = (location.pathname.split("/").pop() || "").replace(/\.html$/i, "").toLowerCase();
-  const bySeg = { movie: "movie", tv: "tv", search: "search", list: "list", settings: "settings", dmca: "dmca", index: "home", osiriscinema: "home", wfc: "wfc" };
+  const bySeg = { movie: "movie", tv: "tv", anime: "anime", search: "search", list: "list", settings: "settings", dmca: "dmca", privacy: "privacy", index: "home", osiriscinema: "home", wfc: "wfc" };
   if (bySeg[seg]) return bySeg[seg];
 
   const p = location.pathname.replace(/\/$/, "") || "/";
+  if (pagePathMatches(p, "anime")) return "anime";
   if (pagePathMatches(p, "movie")) return "movie";
   if (pagePathMatches(p, "tv")) return "tv";
   if (pagePathMatches(p, "search")) return "search";
   if (pagePathMatches(p, "list")) return "list";
   if (pagePathMatches(p, "settings")) return "settings";
+  if (pagePathMatches(p, "privacy")) return "privacy";
   if (pagePathMatches(p, "dmca")) return "dmca";
   return "home";
 }
@@ -2196,6 +2309,7 @@ function buildMobilePillNav(active) {
   const items = [
     { href: homeUrl(), label: "Home", icon: ICONS.home, key: "home" },
     { href: routeUrl("search"), label: "Discover", icon: ICONS.search, key: "search" },
+    { href: routeUrl("anime"), label: "Anime", icon: ICONS.star, key: "anime" },
     { href: routeUrl("list"), label: "My List", icon: ICONS.bookmark, key: "list" },
     { href: routeUrl("settings"), label: "Settings", icon: ICONS.settings, key: "settings" },
   ];
@@ -2214,12 +2328,24 @@ function buildMobilePillNav(active) {
 
   nav.querySelectorAll(".pill-nav-item").forEach(a => {
     const key = a.dataset.navKey;
-    const prewarm = () => prewarmNavKey(key);
+    const prewarm = () => {
+      prewarmNavKey(key);
+      if (typeof SeamlessRouter !== "undefined") SeamlessRouter.prefetch(a.href);
+    };
     a.addEventListener("touchstart", prewarm, { passive: true, once: true });
     a.addEventListener("mouseenter", prewarm, { passive: true, once: true });
-    a.addEventListener("click", () => {
-      nav.querySelectorAll(".pill-nav-item").forEach(el => el.classList.remove("active"));
+    a.addEventListener("click", e => {
+      try { sessionStorage.setItem("orc_warm_nav", "1"); document.documentElement.classList.add("orc-warm-nav"); } catch {}
+      nav.querySelectorAll(".pill-nav-item").forEach(el => {
+        el.classList.remove("active");
+        el.removeAttribute("aria-current");
+      });
       a.classList.add("active");
+      a.setAttribute("aria-current", "page");
+      if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0 && typeof SeamlessRouter !== "undefined") {
+        e.preventDefault();
+        SeamlessRouter.go(a.href);
+      }
     });
   });
 
@@ -2348,14 +2474,15 @@ function initSidebar(active) {
         <nav class="topnav-links" aria-label="Primary">
           ${link(homeUrl(), "Home", active === "home")}
           ${link(routeUrl("search"), "Discover", active === "search" || active === "movies" || active === "tv")}
+          ${link(routeUrl("anime"), "Anime", active === "anime")}
           ${link(routeUrl("list"), "My List", active === "list")}
           ${link(routeUrl("settings"), "Settings", active === "settings")}
         </nav>
         <div class="topnav-actions">
-          <a href="${routeUrl("search")}" class="topnav-icon${active === "search" ? " active" : ""}" aria-label="Search">${ICONS.search}</a>
+          <a href="${routeUrl("search")}" class="topnav-icon${active === "search" ? " active" : ""}" id="topnav-search-btn" aria-label="Search" aria-expanded="false">${ICONS.search}</a>
           <button type="button" class="topnav-icon topnav-bell-btn" id="topnav-bell-btn" aria-label="Notifications" aria-expanded="false">${ICONS.bell}</button>
           <a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" class="topnav-icon" aria-label="Discord">${ICONS.discord}</a>
-          <button type="button" class="topnav-icon topnav-account-btn" id="topnav-account-btn" aria-label="Account" hidden style="display:none">${ICONS.user}</button>
+          <button type="button" class="topnav-icon topnav-user-btn" id="topnav-user-btn" aria-label="Account and menu" aria-expanded="false">${ICONS.user}</button>
           <button type="button" class="topnav-burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
         </div>
       </div>`;
@@ -2364,6 +2491,7 @@ function initSidebar(active) {
       const href = a.getAttribute("href") || "";
       let isAct = false;
       if (active === "home" && (href === "/" || href.endsWith("index.html") || href === homeUrl())) isAct = true;
+      else if (active === "anime" && href.includes("anime")) isAct = true;
       else if ((active === "search" || active === "movies" || active === "tv") && href.includes("search")) isAct = true;
       else if (active === "list" && href.includes("list")) isAct = true;
       else if (active === "settings" && href.includes("settings")) isAct = true;
@@ -2378,26 +2506,39 @@ function initSidebar(active) {
 
   initAuthUI();
   initNotificationDropdown();
+  if (typeof initHeaderSearch === "function") initHeaderSearch();
+  if (typeof initUserDropdown === "function") initUserDropdown();
 
-  const burger = el.querySelector(".topnav-burger");
-  burger?.addEventListener("click", e => {
-    e.stopPropagation();
-    const open = el.classList.toggle("nav-open");
-    burger.setAttribute("aria-expanded", open ? "true" : "false");
-  });
-  el.querySelectorAll(".topnav-link").forEach(a => {
-    const href = a.getAttribute("href") || "";
-    const key = href.includes("search") ? "search" : href === homeUrl() ? "home" : "";
-    if (key) {
-      const prewarm = () => prewarmNavKey(key);
+  if (!el._sidebarBound) {
+    el._sidebarBound = true;
+    const burger = el.querySelector(".topnav-burger");
+    burger?.addEventListener("click", e => {
+      e.stopPropagation();
+      const open = el.classList.toggle("nav-open");
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    el.querySelectorAll(".topnav-logo, .topnav-link").forEach(a => {
+      const href = a.getAttribute("href") || "";
+      const key = href.includes("search") ? "search" : href === homeUrl() ? "home" : "";
+      const prewarm = () => {
+        if (key) prewarmNavKey(key);
+        if (typeof SeamlessRouter !== "undefined") SeamlessRouter.prefetch(href);
+      };
       a.addEventListener("mouseenter", prewarm, { passive: true, once: true });
       a.addEventListener("touchstart", prewarm, { passive: true, once: true });
-    }
-    a.addEventListener("click", () => el.classList.remove("nav-open"));
-  });
-  document.addEventListener("click", e => {
-    if (el.classList.contains("nav-open") && !el.contains(e.target)) el.classList.remove("nav-open");
-  });
+      a.addEventListener("click", e => {
+        el.classList.remove("nav-open");
+        try { sessionStorage.setItem("orc_warm_nav", "1"); document.documentElement.classList.add("orc-warm-nav"); } catch {}
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0 && typeof SeamlessRouter !== "undefined") {
+          e.preventDefault();
+          SeamlessRouter.go(a.href);
+        }
+      });
+    });
+    document.addEventListener("click", e => {
+      if (el.classList.contains("nav-open") && !el.contains(e.target)) el.classList.remove("nav-open");
+    });
+  }
 
   if (!el._scrollBound) {
     el._scrollBound = true;
@@ -3555,6 +3696,11 @@ async function setHeroSlide(i, animate = false) {
 
 function initHeroCarousel(slides) {
   if (!slides.length) return;
+  stopHeroTimer();
+  heroIndex = 0;
+  heroImgSlot = 0;
+  heroFading = false;
+  heroHovered = false;
   heroSlides = slides;
   buildHeroDots();
   loadHero(slides[0]);
@@ -3660,7 +3806,9 @@ function updateHeroListState() {
 }
 
 function bindHeroActions() {
-  if (heroBound) return;
+  const playBtn = $("#hero-play-btn");
+  if (playBtn?.dataset.heroBound === "1") return;
+  if (playBtn) playBtn.dataset.heroBound = "1";
   heroBound = true;
 
   const heroContent = $(".hero-content") || $("#hero");
@@ -3803,21 +3951,6 @@ function shareTitle(title, text, url) {
     navigator.clipboard?.writeText(url || location.href);
     toast("Link copied to clipboard!");
   }
-}
-
-function setMetaTags(title, desc, img) {
-  document.title = `${title} — ${BRAND}`;
-  let ogTitle = $('meta[property="og:title"]');
-  if (!ogTitle) { ogTitle = document.createElement("meta"); ogTitle.setAttribute("property", "og:title"); document.head.appendChild(ogTitle); }
-  ogTitle.setAttribute("content", title);
-
-  let ogDesc = $('meta[property="og:description"]');
-  if (!ogDesc) { ogDesc = document.createElement("meta"); ogDesc.setAttribute("property", "og:description"); document.head.appendChild(ogDesc); }
-  ogDesc.setAttribute("content", desc || "");
-
-  let ogImg = $('meta[property="og:image"]');
-  if (!ogImg) { ogImg = document.createElement("meta"); ogImg.setAttribute("property", "og:image"); document.head.appendChild(ogImg); }
-  if (img) ogImg.setAttribute("content", img);
 }
 
 function initInstantSearch(inputEl, isEnabled = () => true) {
@@ -4600,6 +4733,11 @@ function navigateWithLoader(href, bg = "", title = "", seed = null) {
       }));
     }
   } catch (err) {}
+  try { sessionStorage.setItem("orc_warm_nav", "1"); document.documentElement.classList.add("orc-warm-nav"); } catch {}
+  if (typeof SeamlessRouter !== "undefined") {
+    SeamlessRouter.go(href);
+    return;
+  }
   if (typeof NProgress !== "undefined" && NProgress.start) NProgress.start();
   location.href = href;
 }
@@ -4637,10 +4775,10 @@ function throttle(func, limit) {
   };
 }
 
-const DEVLOG_ID = "v3.1_nov2026";
+const DEVLOG_ID = "v3.3_nov2026";
 
 function renderDevLogAnnouncement() {
-  if (safeGetItem("orc_devlog_dismissed") === DEVLOG_ID) return;
+  if (safeGetItem("orc_devlog_dismissed") === DEVLOG_ID || $("#devlog-card")) return;
 
   const card = document.createElement("div");
   card.className = "devlog-card";
@@ -4649,14 +4787,14 @@ function renderDevLogAnnouncement() {
     <div class="devlog-header">
       <div class="devlog-header-left">
         <span>WHAT'S NEW</span>
-        <span class="devlog-date">· v3.2 UPDATE</span>
+        <span class="devlog-date">· v3.3 UPDATE</span>
       </div>
       <button type="button" class="devlog-close" id="devlog-close" aria-label="Dismiss update">✕</button>
     </div>
-    <div class="devlog-title">Cleaner design, mobile episode tracking, and faster streams</div>
+    <div class="devlog-title">Anime Hub, Watch Party rooms, animated search, and seamless tab transitions</div>
     <div class="devlog-body">
-      <p>We refreshed the navigation with a floating frosted glass bar, added instant episode notifications on mobile, and tuned movie and TV pages so they look sharper and load faster.</p>
-      <p>Smart recommendations now look at titles you've actually watched. You can also press <kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">Ctrl+K</kbd> anywhere to search instantly.</p>
+      <p>Explore the new dedicated Anime page, host or join live Watch Party rooms with chat and sync countdowns, and search instantly from any page with filtered Movies, Shows, and Anime dropdown results.</p>
+      <p>Switch tabs with zero flicker across desktop and mobile, open your account dropdown from the user icon, or press <kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">W</kbd> on any title to start a Watch Party.</p>
     </div>`;
 
   document.body.appendChild(card);
@@ -4944,6 +5082,7 @@ function renderProviders(container, type, id, s, e, onChange) {
   PROVIDERS.forEach((p, i) => {
     const btn = document.createElement("button");
     btn.className = `provider-tab${getProvider() === p.id ? " active" : ""}`;
+    btn.dataset.providerId = p.id;
     const recBadge = i === 0 ? `<span class="provider-rec" aria-label="Recommended">★</span>` : "";
     const trackBadge = p.tracksProgress
       ? `<span class="provider-track-badge on" title="Progress tracking supported">Tracking ON</span>`
@@ -4951,12 +5090,33 @@ function renderProviders(container, type, id, s, e, onChange) {
     btn.innerHTML = `${p.name}${recBadge}${trackBadge}`;
     btn.addEventListener("click", () => {
       setProvider(p.id);
-      $(".provider-tab").forEach(b => b.classList.remove("active"));
+      $$(".provider-tab").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       onChange(providerUrl(type, id, s, e));
     });
     container.appendChild(btn);
   });
+}
+
+function renderDetailError(header, message, retryFn) {
+  if (!header) {
+    toast(message || "Could not load details.");
+    return;
+  }
+  header.innerHTML = `
+    <div class="detail-error-box">
+      <h2>Could Not Load Details</h2>
+      <p>${esc(message || "Something went wrong while loading this title.")}</p>
+      <div class="detail-actions">
+        <button type="button" class="btn-play" id="detail-err-retry">Retry</button>
+        <a href="${homeUrl()}" class="btn-ghost">Go Home</a>
+      </div>
+    </div>`;
+  header.querySelector("#detail-err-retry")?.addEventListener("click", () => {
+    if (typeof retryFn === "function") retryFn();
+    else location.reload();
+  });
+  LiquidGlass.glassify(header);
 }
 
 async function initMoviePage() {
@@ -4998,6 +5158,7 @@ async function initMoviePage() {
   renderProviders($("#provider-bar"), "movie", id, 1, 1, url => {
     playerStarted = true;
     load(url);
+    WatchPartyManager?.onHostPlaybackChange?.({ provider: getProvider(), action: "play" });
   });
 
   if (playerStarted) {
@@ -5030,9 +5191,13 @@ async function initMoviePage() {
       <div class="detail-actions">
         <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${resumeSeed ? "Resume" : "Play"}</button>
         <button class="btn-ghost" id="detail-save">${savedSeed ? "✓ Saved" : "+ My List"}</button>
+        <button class="btn-ghost btn-icon-text" id="detail-watch-party">${ICONS.party}<span>Watch Party</span></button>
         <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
       </div>`;
     LiquidGlass.glassify(header);
+    $("#detail-watch-party")?.addEventListener("click", () => {
+      openWatchPartyModal(seed.title || "Movie", id, "movie", { poster: seed.poster_path || "" });
+    });
   }
 
   let m;
@@ -5095,12 +5260,39 @@ async function initMoviePage() {
         <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${resume ? "Resume" : "Play"}</button>
         ${trailer ? `<button class="btn-ghost" id="detail-trailer">Trailer</button>` : ""}
         <button class="btn-ghost" id="detail-save">${saved ? "✓ Saved" : "+ My List"}</button>
+        <button class="btn-ghost btn-icon-text" id="detail-watch-party">${ICONS.party}<span>Watch Party</span></button>
         <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
       </div>`;
 
     LiquidGlass.glassify(header);
+    window._orcDetailControls = {
+      type: "movie",
+      id,
+      getTitle: () => m.title,
+      getPoster: () => m.poster_path || "",
+      getSeason: () => 1,
+      getEpisode: () => 1,
+      applyRemoteSync: ({ provider, startPlay }) => {
+        if (provider && provider !== getProvider()) {
+          setProvider(provider);
+          $$(".provider-tab").forEach(b => b.classList.toggle("active", b.dataset.providerId === provider));
+          playerStarted = true;
+          load(providerUrl("movie", id, 1, 1));
+        } else if (startPlay && !playerStarted) {
+          startPlayer();
+        }
+      }
+    };
+    $("#detail-watch-party")?.addEventListener("click", () => {
+      openWatchPartyModal(m.title, id, "movie", { poster: m.poster_path || "" });
+    });
+    const roomParam = new URLSearchParams(location.search).get("room");
+    if (roomParam && typeof WatchPartyManager !== "undefined") {
+      WatchPartyManager.connectFromPage(roomParam, window._orcDetailControls);
+    }
     const markMovieWatched = () => {
       ensureRecommendSection(m.title, true);
+      WatchPartyManager?.onHostPlaybackChange?.({ provider: getProvider(), action: "play" });
     };
     $("#detail-play")?.addEventListener("click", (e) => {
       if (e.shiftKey) return;
@@ -5169,7 +5361,7 @@ async function initMoviePage() {
     renderCardRow("#similar-section", "#similar-row", sim, "movie");
   } catch (e) {
     console.error(e);
-    showErr("Couldn't display this title.");
+    renderDetailError(header, "Couldn't display this title.");
     return;
   }
 
@@ -5227,9 +5419,13 @@ async function initTvPage() {
       <div class="detail-actions">
         <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play</button>
         <button class="btn-ghost" id="detail-save">${savedSeed ? "✓ Saved" : "+ My List"}</button>
+        <button class="btn-ghost btn-icon-text" id="detail-watch-party">${ICONS.party}<span>Watch Party</span></button>
         <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
       </div>`;
     LiquidGlass.glassify(header);
+    $("#detail-watch-party")?.addEventListener("click", () => {
+      openWatchPartyModal(seed.name || seed.title || "Series", id, "tv", { poster: seed.poster_path || "", season, episode });
+    });
   }
 
   let show;
@@ -5304,16 +5500,54 @@ async function initTvPage() {
         <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${resume ? "Resume" : "Play"}</button>
         ${trailer ? `<button class="btn-ghost" id="detail-trailer">Trailer</button>` : ""}
         <button class="btn-ghost" id="detail-save">${saved ? "✓ Saved" : "+ My List"}</button>
+        <button class="btn-ghost btn-icon-text" id="detail-watch-party">${ICONS.party}<span>Watch Party</span></button>
         <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
       </div>`;
 
     LiquidGlass.glassify(header);
+    window._orcDetailControls = {
+      type: "tv",
+      id,
+      getTitle: () => show.name,
+      getPoster: () => show.poster_path || "",
+      getSeason: () => season,
+      getEpisode: () => episode,
+      applyRemoteSync: ({ season: rs, episode: re, provider, startPlay }) => {
+        let changed = false;
+        if (provider && provider !== getProvider()) {
+          setProvider(provider);
+          $$(".provider-tab").forEach(b => b.classList.toggle("active", b.dataset.providerId === provider));
+          changed = true;
+        }
+        if (rs && Number(rs) !== season) {
+          season = Number(rs);
+          const sel = $("#season-select");
+          if (sel) sel.value = String(season);
+          if (typeof loadEps === "function") loadEps(season);
+          changed = true;
+        }
+        if (re && Number(re) !== episode) {
+          episode = Number(re);
+          changed = true;
+        }
+        if (startPlay) playerStarted = true;
+        if (changed || startPlay) update();
+      }
+    };
+    $("#detail-watch-party")?.addEventListener("click", () => {
+      openWatchPartyModal(show.name, id, "tv", { poster: show.poster_path || "", season, episode });
+    });
+    const roomParam = new URLSearchParams(location.search).get("room");
+    if (roomParam && typeof WatchPartyManager !== "undefined") {
+      WatchPartyManager.connectFromPage(roomParam, window._orcDetailControls);
+    }
     const markShowWatched = (sNum = season, eNum = episode) => {
       ensureRecommendSection(show.name, true);
     };
     const startTvPlayer = () => {
       playerStarted = true;
       loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+      WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider(), action: "play" });
     };
     $("#detail-play")?.addEventListener("click", (e) => {
       if (e.shiftKey) return;
@@ -5346,6 +5580,7 @@ async function initTvPage() {
       u.searchParams.set("season", season);
       u.searchParams.set("episode", episode);
       history.replaceState(null, "", u);
+      WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider() });
     };
 
     async function loadEps(sn) {
@@ -5422,7 +5657,11 @@ async function initTvPage() {
       }
     }
 
-    renderProviders($("#provider-bar"), "tv", id, season, episode, update);
+    renderProviders($("#provider-bar"), "tv", id, season, episode, () => {
+      playerStarted = true;
+      loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+      WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider(), action: "provider" });
+    });
     if (seasons.length && $("#season-select")) {
       $("#ep-block").style.display = "";
       const seasonSel = $("#season-select");
@@ -5504,7 +5743,7 @@ async function initTvPage() {
     }).catch(() => {});
   } catch (e) {
     console.error(e);
-    showErr("Couldn't load this show. Check your connection and try again.");
+    renderDetailError(header, "Couldn't load this show. Check your connection and try again.");
   }
 }
 
@@ -6715,9 +6954,10 @@ async function initListPage() {
     if (status) status.textContent = "";
   };
 
+  const initialUrlTab = new URLSearchParams(location.search).get("tab");
   let loadedItems = [];
   let historyItems = [];
-  let currentTab = "watchlist";
+  let currentTab = (initialUrlTab === "history" || initialUrlTab === "folders") ? initialUrlTab : "watchlist";
   let currentType = "all";
   let currentSort = "recent";
   let currentFolderId = null;
@@ -7187,8 +7427,9 @@ const NProgress = {
 };
 
 document.addEventListener("click", e => {
+  if (e.defaultPrevented) return;
   const a = e.target.closest("a[href]");
-  if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+  if (!a || a.id === "topnav-search-btn" || a.target === "_blank" || a.hasAttribute("download")) return;
   try {
     const dest = new URL(a.href, location.origin);
     if (dest.origin !== location.origin) return;
@@ -7236,101 +7477,7 @@ function registerServiceWorker() {
   navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
 }
 
-const WatchPartyEngine = {
-  channel: null,
-  roomId: null,
-  activeCount: 1,
-
-  init(roomId, mediaType, mediaId, onRemoteStateChange) {
-    if (!roomId) return;
-    this.roomId = roomId;
-    const client = getSupabaseClient();
-    if (!client || !client.channel) return;
-
-    try {
-      this.channel = client.channel(`watch-party-${roomId}`, {
-        config: { broadcast: { self: false } }
-      });
-
-      this.channel
-        .on("broadcast", { event: "SYNC_PLAYBACK" }, ({ payload }) => {
-          if (onRemoteStateChange) onRemoteStateChange(payload);
-        })
-        .on("presence", { event: "sync" }, () => {
-          const state = this.channel.presenceState();
-          this.activeCount = Object.keys(state).length || 1;
-          const badge = $("#party-active-count");
-          if (badge) badge.textContent = `${this.activeCount} Members Live`;
-        })
-        .subscribe(async status => {
-          if (status === "SUBSCRIBED") {
-            await this.channel.track({ online_at: new Date().toISOString() });
-            toast(`Joined Watch Party Room: ${roomId}`);
-          }
-        });
-    } catch (err) { console.warn('Caught error:', err); }
-  },
-
-  broadcastState(state) {
-    if (!this.channel) return;
-    try {
-      this.channel.send({
-        type: "broadcast",
-        event: "SYNC_PLAYBACK",
-        payload: { ...state, timestamp: Date.now() }
-      });
-    } catch (err) { console.warn('Caught error:', err); }
-  }
-};
-
-function openWatchPartyModal(title, mediaId, mediaType) {
-  const params = new URLSearchParams(location.search);
-  let roomId = params.get("room");
-  if (!roomId) {
-    roomId = "OSIRIS-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-  }
-  const partyUrl = new URL(routeUrl(mediaType === "tv" ? "tv" : "movie", new URLSearchParams({ id: mediaId || "", room: roomId })), window.location.origin).href;
-
-  let modal = $("#party-modal");
-  if (!modal) {
-    modal = document.createElement("div");
-    modal.className = "modal-overlay";
-    modal.id = "party-modal";
-    modal.innerHTML = `
-      <div class="modal-box glass-surface" style="max-width:460px;padding:24px;aspect-ratio:auto;border-radius:16px">
-        <button type="button" class="modal-close" id="party-close" aria-label="Close">✕</button>
-        <h2 style="font-size:1.2rem;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px;color:#fff">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Real-Time Watch Party Room
-        </h2>
-        <p style="font-size:0.85rem;color:var(--text-2);margin-bottom:16px">Share this link with friends to watch <strong id="party-media-title" style="color:#fff"></strong> in live synchronized stream!</p>
-        <div style="display:flex;gap:8px;margin-bottom:14px">
-          <input type="text" id="party-url-input" readonly class="ep-search-input" style="font-family:monospace;font-size:0.82rem" />
-          <button type="button" class="btn-play" id="party-copy-btn">Copy Link</button>
-        </div>
-        <div style="font-size:0.78rem;color:#10b981;font-weight:700;display:flex;align-items:center;gap:6px">
-          <span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block"></span>
-          <span id="party-active-count">1 Member Active</span>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    modal.querySelector("#party-close").addEventListener("click", () => closeModal(modal));
-    modal.addEventListener("click", e => { if (e.target === modal) closeModal(modal); });
-  }
-  modal.querySelector("#party-media-title").textContent = title || "Title";
-  modal.querySelector("#party-url-input").value = partyUrl;
-  modal.querySelector("#party-copy-btn").onclick = () => {
-    navigator.clipboard.writeText(partyUrl).then(() => toast("Watch Party link copied to clipboard!"));
-  };
-
-  WatchPartyEngine.init(roomId, mediaType, mediaId, payload => {
-    if (payload.provider) setProvider(payload.provider);
-    toast("Synced with Watch Party host!");
-  });
-
-  openModal(modal);
-}
+/* Upgraded WatchPartyManager + openWatchPartyModal appended cleanly */
 
 function openKeyboardShortcutsModal() {
   let modal = $("#shortcuts-modal");
@@ -7381,18 +7528,31 @@ function initGlobalShortcuts() {
       closeTrailer();
       closePersonModal();
       closePopup();
-      $(".instant-search-dropdown").forEach(d => d.remove());
+      if (typeof HeaderSearch !== "undefined") HeaderSearch.close();
+      if (typeof UserDropdown !== "undefined") UserDropdown.close();
+      $$(".instant-search-dropdown").forEach(d => d.remove());
       return;
     }
     const tag = document.activeElement?.tagName?.toUpperCase();
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable) return;
-    if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if ((e.key === "/" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) && !e.altKey) {
       e.preventDefault();
-      const s = $("#main-search-input") || $("#search-input") || $(".ep-search-input");
-      if (s) {
-        if (!isMobile()) { s.focus(); s.select?.(); }
+      const s = $("#main-search-input");
+      if (s && PAGE === "search") {
+        s.focus();
+        s.select?.();
+      } else if (typeof HeaderSearch !== "undefined") {
+        HeaderSearch.open();
       } else {
         location.href = routeUrl("search");
+      }
+    } else if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const ctx = window._orcDetailControls;
+      if (ctx) {
+        openWatchPartyModal(ctx.getTitle(), ctx.id, ctx.type, { poster: ctx.getPoster(), season: ctx.getSeason(), episode: ctx.getEpisode() });
+      } else {
+        openWatchPartyModal("", "", "movie", { tab: "host" });
       }
     } else if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
@@ -7409,7 +7569,6 @@ function checkPlayLoader() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  PAGE = detectPage();
   try {
     document.documentElement.lang = "en";
     LiquidGlass.init();
@@ -7422,15 +7581,8 @@ document.addEventListener("DOMContentLoaded", () => {
     initBackToTop();
     initPullRefresh();
     registerServiceWorker();
-    switch (PAGE) {
-      case "home": initHomePage().catch(e => console.error(e)); break;
-      case "movie": initMoviePage().catch(e => console.error(e)); break;
-      case "tv": initTvPage().catch(e => console.error(e)); break;
-      case "search": initSearchPage(); break;
-      case "list": initListPage(); break;
-      case "settings": initSettingsPage(); break;
-      case "dmca": initDmcaPage(); break;
-    }
+    if (typeof SeamlessRouter !== "undefined") SeamlessRouter.init();
+    mountPage(detectPage());
   } catch (e) {
     console.error("Osiris Watch init failed:", e);
     const header = $("#detail-header");
@@ -7999,3 +8151,1724 @@ document.addEventListener("DOMContentLoaded", () => {
     toast(cur ? "Lite mode disabled" : "Lite mode enabled");
   });
 });
+
+
+/* ============================================================================
+   Scoped Lifecycle, Seamless SPA Router, Anime Page & Privacy Init
+   ============================================================================ */
+
+let _orcPageAbort = null;
+function resetPageScope() {
+  if (_orcPageAbort) {
+    try { _orcPageAbort.abort(); } catch {}
+  }
+  _orcPageAbort = new AbortController();
+  try {
+    if (typeof stopHeroTimer === "function") stopHeroTimer();
+    heroSlides = [];
+    heroIndex = 0;
+    heroBound = false;
+    heroData = null;
+  } catch {}
+  try {
+    window._orcDetailControls = null;
+    if (typeof WatchPartyManager !== "undefined" && typeof WatchPartyManager.teardownHud === "function") {
+      WatchPartyManager.teardownHud();
+    }
+  } catch {}
+  if (typeof HeaderSearch !== "undefined") HeaderSearch.close();
+  if (typeof UserDropdown !== "undefined") UserDropdown.close();
+}
+
+function pageSignal() {
+  if (!_orcPageAbort) _orcPageAbort = new AbortController();
+  return _orcPageAbort.signal;
+}
+
+function initPrivacyPage() {
+  initSidebar("privacy");
+  document.title = "Privacy Policy - Osiris Watch";
+}
+
+function observeProgressiveImages(root = document) {
+  try {
+    root.querySelectorAll("img").forEach(img => {
+      if (img.closest(".hero-bg")) return;
+      if (img.complete && img.naturalWidth > 0) return;
+      img.setAttribute("data-orc-fade", "1");
+      const markLoaded = () => img.classList.add("is-loaded");
+      img.addEventListener("load", markLoaded, { once: true });
+      img.addEventListener("error", markLoaded, { once: true });
+    });
+  } catch {}
+}
+
+function mountPage(page) {
+  PAGE = page || detectPage();
+  const mainEl = $("#main-content") || $(".app-shell");
+  if (mainEl) {
+    mainEl.classList.remove("orc-page-enter");
+    void mainEl.offsetWidth;
+    mainEl.classList.add("orc-page-enter");
+  }
+
+  switch (PAGE) {
+    case "home":
+      initHomePage().then(() => observeProgressiveImages()).catch(e => console.error(e));
+      break;
+    case "anime":
+      initAnimePage().then(() => observeProgressiveImages()).catch(e => console.error(e));
+      break;
+    case "movie":
+      initMoviePage().catch(e => console.error(e));
+      break;
+    case "tv":
+      initTvPage().catch(e => console.error(e));
+      break;
+    case "search":
+      initSearchPage();
+      break;
+    case "list":
+      initListPage();
+      break;
+    case "settings":
+      initSettingsPage();
+      break;
+    case "privacy":
+      initPrivacyPage();
+      break;
+    case "dmca":
+      initDmcaPage();
+      break;
+  }
+
+  if (typeof refreshUserMenuUI === "function") refreshUserMenuUI();
+  if (typeof NProgress !== "undefined" && NProgress.done) NProgress.done();
+}
+
+const SeamlessRouter = {
+  cache: new Map(),
+  inFlight: 0,
+  searchAssetsPromise: null,
+  bound: false,
+
+  isEligibleUrl(href) {
+    if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("javascript:")) return false;
+    let url;
+    try { url = new URL(href, location.origin); } catch { return false; }
+    if (url.origin !== location.origin) return false;
+    const p = url.pathname.replace(/\/+$/, "") || "/";
+    if (p.startsWith("/api/") || /\.(json|xml|txt|png|jpg|jpeg|webp|svg|ico|css|js|mp4)$/i.test(p)) return false;
+    const validPrefixes = ["/", "/index.html", "/anime", "/anime.html", "/search", "/search.html", "/list", "/list.html", "/settings", "/settings.html", "/privacy", "/privacy.html", "/dmca", "/dmca.html", "/movie", "/movie.html", "/tv", "/tv.html"];
+    return validPrefixes.includes(p);
+  },
+
+  fetchUrlForPath(url) {
+    const clean = url.pathname.replace(/\/+$/, "") || "/";
+    const map = {
+      "/": "/index.html",
+      "/anime": "/anime.html",
+      "/search": "/search.html",
+      "/list": "/list.html",
+      "/settings": "/settings.html",
+      "/privacy": "/privacy.html",
+      "/dmca": "/dmca.html",
+      "/movie": "/movie.html",
+      "/tv": "/tv.html",
+    };
+    return (map[clean] || clean) + (url.search || "");
+  },
+
+  async prefetch(href) {
+    if (!this.isEligibleUrl(href)) return null;
+    let url;
+    try { url = new URL(href, location.origin); } catch { return null; }
+    const key = url.pathname + url.search;
+    if (this.cache.has(key)) return this.cache.get(key);
+    const p = (async () => {
+      try {
+        const res = await fetch(this.fetchUrlForPath(url), { credentials: "same-origin" });
+        if (!res.ok) return null;
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (!ct.includes("text/html") && !ct.includes("application/xhtml")) return null;
+        const text = await res.text();
+        if (!text.includes("app-shell")) return null;
+        return text;
+      } catch {
+        return null;
+      }
+    })();
+    this.cache.set(key, p);
+    return p;
+  },
+
+  ensureSearchAssets() {
+    if (window.OsirisAICatalog && window.OsirisAISearchUI) return Promise.resolve();
+    if (this.searchAssetsPromise) return this.searchAssetsPromise;
+    this.searchAssetsPromise = new Promise(resolve => {
+      if (!document.querySelector('link[href*="ai-search.css"]')) {
+        const lk = document.createElement("link");
+        lk.rel = "stylesheet";
+        lk.href = "ai-search.css";
+        document.head.appendChild(lk);
+      }
+      const loadScript = src => new Promise(res => {
+        if (document.querySelector(`script[src*="${src}"]`)) { res(); return; }
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = () => res();
+        s.onerror = () => res();
+        document.head.appendChild(s);
+      });
+      loadScript("ai-search-catalog.js").then(() => loadScript("ai-search-ui.js")).then(() => resolve());
+    });
+    return this.searchAssetsPromise;
+  },
+
+  async go(href, opts = {}) {
+    if (!this.isEligibleUrl(href)) {
+      location.href = href;
+      return;
+    }
+    let url;
+    try { url = new URL(href, location.origin); } catch { location.href = href; return; }
+    const targetFull = url.pathname + url.search + url.hash;
+    const currentFull = location.pathname + location.search + location.hash;
+    if (targetFull === currentFull && !opts.force) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    const token = ++this.inFlight;
+    try { sessionStorage.setItem("orc_warm_nav", "1"); document.documentElement.classList.add("orc-warm-nav"); } catch {}
+
+    try {
+      const html = await this.prefetch(url.href);
+      if (token !== this.inFlight) return;
+      if (!html) {
+        location.href = url.href;
+        return;
+      }
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const newShell = doc.querySelector(".app-shell");
+      const curShell = document.querySelector(".app-shell");
+      if (!newShell || !curShell) {
+        location.href = url.href;
+        return;
+      }
+
+      if (url.pathname.includes("search")) {
+        await this.ensureSearchAssets();
+        if (token !== this.inFlight) return;
+      }
+
+      resetPageScope();
+      if (!opts.skipHistory) {
+        history.pushState({ orcNav: true }, doc.title || document.title, targetFull);
+      }
+      document.title = doc.title || document.title;
+      document.body.className = doc.body.className || "";
+
+      const importedShell = document.importNode(newShell, true);
+      curShell.replaceWith(importedShell);
+
+      if (url.hash) {
+        const target = document.getElementById(url.hash.slice(1));
+        if (target) target.scrollIntoView({ behavior: "auto" });
+        else window.scrollTo(0, 0);
+      } else {
+        window.scrollTo(0, 0);
+      }
+
+      const topnav = $("#topnav");
+      if (topnav) {
+        topnav.classList.remove("nav-hidden", "is-scrolled", "nav-open");
+      }
+
+      mountPage(detectPage());
+    } catch (err) {
+      console.warn("Seamless navigation fell back to full load:", err);
+      location.href = url.href;
+    }
+  },
+
+  init() {
+    if (this.bound) return;
+    this.bound = true;
+
+    window.addEventListener("popstate", () => {
+      this.go(location.href, { skipHistory: true, force: true });
+    });
+
+    document.addEventListener("click", e => {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const a = e.target?.closest?.("a[href]");
+      if (!a) return;
+      if (a.target && a.target !== "_self") return;
+      if (a.hasAttribute("download")) return;
+      if (!this.isEligibleUrl(a.href)) return;
+      e.preventDefault();
+      this.go(a.href);
+    });
+
+    // Warm main tabs in background after initial paint
+    const warmIdle = () => {
+      ["/", "/search", "/anime", "/list", "/settings"].forEach(route => {
+        if (location.pathname !== route) this.prefetch(route);
+      });
+    };
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(warmIdle, { timeout: 2200 });
+    } else {
+      setTimeout(warmIdle, 1400);
+    }
+  }
+};
+
+/* ============================================================================
+   Dedicated Anime Page (/anime)
+   ============================================================================ */
+
+async function initAnimePage() {
+  initSidebar("anime");
+  document.title = "Anime - Osiris Watch";
+  const sig = pageSignal();
+
+  const catEl = $("#categories");
+  const filterStrip = $("#anime-filter-strip");
+  const gridWrap = $("#anime-grid-wrap");
+  const grid = $("#anime-grid");
+  const gridTitle = $("#anime-grid-title");
+  const countPill = $("#anime-result-count");
+  const sortSelect = $("#anime-sort-select");
+  const randomBtn = $("#anime-random-btn");
+  if (!catEl) return;
+
+  const isAdultAllowed = () => SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
+  const animeFilterParams = "&with_genres=16&with_original_language=ja&without_genres=10763,10767";
+
+  const [popularTv, airingTv, topTv, animeMovies, shonenTv, fantasyTv, scifiTv, seinenTv] = await Promise.allSettled([
+    tmdb(`/discover/tv?sort_by=popularity.desc&page=1${animeFilterParams}`),
+    tmdb(`/discover/tv?sort_by=popularity.desc&air_date.gte=${new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)}${animeFilterParams}`),
+    tmdb(`/discover/tv?sort_by=vote_average.desc&vote_count.gte=250${animeFilterParams}`),
+    tmdb(`/discover/movie?sort_by=popularity.desc&page=1&with_genres=16&with_original_language=ja`),
+    tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16,10759&with_original_language=ja`),
+    tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16,10765&with_original_language=ja`),
+    tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16,9648&with_original_language=ja`),
+    tmdb(`/discover/tv?sort_by=vote_average.desc&vote_count.gte=120&vote_average.gte=7.7${animeFilterParams}`),
+  ]);
+
+  if (sig.aborted) return;
+
+  const pick = (res, explicitType) => {
+    if (res.status !== "fulfilled" || !res.value?.results) return [];
+    return res.value.results
+      .filter(it => it && (it.poster_path || it.backdrop_path) && (!isAdultAllowed() || !it.adult))
+      .map(it => ({ ...it, media_type: explicitType }));
+  };
+
+  const datasets = {
+    trending: pick(popularTv, "tv"),
+    airing: pick(airingTv, "tv"),
+    top: pick(topTv, "tv"),
+    movies: pick(animeMovies, "movie"),
+    shonen: pick(shonenTv, "tv"),
+    fantasy: pick(fantasyTv, "tv"),
+    scifi: pick(scifiTv, "tv"),
+    seinen: pick(seinenTv, "tv"),
+  };
+
+  // Spotlight Hero Carousel powered by top Anime backdrops
+  const heroPool = [...datasets.trending, ...datasets.movies.slice(0, 4)]
+    .filter(x => x.backdrop_path && (x.overview || "").length > 20)
+    .slice(0, 8);
+  if (heroPool.length) {
+    initHeroCarousel(heroPool);
+  }
+  bindHeroActions();
+
+  const rowSpecs = [
+    { title: "Trending Anime Series", items: datasets.trending, type: "tv" },
+    { title: "Airing New Episodes", items: datasets.airing, type: "tv" },
+    { title: "Top Rated Anime of All Time", items: datasets.top, type: "tv" },
+    { title: "Acclaimed Anime Films", items: datasets.movies, type: "movie" },
+    { title: "Shonen & High-Octane Action", items: datasets.shonen, type: "tv" },
+    { title: "Fantasy, Magic & Isekai", items: datasets.fantasy, type: "tv" },
+    { title: "Sci-Fi, Mystery & Psychological", items: datasets.scifi, type: "tv" },
+    { title: "Critic Favorites", items: datasets.seinen, type: "tv" },
+  ];
+
+  const renderRowsView = () => {
+    if (gridWrap) gridWrap.hidden = true;
+    catEl.style.display = "";
+    catEl.textContent = "";
+    rowSpecs.forEach(spec => {
+      if (!spec.items.length) return;
+      const row = buildRow(spec.title, spec.items, spec.type);
+      if (row) catEl.appendChild(row);
+    });
+    LiquidGlass.glassify(catEl);
+    observeProgressiveImages(catEl);
+  };
+
+  const renderGridView = async (cat, sortBy) => {
+    catEl.style.display = "none";
+    if (!gridWrap || !grid) return;
+    gridWrap.hidden = false;
+
+    const labels = {
+      trending: "Trending Anime",
+      airing: "Currently Airing",
+      shonen: "Shonen & Action Anime",
+      fantasy: "Fantasy & Sci-Fi Anime",
+      scifi: "Mystery & Psychological Anime",
+      seinen: "Critically Acclaimed Anime",
+      movies: "Anime Films",
+      all: "All Anime"
+    };
+    if (gridTitle) gridTitle.textContent = labels[cat] || "Anime Catalog";
+
+    grid.innerHTML = Array.from({ length: 12 }, () => `<div class="skeleton-card skel-pulse"></div>`).join("");
+
+    let items = [];
+    const page1Endpoint = (() => {
+      if (cat === "movies") return `/discover/movie?sort_by=${sortBy}&with_genres=16&with_original_language=ja&vote_count.gte=40&page=1`;
+      if (cat === "shonen") return `/discover/tv?sort_by=${sortBy}&with_genres=16,10759&with_original_language=ja&page=1`;
+      if (cat === "fantasy") return `/discover/tv?sort_by=${sortBy}&with_genres=16,10765&with_original_language=ja&page=1`;
+      if (cat === "scifi") return `/discover/tv?sort_by=${sortBy}&with_genres=16,9648&with_original_language=ja&page=1`;
+      if (cat === "airing") return `/discover/tv?sort_by=${sortBy}&air_date.gte=${new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)}${animeFilterParams}&page=1`;
+      if (cat === "seinen") return `/discover/tv?sort_by=${sortBy}&vote_count.gte=150&vote_average.gte=7.7${animeFilterParams}&page=1`;
+      return `/discover/tv?sort_by=${sortBy}&vote_count.gte=30${animeFilterParams}&page=1`;
+    })();
+
+    try {
+      const [r1, r2] = await Promise.all([
+        tmdb(page1Endpoint),
+        tmdb(page1Endpoint.replace("page=1", "page=2")),
+      ]);
+      if (sig.aborted) return;
+      const mType = cat === "movies" ? "movie" : "tv";
+      const seen = new Set();
+      [...(r1?.results || []), ...(r2?.results || [])].forEach(it => {
+        if (!it || seen.has(it.id) || (!it.poster_path && !it.backdrop_path)) return;
+        if (isAdultAllowed() && it.adult) return;
+        seen.add(it.id);
+        items.push({ ...it, media_type: mType });
+      });
+    } catch (err) {
+      console.warn("Anime filtered fetch failed:", err);
+      items = datasets[cat] || datasets.trending;
+    }
+
+    if (countPill) countPill.textContent = `${items.length} titles`;
+    grid.textContent = "";
+    items.forEach(item => {
+      grid.appendChild(buildCard(item, item.media_type || "tv"));
+    });
+    LiquidGlass.glassify(grid);
+    observeProgressiveImages(grid);
+  };
+
+  let activeCat = "all";
+  let activeSort = sortSelect?.value || "popularity.desc";
+
+  renderRowsView();
+
+  filterStrip?.querySelectorAll("[data-anime-cat]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeCat = btn.dataset.animeCat || "all";
+      filterStrip.querySelectorAll("[data-anime-cat]").forEach(b => b.classList.toggle("active", b === btn));
+      if (activeCat === "all" && activeSort === "popularity.desc") {
+        renderRowsView();
+      } else {
+        renderGridView(activeCat, activeSort);
+      }
+    });
+  });
+
+  sortSelect?.addEventListener("change", () => {
+    activeSort = sortSelect.value || "popularity.desc";
+    if (activeCat === "all" && activeSort === "popularity.desc") {
+      renderRowsView();
+    } else {
+      renderGridView(activeCat, activeSort);
+    }
+  });
+
+  randomBtn?.addEventListener("click", () => {
+    const pool = [...datasets.trending, ...datasets.top, ...datasets.movies];
+    if (!pool.length) return;
+    const pickItem = pool[Math.floor(Math.random() * pool.length)];
+    const type = mediaType(pickItem, "tv");
+    const href = `${routeUrl(type)}?id=${pickItem.id}`;
+    navigateWithLoader(href, pickItem.backdrop_path ? `${IMG_ORIG}${pickItem.backdrop_path}` : "", pickItem.name || pickItem.title || "", {
+      id: pickItem.id,
+      type,
+      item: pickItem,
+    });
+  });
+}
+
+/* ============================================================================
+   Animated Header Search Morph & Instant Dropdown
+   ============================================================================ */
+
+const HeaderSearch = {
+  isOpen: false,
+  activeTab: "all",
+  selectedIndex: -1,
+  lastItems: [],
+  debounceTimer: null,
+  reqToken: 0,
+
+  ensureDom() {
+    if ($("#header-search-shell")) return;
+    const bd = document.createElement("div");
+    bd.id = "header-search-backdrop";
+    bd.className = "header-search-backdrop";
+
+    const shell = document.createElement("div");
+    shell.id = "header-search-shell";
+    shell.className = "header-search-shell";
+    shell.setAttribute("role", "dialog");
+    shell.setAttribute("aria-modal", "true");
+    shell.setAttribute("aria-label", "Quick search");
+    shell.innerHTML = `
+      <div class="header-search-pill">
+        <span class="header-search-ico" aria-hidden="true">${ICONS.search}</span>
+        <input type="search" class="header-search-input" id="header-search-input" placeholder="Search movies, shows, anime..." autocomplete="off" spellcheck="false" />
+        <button type="button" class="header-search-clear" id="header-search-clear" aria-label="Clear or close search">${ICONS.close}</button>
+      </div>
+      <div class="header-search-panel">
+        <div class="header-search-tabs" role="tablist" aria-label="Search category">
+          <button type="button" class="header-search-tab active" data-hst="all" role="tab" aria-selected="true">All</button>
+          <button type="button" class="header-search-tab" data-hst="movie" role="tab" aria-selected="false">Movies</button>
+          <button type="button" class="header-search-tab" data-hst="tv" role="tab" aria-selected="false">Shows</button>
+          <button type="button" class="header-search-tab" data-hst="anime" role="tab" aria-selected="false">Anime</button>
+        </div>
+        <div class="header-search-list" id="header-search-list" role="listbox"></div>
+        <div class="header-search-footer">
+          <span id="header-search-hint">Press Enter to view all results</span>
+          <a href="${routeUrl("search")}" class="header-search-full-link" id="header-search-full-link">Open Discover &rarr;</a>
+        </div>
+      </div>`;
+
+    document.body.appendChild(bd);
+    document.body.appendChild(shell);
+
+    bd.addEventListener("click", () => this.close());
+    shell.querySelector("#header-search-clear").addEventListener("click", () => {
+      const inp = $("#header-search-input");
+      if (inp && inp.value.trim()) {
+        inp.value = "";
+        inp.focus();
+        this.runQuery("");
+      } else {
+        this.close();
+      }
+    });
+
+    shell.querySelectorAll(".header-search-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        this.activeTab = tab.dataset.hst || "all";
+        shell.querySelectorAll(".header-search-tab").forEach(t => {
+          const act = t === tab;
+          t.classList.toggle("active", act);
+          t.setAttribute("aria-selected", String(act));
+        });
+        this.selectedIndex = -1;
+        this.runQuery($("#header-search-input")?.value || "");
+      });
+    });
+
+    const inp = $("#header-search-input");
+    inp.addEventListener("input", () => {
+      const val = inp.value;
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => this.runQuery(val), val.trim() ? 200 : 20);
+    });
+
+    inp.addEventListener("keydown", e => {
+      const rows = [...shell.querySelectorAll(".header-search-row")];
+      if (e.key === "ArrowDown") {
+        if (!rows.length) return;
+        e.preventDefault();
+        this.selectedIndex = Math.min(rows.length - 1, this.selectedIndex + 1);
+        this.highlightRow(rows);
+      } else if (e.key === "ArrowUp") {
+        if (!rows.length) return;
+        e.preventDefault();
+        this.selectedIndex = Math.max(-1, this.selectedIndex - 1);
+        this.highlightRow(rows);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (this.selectedIndex >= 0 && rows[this.selectedIndex]) {
+          rows[this.selectedIndex].click();
+        } else {
+          const q = inp.value.trim();
+          this.close();
+          if (this.activeTab === "anime" && !q) {
+            SeamlessRouter.go(routeUrl("anime"));
+          } else {
+            const p = new URLSearchParams();
+            if (q) p.set("q", q);
+            if (this.activeTab === "movie" || this.activeTab === "tv") p.set("type", this.activeTab);
+            SeamlessRouter.go(`${routeUrl("search")}${p.toString() ? "?" + p.toString() : ""}`);
+          }
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        this.close();
+      }
+    });
+  },
+
+  highlightRow(rows) {
+    rows.forEach((r, idx) => r.classList.toggle("is-selected", idx === this.selectedIndex));
+    if (this.selectedIndex >= 0 && rows[this.selectedIndex]) {
+      rows[this.selectedIndex].scrollIntoView({ block: "nearest" });
+    }
+  },
+
+  open() {
+    this.ensureDom();
+    if (typeof UserDropdown !== "undefined") UserDropdown.close();
+    $("#notif-popover")?.classList.remove("open");
+    this.isOpen = true;
+    const trigger = $("#topnav-search-btn");
+    trigger?.setAttribute("aria-expanded", "true");
+    $("#header-search-backdrop")?.classList.add("open");
+    $("#header-search-shell")?.classList.add("open");
+    const inp = $("#header-search-input");
+    if (inp) {
+      setTimeout(() => { inp.focus(); inp.select?.(); }, 40);
+      this.runQuery(inp.value || "");
+    }
+  },
+
+  close() {
+    this.isOpen = false;
+    $("#topnav-search-btn")?.setAttribute("aria-expanded", "false");
+    $("#header-search-backdrop")?.classList.remove("open");
+    $("#header-search-shell")?.classList.remove("open");
+  },
+
+  toggle() {
+    if (this.isOpen) this.close();
+    else this.open();
+  },
+
+  formatMeta(item, forcedType) {
+    const kind = mediaType(item, forcedType || (item.first_air_date || item.name ? "tv" : "movie"));
+    const label = kind === "tv" ? "Show" : "Movie";
+    const yr = year(item.release_date || item.first_air_date || "");
+    const rating = item.vote_average > 0 ? `★ ${Number(item.vote_average).toFixed(1)}` : "";
+    const firstGenreId = Array.isArray(item.genre_ids) ? item.genre_ids.find(g => TMDB_GENRES[g]) : null;
+    const genre = firstGenreId ? TMDB_GENRES[firstGenreId] : (kind === "tv" ? "Series" : "Feature");
+    return [label, yr, rating, genre].filter(Boolean).join(" · ");
+  },
+
+  renderRows(listEl, items, forcedType, q) {
+    this.selectedIndex = -1;
+    this.lastItems = items;
+    const fullLink = $("#header-search-full-link");
+    if (fullLink) {
+      const trimQ = (q || "").trim();
+      if (this.activeTab === "anime" && !trimQ) {
+        fullLink.href = routeUrl("anime");
+        fullLink.textContent = "Open Anime Hub →";
+      } else {
+        const p = new URLSearchParams();
+        if (trimQ) p.set("q", trimQ);
+        if (this.activeTab === "movie" || this.activeTab === "tv") p.set("type", this.activeTab);
+        fullLink.href = `${routeUrl("search")}${p.toString() ? "?" + p.toString() : ""}`;
+        fullLink.textContent = trimQ ? `Search "${trimQ}" in Discover →` : "Open Discover →";
+      }
+    }
+
+    if (!items.length) {
+      listEl.innerHTML = `<div class="header-search-empty">No matching titles found${q ? ` for "${esc(q)}"` : ""}. Try another spelling or category tab.</div>`;
+      return;
+    }
+
+    listEl.textContent = "";
+
+    if (!q?.trim()) {
+      const recents = RecentSearches.get();
+      if (recents.length) {
+        const lbl = document.createElement("div");
+        lbl.className = "header-search-section-label";
+        lbl.textContent = "Recent Searches";
+        listEl.appendChild(lbl);
+        const chipRow = document.createElement("div");
+        chipRow.className = "header-search-chips";
+        recents.slice(0, 5).forEach(term => {
+          const c = document.createElement("button");
+          c.type = "button";
+          c.className = "header-search-chip";
+          c.textContent = term;
+          c.addEventListener("click", () => {
+            const inp = $("#header-search-input");
+            if (inp) { inp.value = term; inp.focus(); this.runQuery(term); }
+          });
+          chipRow.appendChild(c);
+        });
+        listEl.appendChild(chipRow);
+      }
+      const trendLbl = document.createElement("div");
+      trendLbl.className = "header-search-section-label";
+      trendLbl.textContent = this.activeTab === "anime" ? "Trending Anime" : "Trending Now";
+      listEl.appendChild(trendLbl);
+    }
+
+    items.slice(0, 12).forEach((item, idx) => {
+      const kind = mediaType(item, forcedType || (item.first_air_date || item.name ? "tv" : "movie"));
+      const title = item.title || item.name || "Untitled";
+      const href = kind === "tv" ? `${routeUrl("tv")}?id=${item.id}` : `${routeUrl("movie")}?id=${item.id}`;
+      const posterSrc = posterUrl(item.poster_path, "w342") || "";
+
+      const row = document.createElement("a");
+      row.href = href;
+      row.className = "header-search-row";
+      row.setAttribute("role", "option");
+      row.style.animationDelay = `${Math.min(idx, 8) * 24}ms`;
+      row.innerHTML = `
+        ${posterSrc ? `<img src="${posterSrc}" alt="" class="header-search-poster" loading="lazy">` : `<div class="header-search-poster"></div>`}
+        <div class="header-search-info">
+          <div class="header-search-title">${esc(title)}</div>
+          <div class="header-search-meta">${esc(this.formatMeta(item, kind))}</div>
+        </div>
+        <span class="header-search-chevron" aria-hidden="true">${ICONS.chevronDown}</span>
+      `;
+      row.addEventListener("click", e => {
+        e.preventDefault();
+        if (q && q.trim().length >= 2) RecentSearches.add(q.trim());
+        this.close();
+        navigateWithLoader(href, item.backdrop_path ? `${IMG_ORIG}${item.backdrop_path}` : "", title, {
+          id: item.id,
+          type: kind,
+          item,
+        });
+      });
+      listEl.appendChild(row);
+    });
+  },
+
+  async runQuery(rawQuery) {
+    const listEl = $("#header-search-list");
+    if (!listEl) return;
+    const token = ++this.reqToken;
+    const q = (rawQuery || "").trim();
+    const adultOk = SETTINGS.get(SETTINGS.hideAdultKey, "1") === "0";
+
+    listEl.innerHTML = Array.from({ length: 4 }, () => `
+      <div class="header-search-skel-row">
+        <div class="header-search-skel-poster skel-pulse"></div>
+        <div class="header-search-skel-text">
+          <div class="header-search-skel-line skel-pulse"></div>
+          <div class="header-search-skel-line short skel-pulse"></div>
+        </div>
+      </div>`).join("");
+
+    try {
+      let results = [];
+      let forcedType = null;
+
+      if (!q) {
+        if (this.activeTab === "anime") {
+          forcedType = "tv";
+          const res = await tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16&with_original_language=ja&page=1`);
+          results = (res?.results || []).map(x => ({ ...x, media_type: "tv" }));
+        } else if (this.activeTab === "movie") {
+          forcedType = "movie";
+          const res = await tmdb(`/trending/movie/day?page=1`);
+          results = (res?.results || []).map(x => ({ ...x, media_type: "movie" }));
+        } else if (this.activeTab === "tv") {
+          forcedType = "tv";
+          const res = await tmdb(`/trending/tv/day?page=1`);
+          results = (res?.results || []).map(x => ({ ...x, media_type: "tv" }));
+        } else {
+          const res = await tmdb(`/trending/all/day?page=1`);
+          results = (res?.results || []).filter(x => x.media_type === "movie" || x.media_type === "tv");
+        }
+      } else {
+        const enc = encodeURIComponent(q);
+        if (this.activeTab === "movie") {
+          forcedType = "movie";
+          const res = await tmdb(`/search/movie?query=${enc}&include_adult=${adultOk}&page=1`);
+          results = (res?.results || []).map(x => ({ ...x, media_type: "movie" }));
+        } else if (this.activeTab === "tv") {
+          forcedType = "tv";
+          const res = await tmdb(`/search/tv?query=${enc}&include_adult=${adultOk}&page=1`);
+          results = (res?.results || []).map(x => ({ ...x, media_type: "tv" }));
+        } else if (this.activeTab === "anime") {
+          const [tvRes, mvRes] = await Promise.all([
+            tmdb(`/search/tv?query=${enc}&include_adult=${adultOk}&page=1`),
+            tmdb(`/search/movie?query=${enc}&include_adult=${adultOk}&page=1`),
+          ]);
+          const combined = [
+            ...(tvRes?.results || []).map(x => ({ ...x, media_type: "tv" })),
+            ...(mvRes?.results || []).map(x => ({ ...x, media_type: "movie" })),
+          ];
+          const isAnimeItem = it => Array.isArray(it.genre_ids) && it.genre_ids.includes(16) && (it.original_language === "ja" || (it.origin_country || []).includes("JP"));
+          const strictAnime = combined.filter(isAnimeItem);
+          const animFallback = combined.filter(it => Array.isArray(it.genre_ids) && it.genre_ids.includes(16));
+          results = (strictAnime.length ? strictAnime : animFallback).sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        } else {
+          const res = await tmdb(`/search/multi?query=${enc}&include_adult=${adultOk}&page=1`);
+          results = (res?.results || []).filter(x => x.media_type === "movie" || x.media_type === "tv");
+        }
+      }
+
+      if (token !== this.reqToken) return;
+      if (!adultOk) results = results.filter(x => !x.adult);
+      this.renderRows(listEl, results, forcedType, q);
+    } catch (err) {
+      if (token !== this.reqToken) return;
+      listEl.innerHTML = `<div class="header-search-empty">Unable to fetch results right now.</div>`;
+    }
+  }
+};
+
+function initHeaderSearch() {
+  const trigger = $("#topnav-search-btn");
+  if (!trigger || trigger.dataset.hsBound === "1") return;
+  trigger.dataset.hsBound = "1";
+  trigger.addEventListener("click", e => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    HeaderSearch.toggle();
+  });
+}
+
+/* ============================================================================
+   User Icon Dropdown + Profile Editor
+   ============================================================================ */
+
+const UserDropdown = {
+  isOpen: false,
+
+  ensureDom() {
+    if ($("#user-menu-popover")) return;
+    const bd = document.createElement("div");
+    bd.id = "user-menu-backdrop";
+    bd.className = "user-menu-backdrop";
+
+    const pop = document.createElement("div");
+    pop.id = "user-menu-popover";
+    pop.className = "user-menu-popover";
+    pop.setAttribute("role", "menu");
+    pop.setAttribute("aria-label", "Account and profile menu");
+    pop.innerHTML = `
+      <div class="user-menu-header" id="user-menu-profile-btn" role="button" tabindex="0" aria-label="Edit display name and avatar">
+        <div class="user-menu-avatar" id="user-menu-avatar">G</div>
+        <div class="user-menu-ident">
+          <div class="user-menu-name" id="user-menu-name">Guest</div>
+          <div class="user-menu-sub" id="user-menu-sub">Click to edit profile</div>
+        </div>
+        <span class="user-menu-edit-ico" aria-hidden="true">${ICONS.edit}</span>
+      </div>
+      <div class="user-menu-divider"></div>
+      <div class="user-menu-items">
+        <a href="${routeUrl("list")}?tab=history" class="user-menu-item" data-um-action="history" role="menuitem">
+          ${ICONS.history}<span>History</span>
+        </a>
+        <a href="${routeUrl("list")}" class="user-menu-item" data-um-action="watchlist" role="menuitem">
+          ${ICONS.bookmark}<span>Watchlist</span>
+        </a>
+        <button type="button" class="user-menu-item" data-um-action="watchparty" role="menuitem">
+          ${ICONS.party}<span>Watch Party</span><span class="user-menu-item-badge">LIVE</span>
+        </button>
+      </div>
+      <div class="user-menu-divider"></div>
+      <div class="user-menu-actions" id="user-menu-actions"></div>
+    `;
+
+    document.body.appendChild(bd);
+    document.body.appendChild(pop);
+
+    bd.addEventListener("click", () => this.close());
+    const profBtn = pop.querySelector("#user-menu-profile-btn");
+    profBtn.addEventListener("click", () => {
+      this.close();
+      openProfileEditModal();
+    });
+    profBtn.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); profBtn.click(); }
+    });
+
+    pop.querySelector('[data-um-action="watchparty"]').addEventListener("click", () => {
+      this.close();
+      const ctx = window._orcDetailControls;
+      if (ctx) {
+        openWatchPartyModal(ctx.getTitle(), ctx.id, ctx.type, { poster: ctx.getPoster(), season: ctx.getSeason(), episode: ctx.getEpisode() });
+      } else {
+        openWatchPartyModal("", "", "movie", { tab: "host" });
+      }
+    });
+
+    pop.querySelectorAll("a.user-menu-item").forEach(a => {
+      a.addEventListener("click", e => {
+        this.close();
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) {
+          e.preventDefault();
+          SeamlessRouter.go(a.href);
+        }
+      });
+    });
+  },
+
+  async refresh() {
+    this.ensureDom();
+    let cloudProfile = null;
+    try {
+      if (window.supabase) cloudProfile = await SupabaseSync.getProfile();
+    } catch {}
+    const local = LocalProfile.get();
+    const isSignedIn = Boolean(cloudProfile && cloudProfile.email);
+    const displayName = isSignedIn
+      ? (cloudProfile.username || cloudProfile.email.split("@")[0])
+      : local.username;
+    const avatarUrl = isSignedIn
+      ? (cloudProfile.avatar_url || local.avatarUrl || "")
+      : (local.avatarUrl || "");
+    const initial = (displayName || "G").charAt(0).toUpperCase();
+
+    // Header button avatar chip vs crisp icon
+    const topBtn = $("#topnav-user-btn");
+    if (topBtn) {
+      if (avatarUrl) {
+        topBtn.classList.add("has-avatar");
+        topBtn.innerHTML = `<img src="${esc(avatarUrl)}" alt="${esc(displayName)}" class="topnav-user-avatar-chip">`;
+      } else if (isSignedIn || (displayName && displayName !== "Guest")) {
+        topBtn.classList.add("has-avatar");
+        topBtn.innerHTML = `<span class="topnav-user-initial">${esc(initial)}</span>`;
+      } else {
+        topBtn.classList.remove("has-avatar");
+        topBtn.innerHTML = ICONS.user;
+      }
+      topBtn.title = `${displayName} menu`;
+    }
+
+    const avatarEl = $("#user-menu-avatar");
+    const nameEl = $("#user-menu-name");
+    const subEl = $("#user-menu-sub");
+    const actionsEl = $("#user-menu-actions");
+
+    if (avatarEl) {
+      avatarEl.innerHTML = avatarUrl
+        ? `<img src="${esc(avatarUrl)}" alt="${esc(displayName)}">`
+        : esc(initial);
+    }
+    if (nameEl) nameEl.textContent = displayName || "Guest";
+    if (subEl) subEl.textContent = isSignedIn ? `${cloudProfile.email} · Synced` : "Guest · Customize profile";
+
+    if (actionsEl) {
+      if (isSignedIn) {
+        actionsEl.innerHTML = `
+          <button type="button" class="user-menu-btn-secondary" id="um-account-btn">Account</button>
+          <button type="button" class="user-menu-btn-primary" id="um-signout-btn">Sign Out</button>`;
+        actionsEl.querySelector("#um-account-btn").addEventListener("click", () => {
+          this.close();
+          SeamlessRouter.go(`${routeUrl("settings")}#settings-account-section`);
+        });
+        actionsEl.querySelector("#um-signout-btn").addEventListener("click", async () => {
+          await SupabaseSync.signOut();
+          toast("Signed out");
+          this.close();
+          refreshUserMenuUI();
+        });
+      } else {
+        actionsEl.innerHTML = `
+          <button type="button" class="user-menu-btn-primary" id="um-login-btn">Login</button>
+          <button type="button" class="user-menu-btn-secondary" id="um-signup-btn">Sign up</button>`;
+        actionsEl.querySelector("#um-login-btn").addEventListener("click", () => {
+          this.close();
+          openAuthModal("signin");
+        });
+        actionsEl.querySelector("#um-signup-btn").addEventListener("click", () => {
+          this.close();
+          openAuthModal("signup");
+        });
+      }
+    }
+  },
+
+  open() {
+    this.refresh();
+    if (typeof HeaderSearch !== "undefined") HeaderSearch.close();
+    $("#notif-popover")?.classList.remove("open");
+    this.isOpen = true;
+    $("#topnav-user-btn")?.setAttribute("aria-expanded", "true");
+    $("#user-menu-backdrop")?.classList.add("open");
+    $("#user-menu-popover")?.classList.add("open");
+  },
+
+  close() {
+    this.isOpen = false;
+    $("#topnav-user-btn")?.setAttribute("aria-expanded", "false");
+    $("#user-menu-backdrop")?.classList.remove("open");
+    $("#user-menu-popover")?.classList.remove("open");
+  },
+
+  toggle() {
+    if (this.isOpen) this.close();
+    else this.open();
+  }
+};
+
+function refreshUserMenuUI() {
+  return UserDropdown.refresh();
+}
+
+function initUserDropdown() {
+  refreshUserMenuUI();
+  const btn = $("#topnav-user-btn");
+  if (!btn || btn.dataset.umBound === "1") return;
+  btn.dataset.umBound = "1";
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    UserDropdown.toggle();
+  });
+}
+
+function openProfileEditModal() {
+  let modal = $("#profile-edit-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "profile-edit-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+      <div class="party-modal-card modal-box" style="max-width:420px">
+        <button type="button" class="modal-close" id="profile-edit-close" aria-label="Close">✕</button>
+        <h2 style="font-size:1.12rem;font-weight:800;margin:0 0 14px">Edit Profile Appearance</h2>
+        <div class="party-field">
+          <label for="pe-username">Display Name</label>
+          <input type="text" id="pe-username" class="party-input" maxlength="32" placeholder="Your display name" />
+        </div>
+        <div class="party-field">
+          <label for="pe-avatar-url">Profile Picture URL (optional)</label>
+          <input type="url" id="pe-avatar-url" class="party-input" placeholder="https://..." />
+        </div>
+        <div class="party-field">
+          <label for="pe-avatar-file">Or Upload Image</label>
+          <input type="file" id="pe-avatar-file" accept="image/*" class="party-input" style="padding:8px 10px" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button type="button" class="user-menu-btn-secondary" id="pe-reset-btn">Clear PFP</button>
+          <button type="button" class="user-menu-btn-primary" id="pe-save-btn">Save Profile</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector("#profile-edit-close").addEventListener("click", () => closeModal(modal));
+    modal.addEventListener("click", e => { if (e.target === modal) closeModal(modal); });
+
+    modal.querySelector("#pe-avatar-file").addEventListener("change", e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const size = 160;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          const minSide = Math.min(img.width, img.height);
+          const sx = (img.width - minSide) / 2;
+          const sy = (img.height - minSide) / 2;
+          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.84);
+          modal.querySelector("#pe-avatar-url").value = dataUrl;
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    modal.querySelector("#pe-reset-btn").addEventListener("click", () => {
+      modal.querySelector("#pe-avatar-url").value = "";
+    });
+
+    modal.querySelector("#pe-save-btn").addEventListener("click", async () => {
+      const username = modal.querySelector("#pe-username").value.trim() || "Guest";
+      const avatarUrl = modal.querySelector("#pe-avatar-url").value.trim();
+      LocalProfile.set({ username, avatarUrl });
+      try {
+        if (window.supabase && await SupabaseSync.getUser()) {
+          await getSupabaseClient().auth.updateUser({ data: { username, avatar_url: avatarUrl } });
+        }
+      } catch {}
+      refreshUserMenuUI();
+      closeModal(modal);
+      toast("Profile updated");
+    });
+  }
+
+  const cur = LocalProfile.get();
+  modal.querySelector("#pe-username").value = cur.username || "";
+  modal.querySelector("#pe-avatar-url").value = cur.avatarUrl || "";
+  openModal(modal);
+}
+
+/* ============================================================================
+   Watch Party Manager (Backend API + Realtime Sync + Interactive HUD)
+   ============================================================================ */
+
+const WatchPartyManager = {
+  state: null,
+  clientId: safeGetItem("orc_wp_member_id") || (() => {
+    const id = "m-" + Math.random().toString(36).slice(2, 10);
+    safeSetItem("orc_wp_member_id", id);
+    return id;
+  })(),
+  followHost: true,
+  pollTimer: null,
+  channel: null,
+  chatOpen: true,
+  seenMsgIds: new Set(),
+
+  isHost() {
+    return Boolean(this.state && this.state.hostClientId === this.clientId);
+  },
+
+  getDisplayName() {
+    return LocalProfile.get().username || "Viewer";
+  },
+
+  async api(method, body = null, query = "") {
+    const url = `/api/watch-party${query ? "?" + query : ""}`;
+    const opts = {
+      method,
+      headers: { "Content-Type": "application/json" },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) {
+      throw new Error(json.error || `Request failed (${res.status})`);
+    }
+    return json;
+  },
+
+  inviteUrl(room) {
+    if (!room) return location.href;
+    const p = new URLSearchParams({ id: room.mediaId, room: room.code });
+    if (room.mediaType === "tv") {
+      p.set("season", String(room.season || 1));
+      p.set("episode", String(room.episode || 1));
+    }
+    return new URL(routeUrl(room.mediaType === "tv" ? "tv" : "movie", p), location.origin).href;
+  },
+
+  async createRoom(opts) {
+    const prof = LocalProfile.get();
+    const res = await this.api("POST", {
+      action: "create",
+      mediaType: opts.mediaType || "movie",
+      mediaId: String(opts.mediaId),
+      title: opts.title || "Watch Party",
+      posterPath: opts.poster || "",
+      season: Number(opts.season || 1),
+      episode: Number(opts.episode || 1),
+      provider: opts.provider || getProvider(),
+      hostName: opts.hostName || prof.username || "Host",
+      clientId: this.clientId,
+      avatar: prof.avatarUrl || "",
+    });
+    return res.room;
+  },
+
+  async joinRoom(rawCode, memberName) {
+    let clean = String(rawCode || "").trim();
+    if (clean.includes("room=")) {
+      try {
+        const u = new URL(clean.startsWith("http") ? clean : `https://watch.osiris.rocks${clean.startsWith("/") ? "" : "/"}${clean}`);
+        clean = u.searchParams.get("room") || clean;
+      } catch {}
+    }
+    clean = clean.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24);
+    if (clean.length < 4) throw new Error("Enter a valid Watch Party room code or link.");
+    const prof = LocalProfile.get();
+    const res = await this.api("POST", {
+      action: "join",
+      code: clean,
+      clientId: this.clientId,
+      name: memberName || prof.username || "Viewer",
+      avatar: prof.avatarUrl || "",
+    });
+    return res.room;
+  },
+
+  async connectFromPage(code, detailCtx) {
+    if (!code) return;
+    const clean = String(code).trim().toUpperCase();
+    const prof = LocalProfile.get();
+    try {
+      const data = await this.api("POST", {
+        action: "join",
+        code: clean,
+        clientId: this.clientId,
+        name: prof.username || "Viewer",
+        avatar: prof.avatarUrl || "",
+      });
+      this.attachSession(data.room, detailCtx);
+    } catch {
+      // Hydrate room descriptor if serverless instance rotated cold while invite link retained context
+      try {
+        const res = await this.api("POST", {
+          action: "join",
+          code: clean,
+          clientId: this.clientId,
+          name: prof.username || "Viewer",
+          avatar: prof.avatarUrl || "",
+          mediaType: detailCtx?.type || "movie",
+          mediaId: String(detailCtx?.id || ""),
+          title: detailCtx?.getTitle?.() || "Watch Party",
+          posterPath: detailCtx?.getPoster?.() || "",
+          season: detailCtx?.getSeason?.() || 1,
+          episode: detailCtx?.getEpisode?.() || 1,
+          provider: getProvider(),
+        });
+        if (res.room) this.attachSession(res.room, detailCtx);
+      } catch {
+        toast(`Watch Party ${clean} was not found or expired.`);
+      }
+    }
+  },
+
+  attachSession(room, detailCtx) {
+    this.teardownHud();
+    if (!room) return;
+    this.state = room;
+    this.seenMsgIds = new Set((room.messages || []).map(m => m.id));
+    this.renderHud(detailCtx);
+    this.startPolling(detailCtx);
+    this.connectRealtime(room.code, detailCtx);
+  },
+
+  teardownHud() {
+    clearInterval(this.pollTimer);
+    this.pollTimer = null;
+    if (this.channel) {
+      try { this.channel.unsubscribe?.(); } catch {}
+      this.channel = null;
+    }
+    $("#party-hud-root")?.remove();
+  },
+
+  connectRealtime(code, detailCtx) {
+    if (!this.state?.realtimeEnabled) return;
+    getSupabaseClientAsync().then(client => {
+      if (!client || !client.channel || this.state?.code !== code) return;
+      try {
+        const ch = client.channel(`watch-party-${code}`, { config: { broadcast: { self: false } } });
+        ch.on("broadcast", { event: "SYNC_PLAYBACK" }, ({ payload }) => {
+          if (!payload || payload.senderId === this.clientId) return;
+          if (payload.countdown) this.showSyncCountdown();
+          if (this.followHost && detailCtx && !this.isHost()) {
+            detailCtx.applyRemoteSync({
+              season: payload.season,
+              episode: payload.episode,
+              provider: payload.provider,
+              startPlay: true,
+            });
+            toast("Synced with Watch Party host");
+          }
+        }).on("broadcast", { event: "CHAT_MESSAGE" }, ({ payload }) => {
+          if (payload) this.appendMessages([payload]);
+        }).on("broadcast", { event: "PARTY_REACTION" }, ({ payload }) => {
+          if (payload?.emoji) this.floatReaction(payload.emoji);
+        }).subscribe();
+        this.channel = ch;
+      } catch {}
+    });
+  },
+
+  startPolling(detailCtx) {
+    clearInterval(this.pollTimer);
+    this.pollTimer = setInterval(async () => {
+      if (!this.state?.code) return;
+      try {
+        const prof = LocalProfile.get();
+        const res = await this.api("POST", {
+          action: "heartbeat",
+          code: this.state.code,
+          clientId: this.clientId,
+          name: prof.username || "Viewer",
+          avatar: prof.avatarUrl || "",
+        });
+        if (!res.room) return;
+        const prev = this.state;
+        this.state = res.room;
+        this.updateHudCounts();
+        this.appendMessages(res.room.messages || []);
+
+        if (!this.isHost() && this.followHost && detailCtx) {
+          const changed =
+            Number(prev.season) !== Number(res.room.season) ||
+            Number(prev.episode) !== Number(res.room.episode) ||
+            String(prev.provider || "") !== String(res.room.provider || "");
+          if (changed) {
+            detailCtx.applyRemoteSync({
+              season: res.room.season,
+              episode: res.room.episode,
+              provider: res.room.provider,
+              startPlay: true,
+            });
+            toast("Synced with Watch Party host");
+          }
+        }
+      } catch {}
+    }, 4500);
+  },
+
+  async onHostPlaybackChange(delta) {
+    if (!this.state?.code || !this.isHost()) return;
+    try {
+      const res = await this.api("PATCH", {
+        code: this.state.code,
+        clientId: this.clientId,
+        name: this.getDisplayName(),
+        season: delta.season,
+        episode: delta.episode,
+        provider: delta.provider,
+        isPlaying: delta.action === "play" ? true : undefined,
+      });
+      if (res.room) this.state = res.room;
+    } catch {}
+  },
+
+  showSyncCountdown() {
+    const frame = $("#player-frame");
+    if (!frame) return;
+    let badge = frame.querySelector(".party-sync-countdown");
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.className = "party-sync-countdown";
+      frame.appendChild(badge);
+    }
+    let count = 3;
+    badge.textContent = `Press Play in ${count}...`;
+    const timer = setInterval(() => {
+      count -= 1;
+      if (count > 0) {
+        badge.textContent = `Press Play in ${count}...`;
+      } else {
+        badge.textContent = "GO!";
+        clearInterval(timer);
+        setTimeout(() => badge.remove(), 1100);
+      }
+    }, 1000);
+  },
+
+  floatReaction(emoji) {
+    const frame = $("#player-frame");
+    if (!frame) return;
+    let layer = frame.querySelector(".party-reaction-layer");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = "party-reaction-layer";
+      frame.appendChild(layer);
+    }
+    const el = document.createElement("span");
+    el.className = "party-reaction-float";
+    el.textContent = emoji;
+    el.style.left = `${14 + Math.random() * 72}%`;
+    layer.appendChild(el);
+    setTimeout(() => el.remove(), 2000);
+  },
+
+  appendMessages(list) {
+    const log = $("#party-chat-log");
+    if (!log || !Array.isArray(list)) return;
+    let added = false;
+    list.forEach(msg => {
+      if (!msg?.id || this.seenMsgIds.has(msg.id)) return;
+      this.seenMsgIds.add(msg.id);
+      if (msg.type === "reaction") {
+        this.floatReaction(msg.text || "❤️");
+        return;
+      }
+      const row = document.createElement("div");
+      row.className = `party-chat-msg${msg.type === "system" ? " system" : ""}`;
+      row.innerHTML = msg.type === "system"
+        ? esc(msg.text)
+        : `<strong>${esc(msg.sender)}:</strong> ${esc(msg.text)}`;
+      log.appendChild(row);
+      added = true;
+    });
+    if (added) log.scrollTop = log.scrollHeight;
+  },
+
+  updateHudCounts() {
+    const el = $("#party-hud-members");
+    if (!el || !this.state) return;
+    const count = (this.state.members || []).length || 1;
+    el.textContent = `${count} ${count === 1 ? "member" : "members"} live`;
+  },
+
+  renderHud(detailCtx) {
+    const playerSection = $(".player-wrap") || $(".player-shell") || $("#player-frame")?.parentElement;
+    if (!playerSection || !this.state) return;
+    $("#party-hud-root")?.remove();
+
+    const p = this.state;
+    const host = this.isHost();
+    const hud = document.createElement("div");
+    hud.id = "party-hud-root";
+    hud.className = "party-hud";
+    hud.innerHTML = `
+      <div class="party-hud-bar">
+        <div class="party-hud-left">
+          <span class="party-live-dot" aria-hidden="true"></span>
+          <button type="button" class="party-code-pill" id="party-hud-copy-code" title="Copy room invite link">ROOM: ${esc(p.code)}</button>
+          <span class="party-members" id="party-hud-members"></span>
+        </div>
+        <div class="party-hud-actions">
+          ${host
+            ? `<button type="button" class="party-hud-btn active" id="party-countdown-btn">Sync 3-2-1</button>`
+            : `<button type="button" class="party-hud-btn ${this.followHost ? "active" : ""}" id="party-follow-btn">Follow Host: ${this.followHost ? "ON" : "OFF"}</button>`
+          }
+          <button type="button" class="party-hud-btn" id="party-chat-toggle">Chat</button>
+          <button type="button" class="party-hud-btn danger" id="party-leave-btn">${host ? "End Party" : "Leave"}</button>
+        </div>
+      </div>
+      <div class="party-chat-wrap" id="party-chat-wrap" ${this.chatOpen ? "" : "hidden"}>
+        <div class="party-chat-log" id="party-chat-log"></div>
+        <div class="party-chat-controls">
+          <form class="party-chat-form" id="party-chat-form">
+            <input type="text" id="party-chat-input" placeholder="Send a message to the party..." maxlength="240" autocomplete="off" />
+            <button type="submit" class="party-hud-btn active">Send</button>
+          </form>
+          <div class="party-reactions-row" aria-label="Reactions">
+            ${["❤️", "😂", "🔥", "😮", "👏"].map(em => `<button type="button" class="party-react-btn" data-react="${em}">${em}</button>`).join("")}
+          </div>
+        </div>
+      </div>`;
+
+    playerSection.insertAdjacentElement("afterend", hud);
+    this.updateHudCounts();
+    const initialMsgs = p.messages || [];
+    this.seenMsgIds.clear();
+    this.appendMessages(initialMsgs);
+
+    hud.querySelector("#party-hud-copy-code").addEventListener("click", () => {
+      const url = this.inviteUrl(this.state);
+      navigator.clipboard?.writeText(url).then(() => toast(`Copied invite link (${this.state.code})`));
+    });
+
+    hud.querySelector("#party-chat-toggle").addEventListener("click", () => {
+      this.chatOpen = !this.chatOpen;
+      const wrap = $("#party-chat-wrap");
+      if (wrap) wrap.hidden = !this.chatOpen;
+    });
+
+    hud.querySelector("#party-follow-btn")?.addEventListener("click", e => {
+      this.followHost = !this.followHost;
+      e.currentTarget.classList.toggle("active", this.followHost);
+      e.currentTarget.textContent = `Follow Host: ${this.followHost ? "ON" : "OFF"}`;
+      if (this.followHost && detailCtx && this.state) {
+        detailCtx.applyRemoteSync({
+          season: this.state.season,
+          episode: this.state.episode,
+          provider: this.state.provider,
+          startPlay: true,
+        });
+      }
+    });
+
+    hud.querySelector("#party-countdown-btn")?.addEventListener("click", async () => {
+      this.showSyncCountdown();
+      try {
+        await this.api("PATCH", {
+          code: this.state.code,
+          clientId: this.clientId,
+          countdown: true,
+        });
+        const res = await this.api("POST", {
+          action: "chat",
+          code: this.state.code,
+          clientId: this.clientId,
+          sender: this.getDisplayName(),
+          text: "Host triggered a 3-2-1 Sync Countdown!",
+        });
+        if (res.room) this.appendMessages(res.room.messages || []);
+      } catch {}
+    });
+
+    hud.querySelector("#party-leave-btn").addEventListener("click", async () => {
+      const code = this.state?.code;
+      try {
+        if (host) {
+          await this.api("DELETE", null, `code=${encodeURIComponent(code)}`);
+        } else {
+          await this.api("POST", { action: "leave", code, clientId: this.clientId, name: this.getDisplayName() });
+        }
+      } catch {}
+      this.teardownHud();
+      this.state = null;
+      const u = new URL(location.href);
+      u.searchParams.delete("room");
+      history.replaceState(null, "", u);
+      toast(host ? "Watch Party ended" : "Left Watch Party");
+    });
+
+    hud.querySelector("#party-chat-form").addEventListener("submit", async e => {
+      e.preventDefault();
+      const inp = $("#party-chat-input");
+      const text = inp?.value?.trim();
+      if (!text || !this.state?.code) return;
+      inp.value = "";
+      try {
+        const res = await this.api("POST", {
+          action: "chat",
+          code: this.state.code,
+          clientId: this.clientId,
+          sender: this.getDisplayName(),
+          avatar: LocalProfile.get().avatarUrl || "",
+          text,
+        });
+        if (res.room) this.appendMessages(res.room.messages || []);
+      } catch (err) {
+        toast(err.message || "Could not send message");
+      }
+    });
+
+    hud.querySelectorAll("[data-react]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const emoji = btn.dataset.react;
+        this.floatReaction(emoji);
+        this.channel?.send?.({ type: "broadcast", event: "PARTY_REACTION", payload: { emoji } });
+        try {
+          const res = await this.api("POST", {
+            action: "reaction",
+            code: this.state.code,
+            clientId: this.clientId,
+            sender: this.getDisplayName(),
+            emoji,
+          });
+          if (res.room) this.state = res.room;
+        } catch {}
+      });
+    });
+  }
+};
+
+function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts = {}) {
+  let modal = $("#party-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.className = "modal-overlay";
+    modal.id = "party-modal";
+    modal.innerHTML = `
+      <div class="party-modal-card modal-box">
+        <button type="button" class="modal-close" id="party-close" aria-label="Close">✕</button>
+        <h2 style="font-size:1.18rem;font-weight:800;margin:0;display:flex;align-items:center;gap:9px">
+          ${ICONS.party}<span>Watch Party</span>
+        </h2>
+        <div class="party-modal-tabs">
+          <button type="button" class="party-modal-tab active" data-pm-tab="host">Host Party</button>
+          <button type="button" class="party-modal-tab" data-pm-tab="join">Join Party</button>
+        </div>
+
+        <div id="pm-host-pane">
+          <div class="party-field">
+            <label for="pm-host-name">Your Display Name</label>
+            <input type="text" id="pm-host-name" class="party-input" maxlength="28" placeholder="Your name" />
+          </div>
+          <div class="party-field">
+            <label>Selected Title</label>
+            <div id="pm-selected-host"></div>
+          </div>
+          <div class="party-field" id="pm-picker-block">
+            <label for="pm-picker-search">Choose Movie, Show, or Anime</label>
+            <input type="search" id="pm-picker-search" class="party-input" placeholder="Search title to watch together..." autocomplete="off" />
+            <div class="party-picker-list" id="pm-picker-list"></div>
+          </div>
+          <div id="pm-host-status" class="auth-status"></div>
+          <button type="button" class="auth-submit-btn" id="pm-create-btn">Create Watch Party Room</button>
+        </div>
+
+        <div id="pm-join-pane" hidden>
+          <div class="party-field">
+            <label for="pm-join-name">Your Display Name</label>
+            <input type="text" id="pm-join-name" class="party-input" maxlength="28" placeholder="Your name" />
+          </div>
+          <div class="party-field">
+            <label for="pm-join-code">Room Code or Invite Link</label>
+            <input type="text" id="pm-join-code" class="party-input is-code" placeholder="e.g. A7K9P2" autocomplete="off" />
+          </div>
+          <div id="pm-join-status" class="auth-status"></div>
+          <button type="button" class="auth-submit-btn" id="pm-join-btn">Join Watch Party</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector("#party-close").addEventListener("click", () => closeModal(modal));
+    modal.addEventListener("click", e => { if (e.target === modal) closeModal(modal); });
+  }
+
+  let picked = mediaId ? {
+    id: String(mediaId),
+    type: mediaType || "movie",
+    title: title || "Selected Title",
+    poster: opts.poster || "",
+    season: opts.season || 1,
+    episode: opts.episode || 1,
+  } : null;
+
+  const setTab = tab => {
+    const isJoin = tab === "join";
+    modal.querySelectorAll(".party-modal-tab").forEach(b => b.classList.toggle("active", b.dataset.pmTab === tab));
+    modal.querySelector("#pm-host-pane").hidden = isJoin;
+    modal.querySelector("#pm-join-pane").hidden = !isJoin;
+  };
+  modal.querySelectorAll(".party-modal-tab").forEach(b => {
+    b.onclick = () => setTab(b.dataset.pmTab);
+  });
+
+  const renderPicked = () => {
+    const box = modal.querySelector("#pm-selected-host");
+    if (!picked) {
+      box.innerHTML = `<div style="font-size:0.84rem;color:var(--text-3);padding:8px 2px">Select a movie or series below to launch a synced room.</div>`;
+    } else {
+      const pUrl = posterUrl(picked.poster, "w342") || "";
+      box.innerHTML = `
+        <div class="party-selected-title">
+          ${pUrl ? `<img src="${pUrl}" alt="">` : ""}
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:750;font-size:0.93rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(picked.title)}</div>
+            <div style="font-size:0.78rem;color:var(--text-3)">${picked.type === "tv" ? `Series · S${picked.season} E${picked.episode}` : "Movie"}</div>
+          </div>
+        </div>`;
+    }
+  };
+
+  const pickerBlock = modal.querySelector("#pm-picker-block");
+  const pickerList = modal.querySelector("#pm-picker-list");
+  const pickerInput = modal.querySelector("#pm-picker-search");
+
+  const loadPickerItems = async q => {
+    pickerList.innerHTML = `<div style="padding:12px;color:var(--text-3);font-size:0.82rem">Loading titles...</div>`;
+    try {
+      const ep = q && q.trim()
+        ? `/search/multi?query=${encodeURIComponent(q.trim())}&include_adult=false&page=1`
+        : `/trending/all/day?page=1`;
+      const res = await tmdb(ep);
+      const items = (res?.results || []).filter(x => x.media_type === "movie" || x.media_type === "tv").slice(0, 10);
+      pickerList.textContent = "";
+      items.forEach(it => {
+        const t = it.media_type || "movie";
+        const name = it.title || it.name || "Untitled";
+        const pImg = posterUrl(it.poster_path, "w342") || "";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "party-picker-row";
+        btn.innerHTML = `
+          ${pImg ? `<img src="${pImg}" alt="">` : ""}
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:650;font-size:0.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
+            <div style="font-size:0.74rem;color:var(--text-3)">${t === "tv" ? "Show" : "Movie"} · ${year(it.release_date || it.first_air_date || "")}</div>
+          </div>`;
+        btn.addEventListener("click", () => {
+          picked = { id: String(it.id), type: t, title: name, poster: it.poster_path || "", season: 1, episode: 1 };
+          renderPicked();
+        });
+        pickerList.appendChild(btn);
+      });
+    } catch {
+      pickerList.innerHTML = `<div style="padding:12px;color:var(--text-3);font-size:0.82rem">Search failed.</div>`;
+    }
+  };
+
+  let pTimer = null;
+  pickerInput.value = "";
+  pickerInput.oninput = () => {
+    clearTimeout(pTimer);
+    pTimer = setTimeout(() => loadPickerItems(pickerInput.value), 220);
+  };
+
+  const defName = WatchPartyManager.getDisplayName();
+  modal.querySelector("#pm-host-name").value = defName;
+  modal.querySelector("#pm-join-name").value = defName;
+  modal.querySelector("#pm-host-status").textContent = "";
+  modal.querySelector("#pm-join-status").textContent = "";
+
+  pickerBlock.hidden = Boolean(mediaId && title);
+  if (!pickerBlock.hidden) loadPickerItems("");
+  renderPicked();
+
+  modal.querySelector("#pm-create-btn").onclick = async () => {
+    const st = modal.querySelector("#pm-host-status");
+    const btn = modal.querySelector("#pm-create-btn");
+    if (!picked) {
+      st.textContent = "Please choose a title first.";
+      return;
+    }
+    const hostName = modal.querySelector("#pm-host-name").value.trim() || "Host";
+    LocalProfile.set({ username: hostName });
+    refreshUserMenuUI();
+    btn.disabled = true;
+    st.textContent = "Creating room...";
+    try {
+      const party = await WatchPartyManager.createRoom({
+        mediaType: picked.type,
+        mediaId: picked.id,
+        title: picked.title,
+        poster: picked.poster,
+        season: picked.season,
+        episode: picked.episode,
+        provider: getProvider(),
+        hostName,
+      });
+      const url = WatchPartyManager.inviteUrl(party);
+      navigator.clipboard?.writeText(url).catch(() => {});
+      closeModal(modal);
+      toast(`Watch Party ${party.code} created! Link copied.`);
+      if (window._orcDetailControls && String(window._orcDetailControls.id) === String(picked.id) && window._orcDetailControls.type === picked.type) {
+        const u = new URL(location.href);
+        u.searchParams.set("room", party.code);
+        history.replaceState(null, "", u);
+        WatchPartyManager.attachSession(party, window._orcDetailControls);
+      } else {
+        SeamlessRouter.go(url);
+      }
+    } catch (err) {
+      st.textContent = err.message || "Could not create Watch Party.";
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  modal.querySelector("#pm-join-btn").onclick = async () => {
+    const st = modal.querySelector("#pm-join-status");
+    const btn = modal.querySelector("#pm-join-btn");
+    const code = modal.querySelector("#pm-join-code").value.trim();
+    const memberName = modal.querySelector("#pm-join-name").value.trim() || "Viewer";
+    LocalProfile.set({ username: memberName });
+    refreshUserMenuUI();
+    btn.disabled = true;
+    st.textContent = "Joining room...";
+    try {
+      const party = await WatchPartyManager.joinRoom(code, memberName);
+      closeModal(modal);
+      const url = WatchPartyManager.inviteUrl(party);
+      if (window._orcDetailControls && String(window._orcDetailControls.id) === String(party.mediaId) && window._orcDetailControls.type === party.mediaType) {
+        const u = new URL(location.href);
+        u.searchParams.set("room", party.code);
+        history.replaceState(null, "", u);
+        WatchPartyManager.attachSession(party, window._orcDetailControls);
+      } else {
+        SeamlessRouter.go(url);
+      }
+    } catch (err) {
+      st.textContent = err.message || "Could not join Watch Party.";
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  setTab(opts.tab === "join" ? "join" : "host");
+  openModal(modal);
+}

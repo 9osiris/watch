@@ -50,8 +50,8 @@ test("canonical URLs and structured data use the new origin and deployed clean r
 
 test("sitemap and robots advertise the migrated clean URLs", () => {
   const urls = [...read("sitemap.xml").matchAll(/<loc>(.*?)<\/loc>/g)].map(match => match[1]);
-  // Phase 7 Item 44: /list and /settings removed from sitemap; /privacy added
-  assert.deepEqual(urls, ["/", "/movie", "/tv", "/search", "/privacy", "/dmca"].map(route => origin + route));
+  // Phase 7 Item 44: /list and /settings removed from sitemap; /privacy added; /anime added
+  assert.deepEqual(urls, ["/", "/movie", "/tv", "/anime", "/search", "/privacy", "/dmca"].map(route => origin + route));
   assert.ok(read("robots.txt").includes(`Sitemap: ${origin}/sitemap.xml`));
   assert.ok(!read("robots.txt").includes("wfc"));
 });
@@ -511,7 +511,7 @@ test("Phase 7: Cleanup regression suite", () => {
 
   // 45. Plain-language update log
   assert.ok(read("orc-script.js").includes("WHAT'S NEW"));
-  assert.ok(read("orc-script.js").includes("Cleaner design, mobile episode tracking, and faster streams"));
+  assert.ok(read("orc-script.js").includes("Anime Hub, Watch Party rooms, animated search, and seamless tab transitions"));
 });
 
 test("Phase 8 & UI Directives regression suite", () => {
@@ -562,3 +562,48 @@ test("Phase 8 & UI Directives regression suite", () => {
   assert.ok(script.includes("openKeyboardHelpSheet"));
 });
 
+
+test("Phase 9: Search morph, user dropdown, anime page, privacy redesign, watch party, adblocker guidance, and seamless transitions", () => {
+  const css = read("orc-styles.css");
+  const script = read("orc-script.js");
+  const vercel = read("vercel.json");
+
+  // Animated Search Morph + User Menu across topnav HTMLs
+  for (const page of ["index.html", "anime.html", "movie.html", "tv.html", "search.html", "list.html", "settings.html", "privacy.html", "dmca.html"]) {
+    const html = read(page);
+    assert.ok(html.includes('id="topnav-search-btn"'), `${page} has search trigger`);
+    assert.ok(html.includes('id="topnav-user-btn"'), `${page} has user dropdown trigger`);
+    assert.ok(html.includes('href="/anime"'), `${page} links to Anime page`);
+    assert.ok(html.includes("orc_warm_nav"), `${page} includes warm-nav transition bootstrap`);
+  }
+
+  // Dedicated Anime page & Vercel clean rewrite
+  const animeHtml = read("anime.html");
+  assert.ok(animeHtml.includes('class="anime-page"'));
+  assert.ok(animeHtml.includes('id="anime-filter-strip"'));
+  assert.ok(vercel.includes('"/anime"'));
+  assert.ok(script.includes("initAnimePage"));
+
+  // Privacy page uses unified DMCA legal-page structure
+  const privacyHtml = read("privacy.html");
+  assert.ok(privacyHtml.includes('class="legal-page'));
+  assert.ok(privacyHtml.includes('class="legal-body"'));
+  assert.ok(privacyHtml.includes("https://watch.osiris.rocks/privacy"));
+
+  // Adblocker recommendations on Settings (desktop + mobile)
+  const settingsHtml = read("settings.html");
+  assert.ok(settingsHtml.includes('id="settings-adblock-section"'));
+  assert.ok(settingsHtml.includes("uBlock Origin"));
+  assert.ok(settingsHtml.includes("AdGuard"));
+
+  // Header search, User dropdown, SeamlessRouter, WatchPartyManager, Player skeletons
+  assert.ok(script.includes("const HeaderSearch ="));
+  assert.ok(script.includes("const UserDropdown ="));
+  assert.ok(script.includes("const SeamlessRouter ="));
+  assert.ok(script.includes("const WatchPartyManager ="));
+  assert.ok(css.includes(".header-search-shell"));
+  assert.ok(css.includes(".user-menu-popover"));
+  assert.ok(css.includes(".player-skel-overlay"));
+  assert.ok(css.includes(".adblock-rec-card"));
+  assert.ok(css.includes(".party-hud"));
+});

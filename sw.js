@@ -1,13 +1,14 @@
-const CACHE_NAME = "orc-static-v41";
+const CACHE_NAME = "orc-static-v42";
 const TMDB_CACHE_NAME = "orc-tmdb-runtime-v2";
 const TMDB_CACHE_MAX_ENTRIES = 200;
 const TMDB_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/search", "/list", "/settings", "/privacy", "/dmca"]);
+const CLEAN_ROUTES = new Set(["/", "/movie", "/tv", "/anime", "/search", "/list", "/settings", "/privacy", "/dmca"]);
 const HTML_TO_CLEAN = new Map([
   ["/index.html", "/"],
   ["/movie.html", "/movie"],
   ["/tv.html", "/tv"],
+  ["/anime.html", "/anime"],
   ["/search.html", "/search"],
   ["/list.html", "/list"],
   ["/settings.html", "/settings"],
@@ -17,6 +18,7 @@ const HTML_TO_CLEAN = new Map([
 const CLEAN_ROUTE_FALLBACKS = new Map([
   ["/movie", "/movie.html"],
   ["/tv", "/tv.html"],
+  ["/anime", "/anime.html"],
   ["/search", "/search.html"],
   ["/list", "/list.html"],
   ["/settings", "/settings.html"],
@@ -26,6 +28,7 @@ const CLEAN_ROUTE_FALLBACKS = new Map([
 
 const STATIC_ASSETS = [
   "/",
+  "/anime",
   "/search",
   "/list",
   "/settings",

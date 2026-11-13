@@ -368,12 +368,40 @@ CREATE POLICY "Users View Own Audit Logs" ON public.audit_logs FOR SELECT USING 
 CREATE POLICY "Users Manage Own History" ON public.watch_history FOR ALL USING (auth.uid() = user_id);
 
 -- ============================================================================
+-- WATCH PARTIES (Optional persisted room mirror for realtime co-watching)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.watch_parties (
+    code TEXT PRIMARY KEY,
+    media_type TEXT NOT NULL CHECK (media_type IN ('movie', 'tv')),
+    media_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    poster_path TEXT DEFAULT '',
+    season INTEGER DEFAULT 1,
+    episode INTEGER DEFAULT 1,
+    provider TEXT DEFAULT 'cinesrc',
+    is_playing BOOLEAN DEFAULT FALSE,
+    position_sec INTEGER DEFAULT 0,
+    host_client_id TEXT NOT NULL,
+    host_name TEXT DEFAULT 'Host',
+    state_version INTEGER DEFAULT 1,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_watch_parties_updated ON public.watch_parties(updated_at DESC);
+ALTER TABLE public.watch_parties ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Watch Parties Public Read" ON public.watch_parties FOR SELECT USING (true);
+CREATE POLICY "Watch Parties Public Write" ON public.watch_parties FOR INSERT WITH CHECK (true);
+CREATE POLICY "Watch Parties Public Update" ON public.watch_parties FOR UPDATE USING (true);
+
+-- ============================================================================
 -- REALTIME PUBSUB SETUP
 -- ============================================================================
 DO $$ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.progress;
     ALTER PUBLICATION supabase_realtime ADD TABLE public.watchlists;
     ALTER PUBLICATION supabase_realtime ADD TABLE public.user_reviews;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.watch_parties;
 EXCEPTION
     WHEN OTHERS THEN null;
 END $$;
