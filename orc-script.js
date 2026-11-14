@@ -113,7 +113,7 @@ const ICONS = {
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
   star: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
   history: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>`,
-  party: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  party: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   chevronDown: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
   chevronRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`,
   close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`,
@@ -134,6 +134,298 @@ const ICONS = {
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => [...c.querySelectorAll(s)];
 
+let _lastMorphTrigger = null;
+if (typeof document !== "undefined" && !window.__orcMorphPointerBound) {
+  window.__orcMorphPointerBound = true;
+  document.addEventListener("pointerdown", e => {
+    const t = e.target?.closest?.("button, a, [role='button'], .media-card");
+    if (t) _lastMorphTrigger = t;
+  }, { capture: true, passive: true });
+}
+
+function getValidTriggerRect(triggerEl) {
+  const el = triggerEl || _lastMorphTrigger || document.activeElement;
+  if (!el || typeof el.getBoundingClientRect !== "function" || el === document.body || el === document.documentElement) return null;
+  const r = el.getBoundingClientRect();
+  if (!r || (r.width === 0 && r.height === 0)) return null;
+  if (r.bottom < -40 || r.top > window.innerHeight + 40 || r.right < -40 || r.left > window.innerWidth + 40) return null;
+  return r;
+}
+
+function animateSubwindowMorph(panelEl, triggerEl, opening, onDone) {
+  if (!panelEl) {
+    if (onDone) onDone();
+    return;
+  }
+  try { panelEl._orcMorphAnim?.cancel?.(); } catch {}
+  panelEl._orcMorphAnim = null;
+
+  if (prefersReducedMotion() || typeof panelEl.animate !== "function") {
+    if (onDone) onDone();
+    return;
+  }
+
+  panelEl.classList.add("is-morphing");
+  const prevTransform = panelEl.style.transform;
+  const prevOrigin = panelEl.style.transformOrigin;
+  const prevOverflow = panelEl.style.overflow;
+  panelEl.style.transform = "none";
+  panelEl.style.transformOrigin = "center center";
+
+  const sr = panelEl.getBoundingClientRect();
+  panelEl.style.transform = prevTransform;
+
+  if (!sr || sr.width < 10 || sr.height < 10) {
+    panelEl.style.transformOrigin = prevOrigin;
+    panelEl.classList.remove("is-morphing");
+    if (onDone) onDone();
+    return;
+  }
+
+  const tr = getValidTriggerRect(triggerEl);
+  const targetRadius = getComputedStyle(panelEl).borderRadius || "18px";
+  let frames;
+
+  if (tr) {
+    const dx = (tr.left + tr.width / 2) - (sr.left + sr.width / 2);
+    const dy = (tr.top + tr.height / 2) - (sr.top + sr.height / 2);
+    const sx = Math.max(0.05, Math.min(0.85, tr.width / sr.width));
+    const sy = Math.max(0.05, Math.min(0.85, tr.height / sr.height));
+    const iconTransform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`;
+    const overshootTransform = "translate(0px, 0px) scale(1.015, 1.015)";
+    const openTransform = "translate(0px, 0px) scale(1, 1)";
+    const midCloseTransform = `translate(${(dx * 0.22).toFixed(1)}px, ${(dy * 0.22).toFixed(1)}px) scale(${(0.9 + (sx - 0.9) * 0.22).toFixed(3)}, ${(0.9 + (sy - 0.9) * 0.22).toFixed(3)})`;
+    if (opening) {
+      frames = [
+        { transform: iconTransform, opacity: 0.14, borderRadius: "999px", transformOrigin: "center center", offset: 0 },
+        { transform: overshootTransform, opacity: 1, borderRadius: targetRadius, transformOrigin: "center center", offset: 0.72 },
+        { transform: openTransform, opacity: 1, borderRadius: targetRadius, transformOrigin: "center center", offset: 1 }
+      ];
+    } else {
+      frames = [
+        { transform: openTransform, opacity: 1, borderRadius: targetRadius, transformOrigin: "center center", offset: 0 },
+        { transform: midCloseTransform, opacity: 0.92, borderRadius: targetRadius, transformOrigin: "center center", offset: 0.3 },
+        { transform: iconTransform, opacity: 0, borderRadius: "999px", transformOrigin: "center center", offset: 1 }
+      ];
+    }
+  } else if (opening) {
+    frames = [
+      { transform: "translateY(14px) scale(0.9)", opacity: 0, borderRadius: targetRadius, transformOrigin: "center center", offset: 0 },
+      { transform: "translateY(-1px) scale(1.012)", opacity: 1, borderRadius: targetRadius, transformOrigin: "center center", offset: 0.74 },
+      { transform: "translateY(0px) scale(1)", opacity: 1, borderRadius: targetRadius, transformOrigin: "center center", offset: 1 }
+    ];
+  } else {
+    frames = [
+      { transform: "translateY(0px) scale(1)", opacity: 1, borderRadius: targetRadius, transformOrigin: "center center", offset: 0 },
+      { transform: "translateY(10px) scale(0.92)", opacity: 0, borderRadius: targetRadius, transformOrigin: "center center", offset: 1 }
+    ];
+  }
+
+  panelEl.style.overflow = "hidden";
+  const anim = panelEl.animate(frames, {
+    duration: opening ? 350 : 240,
+    easing: opening ? "cubic-bezier(0.22, 1, 0.36, 1)" : "cubic-bezier(0.4, 0, 0.2, 1)",
+    fill: "none"
+  });
+  panelEl._orcMorphAnim = anim;
+  const cleanup = () => {
+    if (panelEl._orcMorphAnim === anim) panelEl._orcMorphAnim = null;
+    panelEl.style.overflow = prevOverflow;
+    panelEl.style.transformOrigin = prevOrigin;
+    panelEl.classList.remove("is-morphing");
+  };
+  anim.onfinish = () => {
+    cleanup();
+    if (onDone) onDone();
+  };
+  anim.oncancel = cleanup;
+}
+
+let _notifCache = { sig: "", ts: 0, data: null };
+function invalidateNotifCache() {
+  _notifCache = { sig: "", ts: 0, data: null };
+}
+
+function formatNotifAirDate(airDate) {
+  if (!airDate) return "Recent";
+  const dt = new Date(`${airDate}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return String(airDate);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const diffDays = Math.round((dt.getTime() - todayStart) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === -1) return "Yesterday";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays > 1 && diffDays <= 7) return `Airs ${dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function getSavedTvShowsForNotif() {
+  const seen = new Set();
+  const list = [];
+  const collect = items => {
+    (items || []).forEach(it => {
+      if (!it || !it.id) return;
+      const kind = String(it.type || it.media_type || (it.first_air_date ? "tv" : "")).toLowerCase();
+      if (kind !== "tv" && kind !== "series") return;
+      const key = String(it.id);
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push({ ...it, type: "tv" });
+    });
+  };
+  collect(MyList.get());
+  try {
+    if (typeof Folders !== "undefined" && typeof Folders.get === "function") {
+      Folders.get().forEach(f => collect(f.items));
+    }
+  } catch {}
+  return list;
+}
+
+async function fetchWatchlistNewEpisodes(opts = {}) {
+  const tvShows = getSavedTvShowsForNotif();
+  if (!tvShows.length) {
+    $("#topnav-bell-btn")?.classList.remove("has-unread");
+    return { hasShows: false, recent: [], latest: [], failed: false };
+  }
+  const sig = tvShows.slice(0, 14).map(s => String(s.id)).sort().join(",");
+  const fresh = !opts.force && _notifCache.data && _notifCache.sig === sig && (Date.now() - _notifCache.ts < 60000);
+  if (fresh) {
+    $("#topnav-bell-btn")?.classList.toggle("has-unread", (_notifCache.data.recent || []).length > 0);
+    return _notifCache.data;
+  }
+
+  const nowDate = new Date();
+  const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
+  const twoWeeksAgo = todayStart - 14 * 86400000;
+  const nextWeek = todayStart + 8 * 86400000;
+  const recent = [];
+  const latest = [];
+  let okCount = 0;
+  let failCount = 0;
+
+  await Promise.allSettled(tvShows.slice(0, 14).map(async show => {
+    try {
+      const d = await tmdb(`/tv/${show.id}`);
+      if (!d || typeof d !== "object") {
+        failCount++;
+        return;
+      }
+      okCount++;
+      const enrichedShow = {
+        ...show,
+        id: show.id,
+        title: show.title || show.name || d.name || d.title || "Series",
+        poster_path: show.poster_path || show.poster || d.poster_path || "",
+      };
+      const lastEp = d.last_episode_to_air;
+      const nextEp = d.next_episode_to_air;
+      let addedUpcomingToday = false;
+      if (nextEp && nextEp.air_date) {
+        const nextMs = new Date(`${nextEp.air_date}T00:00:00`).getTime();
+        if (!Number.isNaN(nextMs) && nextMs >= todayStart && nextMs <= nextWeek) {
+          addedUpcomingToday = nextMs === todayStart;
+          recent.push({ show: enrichedShow, ep: nextEp, airMs: nextMs, upcoming: true });
+        }
+      }
+      if (lastEp && lastEp.air_date) {
+        const airMs = new Date(`${lastEp.air_date}T00:00:00`).getTime();
+        if (!Number.isNaN(airMs)) {
+          latest.push({ show: enrichedShow, ep: lastEp, airMs, upcoming: false });
+          const sameAsNext = nextEp && nextEp.season_number === lastEp.season_number && nextEp.episode_number === lastEp.episode_number;
+          if (!sameAsNext && !(addedUpcomingToday && airMs === todayStart) && airMs >= twoWeeksAgo && airMs <= todayStart + 86400000) {
+            recent.push({ show: enrichedShow, ep: lastEp, airMs, upcoming: false });
+          }
+        }
+      }
+    } catch {
+      failCount++;
+    }
+  }));
+
+  recent.sort((a, b) => {
+    if (a.upcoming !== b.upcoming) return a.upcoming ? -1 : 1;
+    return a.upcoming ? a.airMs - b.airMs : b.airMs - a.airMs;
+  });
+  latest.sort((a, b) => b.airMs - a.airMs);
+
+  const failed = okCount === 0 && failCount > 0;
+  const result = { hasShows: true, recent, latest: latest.slice(0, 4), failed };
+  if (!failed) {
+    _notifCache = { sig, ts: Date.now(), data: result };
+  }
+  $("#topnav-bell-btn")?.classList.toggle("has-unread", recent.length > 0);
+  return result;
+}
+
+function buildNotifItemsHtml(data) {
+  if (!data || !data.hasShows) {
+    return `<div class="notif-empty-state">No TV shows in your watchlist yet.<span class="notif-empty-hint">Save a show to track new episodes here.</span></div>`;
+  }
+  if (data.failed && !data.recent.length && !data.latest.length) {
+    return `<div class="notif-empty-state">Couldn't check new episodes right now.<span class="notif-empty-hint">Check your connection and try again.</span></div>`;
+  }
+  const renderEntry = ({ show, ep, upcoming }) => {
+    const posterSrc = show.poster_path
+      ? (show.poster_path.startsWith("http") ? show.poster_path : `${IMG_W300}${show.poster_path}`)
+      : "/favicon.png";
+    const sNum = ep.season_number ?? 1;
+    const eNum = ep.episode_number ?? 1;
+    const epLabel = `S${sNum} E${eNum}${ep.name ? ` · ${esc(ep.name)}` : ""}`;
+    const dateLabel = formatNotifAirDate(ep.air_date);
+    return `
+      <a href="${routeUrl("tv")}?id=${encodeURIComponent(show.id)}&season=${sNum}&episode=${eNum}" class="notif-item" data-notif-nav="1">
+        <div class="notif-thumb"><img src="${esc(posterSrc)}" alt="${esc(show.title || "Series")}" loading="lazy" /></div>
+        <div class="notif-info">
+          <div class="notif-title">${esc(show.title || "Series")}</div>
+          <div class="notif-ep">${epLabel}</div>
+          <div class="notif-date${upcoming ? " is-upcoming" : ""}">${esc(dateLabel)}</div>
+        </div>
+      </a>`;
+  };
+  if (data.recent.length) {
+    return data.recent.map(renderEntry).join("");
+  }
+  if (data.latest.length) {
+    return `<div class="notif-empty-state is-compact">No new episodes this week</div><div class="notif-section-label">Latest from your shows</div>${data.latest.map(renderEntry).join("")}`;
+  }
+  return `<div class="notif-empty-state">No new episodes this week</div>`;
+}
+
+function closeNotificationsPopover(immediate = false) {
+  const bellBtn = $("#topnav-bell-btn");
+  const popover = $("#notif-popover");
+  if (popover && popover.classList.contains("is-open")) {
+    bellBtn?.setAttribute("aria-expanded", "false");
+    bellBtn?.classList.remove("active");
+    popover.setAttribute("aria-hidden", "true");
+    if (immediate) {
+      try { popover._orcMorphAnim?.cancel?.(); } catch {}
+      popover.classList.remove("is-open", "is-closing", "is-morphing");
+    } else {
+      popover.classList.add("is-closing");
+      animateSubwindowMorph(popover, bellBtn, false, () => {
+        popover.classList.remove("is-open", "is-closing");
+      });
+    }
+  }
+  const sheet = $("#notif-mobile-sheet");
+  if (sheet && sheet.classList.contains("open")) {
+    bellBtn?.setAttribute("aria-expanded", "false");
+    bellBtn?.classList.remove("active");
+    const card = sheet.querySelector(".notif-mobile-card");
+    if (immediate || !card) {
+      sheet.classList.remove("open", "is-closing");
+    } else {
+      sheet.classList.add("is-closing");
+      animateSubwindowMorph(card, bellBtn, false, () => {
+        sheet.classList.remove("open", "is-closing");
+      });
+    }
+  }
+}
+
 function initNotificationDropdown() {
   const bellBtn = $("#topnav-bell-btn");
   if (!bellBtn || bellBtn._bound) return;
@@ -148,91 +440,80 @@ function initNotificationDropdown() {
     popover.innerHTML = `
       <div class="notif-popover-header">
         <h3 class="notif-popover-title">New Episodes</h3>
-        <p class="notif-popover-sub">From your watchlist this week</p>
+        <p class="notif-popover-sub">From your watchlist</p>
       </div>
       <div class="notif-popover-divider"></div>
       <div class="notif-popover-body" id="notif-popover-body">
         <div class="notif-empty-state"><span class="spin-dot"></span> Checking watchlist…</div>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(popover);
   }
 
-  let notifsLoaded = false;
-  async function loadWatchlistEpisodes() {
-    if (notifsLoaded) return;
-    notifsLoaded = true;
+  popover.addEventListener("click", e => {
+    const link = e.target.closest("a.notif-item");
+    if (!link) return;
+    closeNotificationsPopover(true);
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0 && typeof SeamlessRouter !== "undefined") {
+      e.preventDefault();
+      SeamlessRouter.go(link.href);
+    }
+  });
+
+  const loadWatchlistEpisodes = async () => {
     const body = $("#notif-popover-body");
-    if (!body) return;
-    const tvShows = MyList.get().filter(it => it.type === "tv" || it.media_type === "tv");
-    if (!tvShows.length) {
-      body.innerHTML = `<div class="notif-empty-state">No TV shows in your watchlist yet.</div>`;
-      return;
+    const rect = bellBtn.getBoundingClientRect();
+    const popW = Math.min(340, window.innerWidth - 24);
+    const rightPx = Math.max(12, Math.min(window.innerWidth - popW - 12, window.innerWidth - rect.right - 6));
+    popover.style.top = `${Math.max(12, Math.round(rect.bottom + 10))}px`;
+    popover.style.right = `${Math.round(rightPx)}px`;
+    popover.classList.add("is-open");
+    popover.setAttribute("aria-hidden", "false");
+    bellBtn.setAttribute("aria-expanded", "true");
+    bellBtn.classList.add("active");
+    animateSubwindowMorph(popover, bellBtn, true);
+
+    if (body && (!_notifCache.data || Date.now() - _notifCache.ts >= 60000)) {
+      body.innerHTML = `<div class="notif-empty-state"><span class="spin-dot"></span> Checking watchlist…</div>`;
     }
-
-    const now = Date.now();
-    const weekAgo = now - 7 * 86400000;
-    const recent = [];
-
-    await Promise.allSettled(tvShows.slice(0, 10).map(async show => {
-      try {
-        const d = await tmdb(`/tv/${show.id}`);
-        const lastEp = d.last_episode_to_air;
-        if (lastEp && lastEp.air_date) {
-          const airTime = new Date(lastEp.air_date + "T00:00:00").getTime();
-          if (airTime >= weekAgo && airTime <= now + 86400000) {
-            recent.push({ show, ep: lastEp });
-          }
-        }
-      } catch {}
-    }));
-
-    if (!recent.length) {
-      body.innerHTML = `<div class="notif-empty-state">No new episodes this week</div>`;
-      return;
-    }
-
-    body.innerHTML = recent.map(({ show, ep }) => `
-      <a href="${routeUrl("tv")}?id=${show.id}&season=${ep.season_number}&episode=${ep.episode_number}" class="notif-item">
-        <div class="notif-thumb">${show.poster_path ? `<img src="${esc(IMG_W300 + show.poster_path)}" alt="${esc(show.title || '')}" />` : ""}</div>
-        <div class="notif-info">
-          <div class="notif-title">${esc(show.title || show.name || "Series")}</div>
-          <div class="notif-ep">S${ep.season_number} E${ep.episode_number} · ${esc(ep.name || 'New Episode')}</div>
-          <div class="notif-date">${ep.air_date}</div>
-        </div>
-      </a>
-    `).join("");
-  }
-
-  const togglePopover = (show) => {
-    const isVisible = show ?? !popover.classList.contains("is-open");
-    popover.classList.toggle("is-open", isVisible);
-    popover.setAttribute("aria-hidden", isVisible ? "false" : "true");
-    bellBtn.setAttribute("aria-expanded", isVisible ? "true" : "false");
-    bellBtn.classList.toggle("active", isVisible);
-
-    if (isVisible) {
-      const rect = bellBtn.getBoundingClientRect();
-      popover.style.top = `${rect.bottom + 10}px`;
-      popover.style.right = `${Math.max(16, window.innerWidth - rect.right - 8)}px`;
-    }
+    const data = await fetchWatchlistNewEpisodes();
+    if (body) body.innerHTML = buildNotifItemsHtml(data);
   };
 
-  bellBtn.addEventListener("click", e => {
+  bellBtn.addEventListener("click", async e => {
     e.stopPropagation();
-    togglePopover();
-    if (popover.classList.contains("is-open")) loadWatchlistEpisodes();
-  });
+    e.preventDefault();
+    if (typeof HeaderSearch !== "undefined" && HeaderSearch.isOpen) HeaderSearch.close();
+    if (typeof UserDropdown !== "undefined" && UserDropdown.isOpen) UserDropdown.close();
 
-  document.addEventListener("click", e => {
-    if (popover.classList.contains("is-open") && !popover.contains(e.target) && !bellBtn.contains(e.target)) {
-      togglePopover(false);
+    if (isMobile()) {
+      const sheet = $("#notif-mobile-sheet");
+      if (sheet && sheet.classList.contains("open")) {
+        closeNotificationsPopover();
+        return;
+      }
+      openMobileNotificationSheet(null, { loading: true });
+      const data = await fetchWatchlistNewEpisodes();
+      openMobileNotificationSheet(data, { loading: false });
+      return;
+    }
+
+    if (popover.classList.contains("is-open")) {
+      closeNotificationsPopover();
+    } else {
+      loadWatchlistEpisodes();
     }
   });
 
-  window.addEventListener("scroll", () => {
-    if (popover.classList.contains("is-open")) togglePopover(false);
-  }, { passive: true });
+  if (!window.__orcNotifDocBound) {
+    window.__orcNotifDocBound = true;
+    document.addEventListener("click", e => {
+      const pop = $("#notif-popover");
+      const btn = $("#topnav-bell-btn");
+      if (pop && pop.classList.contains("is-open") && !pop.contains(e.target) && (!btn || !btn.contains(e.target))) {
+        closeNotificationsPopover();
+      }
+    });
+  }
 }
 
 
@@ -420,15 +701,16 @@ function initSwipeToDismissModals() {
   if (window._swipeModalBound) return;
   window._swipeModalBound = true;
   document.addEventListener("touchstart", e => {
-    const box = e.target.closest(".modal-box");
-    if (!box) return;
+    const box = e.target.closest(".subwin-card, .party-modal-card, .auth-drawer, .surprise-modal-box, .modal-box");
+    if (!box || box.scrollTop > 2) return;
+    if (e.target.closest("input, textarea, select, button")) return;
     const startY = e.touches[0].clientY;
     let currentY = startY;
 
     const onTouchMove = (ev) => {
       currentY = ev.touches[0].clientY;
       const diffY = currentY - startY;
-      if (diffY > 0) {
+      if (diffY > 8) {
         box.style.transform = `translateY(${diffY}px)`;
         box.style.transition = "none";
       }
@@ -438,16 +720,17 @@ function initSwipeToDismissModals() {
       const diffY = currentY - startY;
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
-      if (diffY > 65) {
+      if (diffY > 80) {
         box.style.transform = "translateY(100%)";
-        box.style.transition = "transform 0.25s var(--ease)";
+        box.style.transition = "transform 0.24s var(--ease)";
         setTimeout(() => {
           box.style.transform = "";
+          box.style.transition = "";
           closeModal();
-        }, 250);
+        }, 230);
       } else {
         box.style.transform = "";
-        box.style.transition = "transform 0.25s var(--ease)";
+        box.style.transition = "transform 0.24s var(--ease)";
       }
     };
 
@@ -468,6 +751,7 @@ function observeLazyRow(rowWrapper, loadCardsFn) {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           const wrapper = entry.target;
+          wrapper.classList.add("visible");
           if (wrapper._loadCardsFn) {
             wrapper._loadCardsFn();
             delete wrapper._loadCardsFn;
@@ -787,12 +1071,12 @@ async function openPersonModal(id, seedActor = null) {
     modal = document.createElement("div");
     modal.id = "person-modal";
     modal.className = "modal-overlay person-modal";
-    modal.innerHTML = `<button class="modal-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="modal-box"></div>`;
+    modal.innerHTML = `<div class="person-modal-card subwin-card" role="dialog" aria-modal="true"><button class="subwin-close modal-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="person-modal-body"></div></div>`;
     document.body.appendChild(modal);
-    modal.querySelector(".modal-close").addEventListener("click", closePersonModal);
+    modal.querySelector(".subwin-close").addEventListener("click", closePersonModal);
     modal.addEventListener("click", e => { if (e.target === modal) closePersonModal(); });
   }
-  const box = modal.querySelector(".modal-box");
+  const box = modal.querySelector(".person-modal-body");
   box.innerHTML = `
     <div class="person-head">
       ${seedActor?.profile_path ? `<img src="${esc(IMG_W185 + seedActor.profile_path)}" alt="${esc(seedActor.name || '')}"/>` : `<div class="person-ph skel-pulse"></div>`}
@@ -805,8 +1089,7 @@ async function openPersonModal(id, seedActor = null) {
       <div class="skel-pulse" style="width:100%;height:12px;border-radius:4px"></div>
       <div class="skel-pulse" style="width:88%;height:12px;border-radius:4px"></div>
     </div>`;
-  modal.classList.add("open");
-  trapModalFocus(modal, "Cast member");
+  openModal(modal);
   try {
     const p = await tmdb(`/person/${id}?append_to_response=combined_credits`);
     const credits = (p.combined_credits?.cast || []).sort((a, b) => (b.popularity || 0) - (a.popularity || 0)).slice(0, 12);
@@ -847,8 +1130,7 @@ async function openPersonModal(id, seedActor = null) {
   }
 }
 function closePersonModal() {
-  $("#person-modal")?.classList.remove("open");
-  releaseModalFocus();
+  closeModal("#person-modal");
 }
 function esc(s = "") {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -1875,8 +2157,8 @@ function openAuthModal(initialTab = "signin") {
     modal.id = "auth-modal";
     modal.className = "modal-overlay auth-modal";
     modal.innerHTML = `
-      <div class="auth-drawer modal-box">
-        <button type="button" class="modal-close" id="auth-modal-close" aria-label="Close">✕</button>
+      <div class="auth-drawer subwin-card">
+        <button type="button" class="subwin-close modal-close" id="auth-modal-close" aria-label="Close">✕</button>
         <div class="auth-content-wrap">
           
           <div id="auth-main-view" style="width:100%;display:flex;flex-direction:column;align-items:center">
@@ -2031,23 +2313,27 @@ function openAuthModal(initialTab = "signin") {
   const tabBtn = modal.querySelector(`.auth-tab[data-tab="${wantTab}"]`);
   if (tabBtn) tabBtn.click();
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      modal.classList.add("open");
-      trapModalFocus(modal, "Authentication");
-      setTimeout(() => modal.querySelector(wantTab === "signup" ? "#auth-username" : "#auth-email")?.focus(), 120);
-    });
+    openModal(modal);
+    setTimeout(() => modal.querySelector(wantTab === "signup" ? "#auth-username" : "#auth-email")?.focus(), 140);
   });
 }
 
-function openModal(modal) {
+function openModal(modal, triggerEl = null) {
   if (!modal) return;
+  modal._morphTrigger = triggerEl || _lastMorphTrigger || document.activeElement;
+  modal.classList.remove("is-closing");
   modal.classList.add("open");
   let label = "Dialog";
-  if (modal.id === "shortcuts-modal") label = "Keyboard Shortcuts";
+  if (modal.id === "shortcuts-modal" || modal.id === "keyboard-help-modal") label = "Keyboard Shortcuts";
   else if (modal.id === "party-modal") label = "Watch Party";
   else if (modal.id === "surprise-modal") label = "Surprise Me";
   else if (modal.id === "save-modal") label = "Save to Folder";
   else if (modal.id === "folder-modal") label = "Create New Folder";
+  else if (modal.id === "auth-modal") label = "Authentication";
+  else if (modal.id === "person-modal") label = "Cast member";
+  else if (modal.id === "profile-edit-modal") label = "Edit Profile";
+  const card = modal.querySelector(".subwin-card, .party-modal-card, .auth-drawer, .surprise-modal-box, .person-modal-card, .modal-box, .modal-content");
+  if (card) animateSubwindowMorph(card, modal._morphTrigger, true);
   trapModalFocus(modal, label);
 }
 
@@ -2070,12 +2356,21 @@ function closeModal(target = ".modal-overlay") {
       clearInterval(surpriseSpinInterval);
       surpriseSpinInterval = null;
     }
-    m.classList.remove("open");
-    setTimeout(() => {
-      if (!m.classList.contains("open")) {
+    if (!m.classList.contains("open")) {
+      m.style.display = "";
+      return;
+    }
+    const card = m.querySelector(".subwin-card, .party-modal-card, .auth-drawer, .surprise-modal-box, .person-modal-card, .modal-box, .modal-content");
+    m.classList.add("is-closing");
+    if (card) {
+      animateSubwindowMorph(card, m._morphTrigger, false, () => {
+        m.classList.remove("open", "is-closing");
         m.style.display = "";
-      }
-    }, 320);
+      });
+    } else {
+      m.classList.remove("open", "is-closing");
+      m.style.display = "";
+    }
   });
   releaseModalFocus();
 }
@@ -2111,7 +2406,12 @@ const MyList = {
   save(list) {
     safeSetItem(this.key, JSON.stringify(list));
     idbSet(this.key, list);
+    if (typeof invalidateNotifCache === "function") invalidateNotifCache();
     if (typeof updateWatchlistBadge === "function") updateWatchlistBadge();
+    if (typeof fetchWatchlistNewEpisodes === "function") {
+      clearTimeout(window._orcNotifRefreshTimer);
+      window._orcNotifRefreshTimer = setTimeout(() => fetchWatchlistNewEpisodes().catch(() => {}), 150);
+    }
   },
   toggle(item) {
     const list = this.get();
@@ -2302,6 +2602,23 @@ function initMobileUI(active) {
   }
 }
 
+function updateMobilePillIndicator(nav) {
+  if (!nav) return;
+  const indicator = nav.querySelector(".mobile-pill-indicator");
+  const items = [...nav.querySelectorAll(".pill-nav-item")];
+  const idx = items.findIndex(el => el.classList.contains("active"));
+  if (!indicator) return;
+  if (idx < 0 || !items.length) {
+    indicator.style.opacity = "0";
+    return;
+  }
+  const activeEl = items[idx];
+  const barW = 24;
+  const left = activeEl.offsetLeft + (activeEl.offsetWidth - barW) / 2;
+  indicator.style.opacity = "1";
+  indicator.style.transform = `translateX(${left.toFixed(1)}px)`;
+}
+
 function buildMobilePillNav(active) {
   const existing = $("#mobile-pill-nav");
   if (!isMobile()) { if (existing) existing.remove(); return; }
@@ -2319,7 +2636,21 @@ function buildMobilePillNav(active) {
   nav.className = "mobile-pill-nav";
   nav.setAttribute("aria-label", "Primary");
 
-  nav.innerHTML = items.map(it => `
+  const hasBuiltItems = existing && nav.querySelectorAll(".pill-nav-item").length === items.length && nav.querySelector(".mobile-pill-indicator");
+  if (hasBuiltItems) {
+    nav.querySelectorAll(".pill-nav-item").forEach(el => {
+      const isMatch = el.dataset.navKey === active;
+      el.classList.toggle("active", isMatch);
+      if (isMatch) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
+    requestAnimationFrame(() => updateMobilePillIndicator(nav));
+    initMobilePillNavScroll();
+    initScrollRestoration();
+    return;
+  }
+
+  nav.innerHTML = `<span class="mobile-pill-indicator" aria-hidden="true"></span>` + items.map(it => `
     <a href="${it.href}" data-nav-key="${it.key}" class="pill-nav-item${active === it.key ? " active" : ""}" aria-label="${it.label}"${active === it.key ? ' aria-current="page"' : ""}>
       <span class="pill-nav-ico">${it.icon}</span>
       <span class="pill-nav-label">${it.label}</span>
@@ -2342,6 +2673,7 @@ function buildMobilePillNav(active) {
       });
       a.classList.add("active");
       a.setAttribute("aria-current", "page");
+      requestAnimationFrame(() => updateMobilePillIndicator(nav));
       if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0 && typeof SeamlessRouter !== "undefined") {
         e.preventDefault();
         SeamlessRouter.go(a.href);
@@ -2349,7 +2681,11 @@ function buildMobilePillNav(active) {
     });
   });
 
-  if (!existing) document.body.appendChild(nav);
+  if (!existing) {
+    document.body.appendChild(nav);
+    window.addEventListener("resize", () => updateMobilePillIndicator($("#mobile-pill-nav")), { passive: true });
+  }
+  requestAnimationFrame(() => updateMobilePillIndicator(nav));
 
   initMobilePillNavScroll();
   initScrollRestoration();
@@ -2906,20 +3242,24 @@ function openSaveModal(item, onToggle) {
   const folders = Folders.get();
   
   modal.innerHTML = `
-    <div class="modal-content" role="dialog" aria-modal="true" style="width:min(340px,92vw);padding:22px;border-radius:20px;background:var(--bg-1);border:1px solid var(--border-2)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-        <h2 style="font-size:1.15rem;font-weight:800;margin:0">Save to...</h2>
-        <button type="button" class="modal-close-btn" aria-label="Close" style="background:var(--bg-2);border:1px solid var(--border);border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--text-2);cursor:pointer"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <div class="subwin-card subwin-dialog-sm" role="dialog" aria-modal="true">
+      <div class="subwin-header">
+        <div>
+          <h2 class="subwin-title">Save to...</h2>
+          <p class="subwin-sub">Watchlist &amp; custom folders</p>
+        </div>
+        <button type="button" class="subwin-close modal-close-btn" aria-label="Close">✕</button>
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto">
-        <button type="button" class="save-opt-btn ${savedInWL ? 'active' : ''}" data-target="watchlist" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:1px solid ${savedInWL ? 'var(--accent)' : 'var(--border)'};background:${savedInWL ? 'var(--accent)' : 'var(--bg-2)'};color:${savedInWL ? 'var(--on-accent, #000)' : 'var(--text)'};cursor:pointer;font-weight:700;font-size:0.95rem;transition:background 0.2s">
-          <div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center">${ICONS.list}</div> Watchlist ${savedInWL ? '<div style="margin-left:auto;width:20px;height:20px;display:flex;align-items:center;justify-content:center">'+ICONS.check+'</div>' : ''}
+      <div class="subwin-divider"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto">
+        <button type="button" class="save-opt-btn subwin-list-btn ${savedInWL ? 'active' : ''}" data-target="watchlist">
+          <div style="width:18px;height:18px;display:flex;align-items:center">${ICONS.list}</div> <span>Watchlist</span> ${savedInWL ? '<div style="margin-left:auto;width:18px;height:18px;display:flex;align-items:center">'+ICONS.check+'</div>' : ''}
         </button>
-        ${folders.length > 0 ? `<div style="height:1px;background:var(--border);margin:4px 0"></div>` : ''}
+        ${folders.length > 0 ? `<div class="subwin-divider is-inset"></div>` : ''}
         ${folders.map(f => {
           const inF = Folders.hasItem(f.id, item.id, item.type);
-          return `<button type="button" class="save-opt-btn ${inF ? 'active' : ''}" data-folder-id="${f.id}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:1px solid ${inF ? 'var(--accent)' : 'var(--border)'};background:${inF ? 'var(--accent)' : 'var(--bg-2)'};color:${inF ? 'var(--on-accent, #000)' : 'var(--text)'};cursor:pointer;font-weight:700;font-size:0.95rem;transition:background 0.2s">
-            <div style="width:20px;height:20px;display:flex;align-items:center;justify-content:center">${ICONS.list}</div> ${esc(f.name)} ${inF ? '<div style="margin-left:auto;width:20px;height:20px;display:flex;align-items:center;justify-content:center">'+ICONS.check+'</div>' : ''}
+          return `<button type="button" class="save-opt-btn subwin-list-btn ${inF ? 'active' : ''}" data-folder-id="${f.id}">
+            <div style="width:18px;height:18px;display:flex;align-items:center">${ICONS.list}</div> <span>${esc(f.name)}</span> ${inF ? '<div style="margin-left:auto;width:18px;height:18px;display:flex;align-items:center">'+ICONS.check+'</div>' : ''}
           </button>`;
         }).join("")}
       </div>
@@ -3044,7 +3384,7 @@ function buildRow(title, items, type = "movie", opts = {}) {
   const list = (items || []).filter(i => !i.media_type || i.media_type === "movie" || i.media_type === "tv");
   if (!list.length) return null;
   const wrap = document.createElement("div");
-  wrap.className = "row-wrapper";
+  wrap.className = "row-wrapper visible";
   if (opts.id) wrap.id = opts.id;
   wrap.innerHTML = `
     <div class="row-header">
@@ -4781,20 +5121,23 @@ function renderDevLogAnnouncement() {
   if (safeGetItem("orc_devlog_dismissed") === DEVLOG_ID || $("#devlog-card")) return;
 
   const card = document.createElement("div");
-  card.className = "devlog-card";
+  card.className = "devlog-card subwin-card";
   card.id = "devlog-card";
   card.innerHTML = `
-    <div class="devlog-header">
-      <div class="devlog-header-left">
-        <span>WHAT'S NEW</span>
-        <span class="devlog-date">· v3.3 UPDATE</span>
+    <div class="subwin-header devlog-header-row">
+      <div>
+        <div class="devlog-header">
+          <span>WHAT'S NEW</span>
+          <span class="devlog-date">· v3.3 UPDATE</span>
+        </div>
+        <h3 class="subwin-title devlog-title">Anime Hub, Watch Party &amp; Morph Search</h3>
       </div>
-      <button type="button" class="devlog-close" id="devlog-close" aria-label="Dismiss update">✕</button>
+      <button type="button" class="subwin-close devlog-close" id="devlog-close" aria-label="Dismiss update">✕</button>
     </div>
-    <div class="devlog-title">Anime Hub, Watch Party rooms, animated search, and seamless tab transitions</div>
+    <div class="subwin-divider"></div>
     <div class="devlog-body">
-      <p>Explore the new dedicated Anime page, host or join live Watch Party rooms with chat and sync countdowns, and search instantly from any page with filtered Movies, Shows, and Anime dropdown results.</p>
-      <p>Switch tabs with zero flicker across desktop and mobile, open your account dropdown from the user icon, or press <kbd style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">W</kbd> on any title to start a Watch Party.</p>
+      <p>Explore the new dedicated Anime page, host or join Watch Party rooms with chat and sync countdowns, and search instantly from any page.</p>
+      <p>Switch tabs seamlessly across desktop and mobile, open your account dropdown from the user icon, or press <kbd class="kbd-key" style="font-size:0.74rem;padding:2px 6px">W</kbd> on any title to start a Watch Party.</p>
     </div>`;
 
   document.body.appendChild(card);
@@ -4802,8 +5145,8 @@ function renderDevLogAnnouncement() {
   card.querySelector("#devlog-close")?.addEventListener("click", () => {
     safeSetItem("orc_devlog_dismissed", DEVLOG_ID);
     card.style.opacity = "0";
-    card.style.transform = "translateY(16px) scale(0.96)";
-    card.style.transition = "opacity 0.25s, transform 0.25s";
+    card.style.transform = "translateY(16px) scale(0.95)";
+    card.style.transition = "opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1), transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)";
     setTimeout(() => card.remove(), 260);
   });
 }
@@ -6167,11 +6510,15 @@ async function initSurpriseMe() {
     modal.className = "modal-overlay";
     modal.id = "surprise-modal";
     modal.innerHTML = `
-      <div class="surprise-modal-box" role="dialog" aria-modal="true" aria-labelledby="surprise-title">
-        <button type="button" class="modal-close" id="surprise-modal-close" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-        <div class="surprise-modal-header">
-          <span class="surprise-badge">Surprise Picker</span>
+      <div class="surprise-modal-box subwin-card" role="dialog" aria-modal="true" aria-labelledby="surprise-title">
+        <div class="subwin-header">
+          <div>
+            <h2 class="subwin-title"><span class="surprise-badge">Surprise Picker</span></h2>
+            <p class="subwin-sub">Hand-picked movie or series</p>
+          </div>
+          <button type="button" class="subwin-close modal-close" id="surprise-modal-close" aria-label="Close">✕</button>
         </div>
+        <div class="subwin-divider"></div>
         <div class="surprise-reel-stage">
           <div class="surprise-reel-card">
             <div class="surprise-poster-wrap" id="surprise-poster-wrap">
@@ -6344,7 +6691,7 @@ async function renderAccountSettingsSection() {
     container.innerHTML = `
       <div class="account-settings-card">
         <div style="display:flex;align-items:center;gap:14px">
-          <span class="account-avatar-badge" style="width:44px;height:44px;font-size:1.2rem">?</span>
+          <span class="account-avatar-badge is-guest" style="width:44px;height:44px;font-size:1.2rem">?</span>
           <div>
             <div style="font-weight:700;font-size:1rem;color:var(--text)">Not Signed In</div>
             <div style="font-size:0.82rem;color:var(--text-2);margin-top:2px">Sign in or create an account to sync your watchlist, progress, and settings across all devices.</div>
@@ -7320,17 +7667,24 @@ async function initListPage() {
         modal.id = "folder-modal";
         modal.className = "modal-overlay";
         modal.innerHTML = `
-          <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="folder-modal-title" style="width:min(380px,92vw);padding:24px;border-radius:20px;background:var(--bg-1);border:1px solid var(--border-2)">
-            <h2 id="folder-modal-title" style="margin:0 0 14px;font-size:1.25rem;font-weight:800">Create New Folder</h2>
-            <input type="text" id="folder-name-input" placeholder="e.g. Anime, Sci-Fi, Weekend Watch" style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid var(--border-2);background:var(--bg-2);color:var(--text);font-size:0.95rem;outline:none" />
-            <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
-              <button type="button" class="btn-ghost" id="folder-cancel" style="padding:10px 18px">Cancel</button>
-              <button type="button" class="btn-play" id="folder-create" style="padding:10px 20px">Create</button>
+          <div class="subwin-card subwin-dialog-sm" role="dialog" aria-modal="true" aria-labelledby="folder-modal-title">
+            <div class="subwin-header">
+              <div>
+                <h2 class="subwin-title" id="folder-modal-title">Create New Folder</h2>
+                <p class="subwin-sub">Organize saved titles</p>
+              </div>
+              <button type="button" class="subwin-close modal-close-btn" aria-label="Close">✕</button>
+            </div>
+            <div class="subwin-divider"></div>
+            <input type="text" id="folder-name-input" class="party-input" placeholder="e.g. Anime, Sci-Fi, Weekend Watch" />
+            <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+              <button type="button" class="user-menu-btn-secondary" id="folder-cancel" style="padding:0 16px;flex:0 0 auto">Cancel</button>
+              <button type="button" class="user-menu-btn-primary" id="folder-create" style="padding:0 18px;flex:0 0 auto">Create</button>
             </div>
           </div>
         `;
         document.body.appendChild(modal);
-        modal.addEventListener("click", e => { if (e.target === modal) closeModal(modal); });
+        modal.addEventListener("click", e => { if (e.target === modal || e.target.closest(".modal-close-btn")) closeModal(modal); });
         modal.querySelector("#folder-cancel").addEventListener("click", () => closeModal(modal));
         const submitFolder = () => {
           const inp = modal.querySelector("#folder-name-input");
@@ -7486,27 +7840,30 @@ function openKeyboardShortcutsModal() {
     modal.className = "modal-overlay";
     modal.id = "shortcuts-modal";
     modal.innerHTML = `
-      <div class="modal-box glass-surface" style="max-width:440px;padding:24px;aspect-ratio:auto;border-radius:16px">
-        <button type="button" class="modal-close" id="shortcuts-close" aria-label="Close">✕</button>
-        <h2 style="font-size:1.15rem;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;color:#fff">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
-          Keyboard Shortcuts
-        </h2>
-        <div style="display:flex;flex-direction:column;gap:10px;font-size:0.85rem">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <span style="color:var(--text-2)">Focus Search Input</span>
+      <div class="subwin-card subwin-dialog-md" role="dialog" aria-modal="true">
+        <div class="subwin-header">
+          <div>
+            <h2 class="subwin-title">Keyboard Shortcuts</h2>
+            <p class="subwin-sub">Quick navigation controls</p>
+          </div>
+          <button type="button" class="subwin-close modal-close" id="shortcuts-close" aria-label="Close">✕</button>
+        </div>
+        <div class="subwin-divider"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:0.86rem">
+          <div class="kbd-shortcut-row">
+            <span>Focus Search Input</span>
             <kbd class="shortcut-key">/</kbd>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <span style="color:var(--text-2)">Keyboard Shortcuts Cheat Sheet</span>
+          <div class="kbd-shortcut-row">
+            <span>Keyboard Shortcuts Cheat Sheet</span>
             <kbd class="shortcut-key">?</kbd>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-            <span style="color:var(--text-2)">Close Modals & Player</span>
+          <div class="kbd-shortcut-row">
+            <span>Close Modals &amp; Player</span>
             <kbd class="shortcut-key">ESC</kbd>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
-            <span style="color:var(--text-2)">Surprise Me Reel</span>
+          <div class="kbd-shortcut-row" style="border-bottom:0">
+            <span>Surprise Me Reel</span>
             <kbd class="shortcut-key">R</kbd>
           </div>
         </div>
@@ -7524,10 +7881,12 @@ function initGlobalShortcuts() {
   window.__orcShortcutsBound = true;
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
+      if (typeof window.closeCommandPalette === "function") window.closeCommandPalette();
       closeModal();
       closeTrailer();
       closePersonModal();
       closePopup();
+      if (typeof closeNotificationsPopover === "function") closeNotificationsPopover();
       if (typeof HeaderSearch !== "undefined") HeaderSearch.close();
       if (typeof UserDropdown !== "undefined") UserDropdown.close();
       $$(".instant-search-dropdown").forEach(d => d.remove());
@@ -7535,7 +7894,7 @@ function initGlobalShortcuts() {
     }
     const tag = document.activeElement?.tagName?.toUpperCase();
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable) return;
-    if ((e.key === "/" || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) && !e.altKey) {
+    if ((e.key === "/" || (!window._cmdPaletteInit && e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) && !e.altKey) {
       e.preventDefault();
       const s = $("#main-search-input");
       if (s && PAGE === "search") {
@@ -7742,12 +8101,12 @@ function showConfirmModal(title, msg, onConfirm) {
     });
   }
   modal.innerHTML = `
-    <div class="modal-content" role="dialog" aria-modal="true" style="width:min(360px,92vw);padding:24px;border-radius:20px;background:var(--bg-1);border:1px solid var(--border-2);text-align:center">
-      <h3 style="margin:0 0 10px;font-size:1.15rem;font-weight:800;color:var(--text)">${esc(title)}</h3>
-      <p style="margin:0 0 20px;font-size:0.88rem;color:var(--text-2);line-height:1.4">${esc(msg)}</p>
+    <div class="subwin-card subwin-dialog-sm" role="dialog" aria-modal="true" style="text-align:center">
+      <h3 class="subwin-title" style="margin-bottom:8px">${esc(title)}</h3>
+      <p style="margin:0 0 18px;font-size:0.86rem;color:var(--text-2);line-height:1.45">${esc(msg)}</p>
       <div style="display:flex;gap:10px;justify-content:center">
-        <button type="button" class="btn-ghost confirm-cancel-btn" style="flex:1;min-height:42px">Cancel</button>
-        <button type="button" class="btn-play confirm-ok-btn" style="flex:1;min-height:42px;background:#ef4444;color:#fff">Clear</button>
+        <button type="button" class="user-menu-btn-secondary confirm-cancel-btn" style="flex:1;min-height:42px">Cancel</button>
+        <button type="button" class="btn-play confirm-ok-btn" style="flex:1;min-height:42px;background:#ef4444;color:#fff;justify-content:center">Clear</button>
       </div>
     </div>
   `;
@@ -7824,7 +8183,7 @@ function resolveEffectiveTheme() {
 }
 
 // Mobile New Episodes Dedicated Sheet
-function openMobileNotificationSheet(recentEpisodes) {
+function openMobileNotificationSheet(dataOrEpisodes, opts = {}) {
   let sheet = $("#notif-mobile-sheet");
   if (!sheet) {
     sheet = document.createElement("div");
@@ -7834,50 +8193,59 @@ function openMobileNotificationSheet(recentEpisodes) {
     sheet.setAttribute("aria-modal", "true");
     sheet.setAttribute("aria-label", "New Episodes");
     sheet.innerHTML = `
-      <div class="notif-mobile-card">
+      <div class="notif-mobile-card subwin-card">
         <div class="notif-mobile-header">
           <div>
-            <h3 class="notif-mobile-title">New Episodes</h3>
-            <p style="font-size:0.78rem;color:var(--text-2);margin-top:2px;">Aired in the last 7 days from your watchlist</p>
+            <h3 class="notif-popover-title">New Episodes</h3>
+            <p class="notif-popover-sub" style="margin-bottom:0">From your watchlist</p>
           </div>
           <button type="button" class="notif-mobile-close" id="notif-mobile-close" aria-label="Close">✕</button>
         </div>
+        <div class="notif-popover-divider"></div>
         <div class="notif-mobile-list" id="notif-mobile-list"></div>
       </div>
     `;
     document.body.appendChild(sheet);
 
     sheet.addEventListener("click", e => {
+      const link = e.target.closest("a.notif-item");
+      if (link) {
+        closeNotificationsPopover(true);
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0 && typeof SeamlessRouter !== "undefined") {
+          e.preventDefault();
+          SeamlessRouter.go(link.href);
+        }
+        return;
+      }
       if (e.target === sheet || e.target.closest("#notif-mobile-close")) {
-        sheet.classList.remove("open");
+        closeNotificationsPopover();
       }
     });
   }
 
   const listEl = sheet.querySelector("#notif-mobile-list");
   if (listEl) {
-    if (!recentEpisodes || !recentEpisodes.length) {
-      listEl.innerHTML = `<div class="notif-empty-state" style="padding:28px 16px;text-align:center;color:var(--text-2);font-size:0.9rem;">No new episodes this week.<br><span style="font-size:0.8rem;color:var(--text-3);margin-top:6px;display:block;">Shows in your watchlist will notify you here when new episodes drop.</span></div>`;
+    if (opts.loading) {
+      listEl.innerHTML = `<div class="notif-empty-state"><span class="spin-dot"></span> Checking watchlist…</div>`;
+    } else if (Array.isArray(dataOrEpisodes)) {
+      listEl.innerHTML = buildNotifItemsHtml({
+        hasShows: MyList.get().some(it => (it.type || it.media_type) === "tv"),
+        recent: dataOrEpisodes,
+        latest: []
+      });
     } else {
-      listEl.innerHTML = recentEpisodes.map(({ show, ep }) => {
-        const poster = show.poster ? `${IMG_W185}${show.poster}` : "/favicon.png";
-        const airDate = ep.air_date ? new Date(ep.air_date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Recent";
-        return `
-          <a href="${routeUrl("tv")}?id=${show.id}&season=${ep.season_number}&episode=${ep.episode_number}" class="notif-ep-card">
-            <img src="${poster}" class="notif-ep-thumb" alt="${esc(show.title)}" loading="lazy">
-            <div class="notif-ep-info">
-              <div class="notif-ep-show">${esc(show.title)}</div>
-              <div class="notif-ep-desc">S${ep.season_number} · E${ep.episode_number}${ep.name ? ` - ${esc(ep.name)}` : ""}</div>
-              <div class="notif-ep-time">${airDate}</div>
-            </div>
-            <span style="font-size:0.75rem;font-weight:700;color:var(--solid-fg);background:var(--solid-bg);padding:6px 12px;border-radius:999px;">Watch</span>
-          </a>
-        `;
-      }).join("");
+      listEl.innerHTML = buildNotifItemsHtml(dataOrEpisodes);
     }
   }
 
-  sheet.classList.add("open");
+  const bellBtn = $("#topnav-bell-btn");
+  bellBtn?.setAttribute("aria-expanded", "true");
+  bellBtn?.classList.add("active");
+  if (!sheet.classList.contains("open")) {
+    sheet.classList.add("open");
+    const card = sheet.querySelector(".notif-mobile-card");
+    if (card) animateSubwindowMorph(card, bellBtn, true);
+  }
 }
 
 // Command Palette (Ctrl+K and / hotkey) (Item A)
@@ -7894,18 +8262,12 @@ function initCommandPalette() {
     backdrop.setAttribute("aria-modal", "true");
     backdrop.setAttribute("aria-label", "Command Palette");
     backdrop.innerHTML = `
-      <div class="cmd-palette-dialog">
+      <div class="cmd-palette-dialog subwin-card">
         <div class="cmd-palette-input-wrap">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="text" class="cmd-palette-input" id="cmd-palette-input" placeholder="Search titles, switch pages, or run quick actions…" autocomplete="off">
         </div>
-        <div class="cmd-palette-list" id="cmd-palette-list">
-          <button type="button" class="cmd-palette-item" data-action="list">📁 Go to My List</button>
-          <button type="button" class="cmd-palette-item" data-action="theme">🌓 Toggle Theme</button>
-          <button type="button" class="cmd-palette-item" data-action="surprise">🎲 Surprise Me</button>
-          <button type="button" class="cmd-palette-item" data-action="settings">⚙️ Settings</button>
-          <button type="button" class="cmd-palette-item" data-action="discord">💬 Join Discord Community</button>
-        </div>
+        <div class="cmd-palette-list" id="cmd-palette-list"></div>
         <div class="cmd-palette-hint">
           <span>Navigation: <kbd>↑</kbd> <kbd>↓</kbd> to select · <kbd>Enter</kbd> to open</span>
           <span>Press <kbd>Esc</kbd> to dismiss</span>
@@ -7917,26 +8279,55 @@ function initCommandPalette() {
 
   const input = backdrop.querySelector("#cmd-palette-input");
   const list = backdrop.querySelector("#cmd-palette-list");
-
-  const openPalette = () => {
-    backdrop.classList.add("open");
-    input.value = "";
-    renderDefaultCommands();
-    setTimeout(() => input.focus(), 50);
-  };
-
-  const closePalette = () => {
-    backdrop.classList.remove("open");
+  const CMD_ICONS = {
+    list: ICONS.bookmark,
+    theme: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`,
+    surprise: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="12" height="12" x="2" y="10" rx="2" ry="2"/><path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6"/><path d="M6 18h.01M10 14h.01M15 6h.01M18 9h.01"/></svg>`,
+    settings: ICONS.settings,
+    discord: ICONS.discord,
+    film: ICONS.film,
   };
 
   const renderDefaultCommands = () => {
     list.innerHTML = `
-      <button type="button" class="cmd-palette-item" data-action="list">📁 Go to My List</button>
-      <button type="button" class="cmd-palette-item" data-action="theme">🌓 Toggle Theme</button>
-      <button type="button" class="cmd-palette-item" data-action="surprise">🎲 Surprise Me</button>
-      <button type="button" class="cmd-palette-item" data-action="settings">⚙️ Settings</button>
-      <button type="button" class="cmd-palette-item" data-action="discord">💬 Join Discord Community</button>
+      <button type="button" class="cmd-palette-item" data-action="list"><span class="cmd-palette-ico">${CMD_ICONS.list}</span><span>Go to My List</span></button>
+      <button type="button" class="cmd-palette-item" data-action="theme"><span class="cmd-palette-ico">${CMD_ICONS.theme}</span><span>Toggle Theme</span></button>
+      <button type="button" class="cmd-palette-item" data-action="surprise"><span class="cmd-palette-ico">${CMD_ICONS.surprise}</span><span>Surprise Me</span></button>
+      <button type="button" class="cmd-palette-item" data-action="settings"><span class="cmd-palette-ico">${CMD_ICONS.settings}</span><span>Settings</span></button>
+      <button type="button" class="cmd-palette-item" data-action="discord"><span class="cmd-palette-ico">${CMD_ICONS.discord}</span><span>Join Discord Community</span></button>
     `;
+  };
+
+  const openPalette = () => {
+    backdrop._morphTrigger = _lastMorphTrigger || $("#topnav-search-btn");
+    backdrop.classList.remove("is-closing");
+    backdrop.classList.add("open");
+    input.value = "";
+    renderDefaultCommands();
+    const dlg = backdrop.querySelector(".cmd-palette-dialog");
+    if (dlg) animateSubwindowMorph(dlg, backdrop._morphTrigger, true);
+    setTimeout(() => input.focus(), 60);
+  };
+
+  const closePalette = () => {
+    if (!backdrop.classList.contains("open")) return;
+    const dlg = backdrop.querySelector(".cmd-palette-dialog");
+    backdrop.classList.add("is-closing");
+    if (dlg) {
+      animateSubwindowMorph(dlg, backdrop._morphTrigger, false, () => {
+        backdrop.classList.remove("open", "is-closing");
+      });
+    } else {
+      backdrop.classList.remove("open", "is-closing");
+    }
+  };
+
+  const goRoute = targetUrl => {
+    if (typeof SeamlessRouter !== "undefined" && typeof SeamlessRouter.go === "function") {
+      SeamlessRouter.go(targetUrl);
+    } else {
+      location.href = targetUrl;
+    }
   };
 
   list.addEventListener("click", e => {
@@ -7946,11 +8337,11 @@ function initCommandPalette() {
     const url = btn.dataset.url;
     closePalette();
     if (url) {
-      location.href = url;
+      goRoute(url);
     } else if (action === "list") {
-      location.href = routeUrl("list");
+      goRoute(routeUrl("list"));
     } else if (action === "settings") {
-      location.href = routeUrl("settings");
+      goRoute(routeUrl("settings"));
     } else if (action === "discord") {
       window.open("https://discord.gg/yv8cVk8p4f", "_blank", "noopener");
     } else if (action === "surprise") {
@@ -7986,7 +8377,7 @@ function initCommandPalette() {
           const yr = (hit.release_date || hit.first_air_date || "").slice(0, 4);
           const url = `${routeUrl(type)}?id=${hit.id}`;
           return `<button type="button" class="cmd-palette-item" data-url="${url}">
-            <span>🎬</span>
+            <span class="cmd-palette-ico">${CMD_ICONS.film}</span>
             <span style="flex:1;">${esc(title)} ${yr ? `<span style="color:var(--text-3);font-size:0.8rem;">(${yr})</span>` : ""}</span>
             <span style="font-size:0.72rem;text-transform:uppercase;color:var(--text-3);">${type}</span>
           </button>`;
@@ -8003,10 +8394,10 @@ function initCommandPalette() {
       const firstItem = list.querySelector(".cmd-palette-item");
       if (firstItem && firstItem.dataset.url) {
         closePalette();
-        location.href = firstItem.dataset.url;
+        goRoute(firstItem.dataset.url);
       } else if (q) {
         closePalette();
-        location.href = `${routeUrl("search")}?q=${encodeURIComponent(q)}`;
+        goRoute(`${routeUrl("search")}?q=${encodeURIComponent(q)}`);
       }
     } else if (e.key === "Escape") {
       closePalette();
@@ -8017,17 +8408,18 @@ function initCommandPalette() {
     if (e.target === backdrop) closePalette();
   });
 
-  // Hotkey listener: Ctrl+K, Cmd+K, or "/"
+  window.closeCommandPalette = closePalette;
+
+  // Hotkey listener: Ctrl+K, Cmd+K, and Escape
   window.addEventListener("keydown", e => {
+    if (e.key === "Escape" && backdrop.classList.contains("open")) {
+      e.preventDefault();
+      closePalette();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
       openPalette();
-    } else if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
-      e.preventDefault();
-      openPalette();
-    } else if (e.key === "?" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
-      e.preventDefault();
-      openKeyboardHelpSheet();
     }
   });
 }
@@ -8040,26 +8432,30 @@ function openKeyboardHelpSheet() {
     modal.id = "keyboard-help-modal";
     modal.className = "modal-overlay";
     modal.innerHTML = `
-      <div class="modal-card glass-surface" style="max-width:480px;padding:24px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <h3 style="margin:0;font-size:1.15rem;font-weight:800;color:var(--text);">Keyboard Shortcuts</h3>
-          <button type="button" class="modal-close" style="background:none;border:none;color:var(--text-2);cursor:pointer;font-size:1.1rem;">✕</button>
+      <div class="subwin-card subwin-dialog-md" role="dialog" aria-modal="true">
+        <div class="subwin-header">
+          <div>
+            <h3 class="subwin-title">Keyboard Shortcuts</h3>
+            <p class="subwin-sub">Quick controls &amp; playback</p>
+          </div>
+          <button type="button" class="subwin-close modal-close" aria-label="Close">✕</button>
         </div>
+        <div class="subwin-divider"></div>
         <div style="display:flex;flex-direction:column;gap:4px;">
           <div class="kbd-shortcut-row"><span>Open command palette / Quick search</span><div><span class="kbd-key">Ctrl</span> + <span class="kbd-key">K</span> or <span class="kbd-key">/</span></div></div>
           <div class="kbd-shortcut-row"><span>Keyboard shortcuts help</span><span class="kbd-key">?</span></div>
           <div class="kbd-shortcut-row"><span>Close modal or player</span><span class="kbd-key">Esc</span></div>
           <div class="kbd-shortcut-row"><span>Toggle play / pause (in stream)</span><span class="kbd-key">Space</span></div>
-          <div class="kbd-shortcut-row"><span>Fullscreen toggle</span><span class="kbd-key">F</span></div>
+          <div class="kbd-shortcut-row" style="border-bottom:0"><span>Fullscreen toggle</span><span class="kbd-key">F</span></div>
         </div>
       </div>
     `;
     document.body.appendChild(modal);
     modal.addEventListener("click", e => {
-      if (e.target === modal || e.target.closest(".modal-close")) modal.classList.remove("open");
+      if (e.target === modal || e.target.closest(".modal-close")) closeModal(modal);
     });
   }
-  modal.classList.add("open");
+  openModal(modal);
 }
 
 // Mood Picker Integration (Item I)
@@ -8112,35 +8508,7 @@ document.addEventListener("DOMContentLoaded", () => {
   applyLiteMode();
   initCommandPalette();
   initWatchlistShuffle();
-
-  // Mobile episodes integration in topnav bell button
-  const bellBtn = $("#topnav-bell-btn");
-  if (bellBtn && !bellBtn._mobileBound) {
-    bellBtn._mobileBound = true;
-    bellBtn.addEventListener("click", async e => {
-      if (isMobile()) {
-        e.stopPropagation();
-        e.preventDefault();
-        const tvShows = MyList.get().filter(it => it.type === "tv" || it.media_type === "tv");
-        const now = Date.now();
-        const weekAgo = now - 7 * 86400000;
-        const recent = [];
-        await Promise.allSettled(tvShows.slice(0, 10).map(async show => {
-          try {
-            const d = await tmdb(`/tv/${show.id}`);
-            const lastEp = d.last_episode_to_air;
-            if (lastEp && lastEp.air_date) {
-              const airTime = new Date(lastEp.air_date + "T00:00:00").getTime();
-              if (airTime >= weekAgo && airTime <= now + 86400000) {
-                recent.push({ show, ep: lastEp });
-              }
-            }
-          } catch {}
-        }));
-        openMobileNotificationSheet(recent);
-      }
-    });
-  }
+  initNotificationDropdown();
 
   // Lite Mode toggle in settings
   const liteToggle = $("#settings-lite-mode");
@@ -8176,8 +8544,9 @@ function resetPageScope() {
       WatchPartyManager.teardownHud();
     }
   } catch {}
-  if (typeof HeaderSearch !== "undefined") HeaderSearch.close();
-  if (typeof UserDropdown !== "undefined") UserDropdown.close();
+  if (typeof HeaderSearch !== "undefined") HeaderSearch.close(true);
+  if (typeof UserDropdown !== "undefined") UserDropdown.close(true);
+  if (typeof closeNotificationsPopover === "function") closeNotificationsPopover(true);
 }
 
 function pageSignal() {
@@ -8203,10 +8572,22 @@ function observeProgressiveImages(root = document) {
   } catch {}
 }
 
-function mountPage(page) {
+function mountPage(page, opts = {}) {
+  const prevPage = PAGE;
   PAGE = page || detectPage();
   const mainEl = $("#main-content") || $(".app-shell");
   if (mainEl) {
+    const tabOrder = ["home", "search", "anime", "list", "settings"];
+    const fromIdx = tabOrder.indexOf(prevPage);
+    const toIdx = tabOrder.indexOf(PAGE);
+    let enterX = "0px";
+    let enterY = "6px";
+    if (opts.viaRouter && fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+      enterX = toIdx > fromIdx ? "14px" : "-14px";
+      enterY = "0px";
+    }
+    mainEl.style.setProperty("--orc-enter-x", enterX);
+    mainEl.style.setProperty("--orc-enter-y", enterY);
     mainEl.classList.remove("orc-page-enter");
     void mainEl.offsetWidth;
     mainEl.classList.add("orc-page-enter");
@@ -8243,6 +8624,10 @@ function mountPage(page) {
   }
 
   if (typeof refreshUserMenuUI === "function") refreshUserMenuUI();
+  if (typeof fetchWatchlistNewEpisodes === "function" && typeof getSavedTvShowsForNotif === "function" && getSavedTvShowsForNotif().length) {
+    clearTimeout(window._orcNotifMountTimer);
+    window._orcNotifMountTimer = setTimeout(() => fetchWatchlistNewEpisodes().catch(() => {}), 260);
+  }
   if (typeof NProgress !== "undefined" && NProgress.done) NProgress.done();
 }
 
@@ -8385,7 +8770,7 @@ const SeamlessRouter = {
         topnav.classList.remove("nav-hidden", "is-scrolled", "nav-open");
       }
 
-      mountPage(detectPage());
+      mountPage(detectPage(), { viaRouter: true });
     } catch (err) {
       console.warn("Seamless navigation fell back to full load:", err);
       location.href = url.href;
@@ -8439,79 +8824,133 @@ async function initAnimePage() {
   const gridWrap = $("#anime-grid-wrap");
   const grid = $("#anime-grid");
   const gridTitle = $("#anime-grid-title");
-  const countPill = $("#anime-result-count");
+  const countPill = $("#anime-count-pill") || $("#anime-result-count");
   const sortSelect = $("#anime-sort-select");
   const randomBtn = $("#anime-random-btn");
   if (!catEl) return;
 
+  // Enforce "All Anime" + "pop" ("Most Popular") default matching anime.html <option value="pop">
+  let activeCat = "all";
+  let activeSort = "pop";
+  if (sortSelect) sortSelect.value = "pop";
+  filterStrip?.querySelectorAll("[data-anime-cat]").forEach(b => {
+    const isAll = (b.dataset.animeCat || "") === "all";
+    b.classList.toggle("active", isAll);
+    b.setAttribute("aria-selected", isAll ? "true" : "false");
+  });
+  if (gridWrap) gridWrap.hidden = true;
+  catEl.style.display = "";
+
   const isAdultAllowed = () => SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
   const animeFilterParams = "&with_genres=16&with_original_language=ja&without_genres=10763,10767";
+  const recentAirDate = new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10);
 
-  const [popularTv, airingTv, topTv, animeMovies, shonenTv, fantasyTv, scifiTv, seinenTv] = await Promise.allSettled([
-    tmdb(`/discover/tv?sort_by=popularity.desc&page=1${animeFilterParams}`),
-    tmdb(`/discover/tv?sort_by=popularity.desc&air_date.gte=${new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)}${animeFilterParams}`),
-    tmdb(`/discover/tv?sort_by=vote_average.desc&vote_count.gte=250${animeFilterParams}`),
-    tmdb(`/discover/movie?sort_by=popularity.desc&page=1&with_genres=16&with_original_language=ja`),
-    tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16,10759&with_original_language=ja`),
-    tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16,10765&with_original_language=ja`),
-    tmdb(`/discover/tv?sort_by=popularity.desc&with_genres=16,9648&with_original_language=ja`),
-    tmdb(`/discover/tv?sort_by=vote_average.desc&vote_count.gte=120&vote_average.gte=7.7${animeFilterParams}`),
-  ]);
+  const rowDefs = [
+    { key: "trending", title: "Trending Anime Series", type: "tv", path: `/discover/tv?sort_by=popularity.desc&page=1${animeFilterParams}` },
+    { key: "airing", title: "Airing New Episodes", type: "tv", path: `/discover/tv?sort_by=popularity.desc&air_date.gte=${recentAirDate}${animeFilterParams}` },
+    { key: "top", title: "Top Rated Anime of All Time", type: "tv", path: `/discover/tv?sort_by=vote_average.desc&vote_count.gte=250${animeFilterParams}` },
+    { key: "movies", title: "Acclaimed Anime Films", type: "movie", path: `/discover/movie?sort_by=popularity.desc&page=1&with_genres=16&with_original_language=ja` },
+    { key: "shonen", title: "Shonen & High-Octane Action", type: "tv", path: `/discover/tv?sort_by=popularity.desc&with_genres=16,10759&with_original_language=ja` },
+    { key: "fantasy", title: "Fantasy, Magic & Isekai", type: "tv", path: `/discover/tv?sort_by=popularity.desc&with_genres=16,10765&with_original_language=ja` },
+    { key: "scifi", title: "Sci-Fi, Mystery & Psychological", type: "tv", path: `/discover/tv?sort_by=popularity.desc&with_genres=16,9648&with_original_language=ja` },
+    { key: "seinen", title: "Critic Favorites", type: "tv", path: `/discover/tv?sort_by=vote_average.desc&vote_count.gte=120&vote_average.gte=7.7${animeFilterParams}` },
+  ];
 
-  if (sig.aborted) return;
+  const datasets = {
+    trending: [], airing: [], top: [], movies: [],
+    shonen: [], fantasy: [], scifi: [], seinen: [],
+  };
 
-  const pick = (res, explicitType) => {
-    if (res.status !== "fulfilled" || !res.value?.results) return [];
-    return res.value.results
+  // Pre-render all 8 rows visibly right away so users never wait on all 8 requests or bottom scroll reveal
+  catEl.textContent = "";
+  const rowRefs = rowDefs.map(def => {
+    const wrap = document.createElement("div");
+    wrap.className = "row-wrapper visible";
+    wrap.innerHTML = `
+      <div class="row-header"><h2 class="row-title">${esc(def.title)}</h2></div>
+      <div class="row-track-container">
+        <button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button>
+        <div class="row-track"></div>
+        <button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button>
+      </div>`;
+    const track = wrap.querySelector(".row-track");
+    track.append(...skeletons(8));
+    wrap.querySelector(".row-arrow.left")?.addEventListener("click", () => track.scrollBy({ left: -480, behavior: "smooth" }));
+    wrap.querySelector(".row-arrow.right")?.addEventListener("click", () => track.scrollBy({ left: 480, behavior: "smooth" }));
+    catEl.appendChild(wrap);
+    return { def, wrap, track };
+  });
+
+  bindHeroActions();
+  let heroInitialized = false;
+
+  const normalizeItems = (res, explicitType) => {
+    if (!res?.results) return [];
+    return res.results
       .filter(it => it && (it.poster_path || it.backdrop_path) && (!isAdultAllowed() || !it.adult))
       .map(it => ({ ...it, media_type: explicitType }));
   };
 
-  const datasets = {
-    trending: pick(popularTv, "tv"),
-    airing: pick(airingTv, "tv"),
-    top: pick(topTv, "tv"),
-    movies: pick(animeMovies, "movie"),
-    shonen: pick(shonenTv, "tv"),
-    fantasy: pick(fantasyTv, "tv"),
-    scifi: pick(scifiTv, "tv"),
-    seinen: pick(seinenTv, "tv"),
+  const populateRow = (ref, items) => {
+    if (!items.length) {
+      ref.wrap.remove();
+      return;
+    }
+    ref.wrap.classList.add("visible");
+    ref.track.textContent = "";
+    items.forEach(item => ref.track.appendChild(buildCard(item, ref.def.type)));
+    initRowDrag(ref.track);
+    initRowKeyboard(ref.track);
+    LiquidGlass.glassify(ref.wrap);
+    observeProgressiveImages(ref.wrap);
   };
 
-  // Spotlight Hero Carousel powered by top Anime backdrops
-  const heroPool = [...datasets.trending, ...datasets.movies.slice(0, 4)]
-    .filter(x => x.backdrop_path && (x.overview || "").length > 20)
-    .slice(0, 8);
-  if (heroPool.length) {
-    initHeroCarousel(heroPool);
-  }
-  bindHeroActions();
-
-  const rowSpecs = [
-    { title: "Trending Anime Series", items: datasets.trending, type: "tv" },
-    { title: "Airing New Episodes", items: datasets.airing, type: "tv" },
-    { title: "Top Rated Anime of All Time", items: datasets.top, type: "tv" },
-    { title: "Acclaimed Anime Films", items: datasets.movies, type: "movie" },
-    { title: "Shonen & High-Octane Action", items: datasets.shonen, type: "tv" },
-    { title: "Fantasy, Magic & Isekai", items: datasets.fantasy, type: "tv" },
-    { title: "Sci-Fi, Mystery & Psychological", items: datasets.scifi, type: "tv" },
-    { title: "Critic Favorites", items: datasets.seinen, type: "tv" },
-  ];
+  const sortQueryFor = (sortKey, isMovie) => {
+    if (sortKey === "rating" || sortKey === "vote_average.desc") return "vote_average.desc&vote_count.gte=40";
+    if (sortKey === "newest" || sortKey === "first_air_date.desc" || sortKey === "primary_release_date.desc") {
+      return isMovie ? "primary_release_date.desc" : "first_air_date.desc";
+    }
+    return "popularity.desc";
+  };
 
   const renderRowsView = () => {
     if (gridWrap) gridWrap.hidden = true;
     catEl.style.display = "";
-    catEl.textContent = "";
-    rowSpecs.forEach(spec => {
-      if (!spec.items.length) return;
-      const row = buildRow(spec.title, spec.items, spec.type);
-      if (row) catEl.appendChild(row);
+    const viewHeading = $("#anime-view-heading") || gridTitle;
+    if (viewHeading) viewHeading.textContent = "Curated Anime Hub";
+    if (countPill) countPill.textContent = "Series & Films";
+    rowRefs.forEach(ref => {
+      if (!ref.wrap.isConnected && datasets[ref.def.key]?.length) {
+        catEl.appendChild(ref.wrap);
+        populateRow(ref, datasets[ref.def.key]);
+      }
+      ref.wrap.classList.add("visible");
     });
-    LiquidGlass.glassify(catEl);
-    observeProgressiveImages(catEl);
   };
 
-  const renderGridView = async (cat, sortBy) => {
+  Promise.allSettled(
+    rowRefs.map(async ref => {
+      try {
+        const res = await tmdb(ref.def.path);
+        if (sig.aborted) return;
+        const items = normalizeItems(res, ref.def.type);
+        datasets[ref.def.key] = items;
+        if (!heroInitialized && (ref.def.key === "trending" || ref.def.key === "movies") && items.length) {
+          const heroPool = items.filter(x => x.backdrop_path && (x.overview || "").length > 10).slice(0, 8);
+          if (heroPool.length) {
+            heroInitialized = true;
+            initHeroCarousel(heroPool);
+            bindHeroActions();
+          }
+        }
+        populateRow(ref, items);
+      } catch {
+        if (!sig.aborted) ref.wrap.remove();
+      }
+    })
+  );
+
+  const renderGridView = async (cat, sortKey) => {
     catEl.style.display = "none";
     if (!gridWrap || !grid) return;
     gridWrap.hidden = false;
@@ -8526,17 +8965,20 @@ async function initAnimePage() {
       movies: "Anime Films",
       all: "All Anime"
     };
-    if (gridTitle) gridTitle.textContent = labels[cat] || "Anime Catalog";
+    const viewHeading = $("#anime-view-heading") || gridTitle;
+    if (viewHeading) viewHeading.textContent = labels[cat] || "Anime Catalog";
 
     grid.innerHTML = Array.from({ length: 12 }, () => `<div class="skeleton-card skel-pulse"></div>`).join("");
 
+    const sortBy = sortQueryFor(sortKey, cat === "movies").split("&")[0];
+    const minVotes = (sortBy === "vote_average.desc" && cat !== "movies" && cat !== "seinen") ? "&vote_count.gte=40" : "";
     let items = [];
     const page1Endpoint = (() => {
       if (cat === "movies") return `/discover/movie?sort_by=${sortBy}&with_genres=16&with_original_language=ja&vote_count.gte=40&page=1`;
-      if (cat === "shonen") return `/discover/tv?sort_by=${sortBy}&with_genres=16,10759&with_original_language=ja&page=1`;
-      if (cat === "fantasy") return `/discover/tv?sort_by=${sortBy}&with_genres=16,10765&with_original_language=ja&page=1`;
-      if (cat === "scifi") return `/discover/tv?sort_by=${sortBy}&with_genres=16,9648&with_original_language=ja&page=1`;
-      if (cat === "airing") return `/discover/tv?sort_by=${sortBy}&air_date.gte=${new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)}${animeFilterParams}&page=1`;
+      if (cat === "shonen") return `/discover/tv?sort_by=${sortBy}${minVotes}&with_genres=16,10759&with_original_language=ja&page=1`;
+      if (cat === "fantasy") return `/discover/tv?sort_by=${sortBy}${minVotes}&with_genres=16,10765&with_original_language=ja&page=1`;
+      if (cat === "scifi") return `/discover/tv?sort_by=${sortBy}${minVotes}&with_genres=16,9648&with_original_language=ja&page=1`;
+      if (cat === "airing") return `/discover/tv?sort_by=${sortBy}${minVotes}&air_date.gte=${new Date(Date.now() - 120 * 864e5).toISOString().slice(0, 10)}${animeFilterParams}&page=1`;
       if (cat === "seinen") return `/discover/tv?sort_by=${sortBy}&vote_count.gte=150&vote_average.gte=7.7${animeFilterParams}&page=1`;
       return `/discover/tv?sort_by=${sortBy}&vote_count.gte=30${animeFilterParams}&page=1`;
     })();
@@ -8569,16 +9011,15 @@ async function initAnimePage() {
     observeProgressiveImages(grid);
   };
 
-  let activeCat = "all";
-  let activeSort = sortSelect?.value || "popularity.desc";
-
-  renderRowsView();
-
   filterStrip?.querySelectorAll("[data-anime-cat]").forEach(btn => {
     btn.addEventListener("click", () => {
       activeCat = btn.dataset.animeCat || "all";
-      filterStrip.querySelectorAll("[data-anime-cat]").forEach(b => b.classList.toggle("active", b === btn));
-      if (activeCat === "all" && activeSort === "popularity.desc") {
+      filterStrip.querySelectorAll("[data-anime-cat]").forEach(b => {
+        const on = b === btn;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      if (activeCat === "all" && activeSort === "pop") {
         renderRowsView();
       } else {
         renderGridView(activeCat, activeSort);
@@ -8587,8 +9028,8 @@ async function initAnimePage() {
   });
 
   sortSelect?.addEventListener("change", () => {
-    activeSort = sortSelect.value || "popularity.desc";
-    if (activeCat === "all" && activeSort === "popularity.desc") {
+    activeSort = sortSelect.value || "pop";
+    if (activeCat === "all" && activeSort === "pop") {
       renderRowsView();
     } else {
       renderGridView(activeCat, activeSort);
@@ -8732,25 +9173,75 @@ const HeaderSearch = {
 
   open() {
     this.ensureDom();
-    if (typeof UserDropdown !== "undefined") UserDropdown.close();
-    $("#notif-popover")?.classList.remove("open");
+    if (typeof UserDropdown !== "undefined" && UserDropdown.isOpen) UserDropdown.close(true);
+    if (typeof closeNotificationsPopover === "function") closeNotificationsPopover(true);
     this.isOpen = true;
     const trigger = $("#topnav-search-btn");
     trigger?.setAttribute("aria-expanded", "true");
-    $("#header-search-backdrop")?.classList.add("open");
-    $("#header-search-shell")?.classList.add("open");
+    const bd = $("#header-search-backdrop");
+    const shell = $("#header-search-shell");
+    if (shell) {
+      if (window.innerWidth > 768 && trigger) {
+        const tr = trigger.getBoundingClientRect();
+        const w = Math.min(460, window.innerWidth - 32);
+        const rightPx = Math.max(16, Math.min(window.innerWidth - w - 16, window.innerWidth - tr.right - 8));
+        shell.style.width = `${Math.round(w)}px`;
+        shell.style.top = `${Math.max(10, Math.round(tr.top - 4))}px`;
+        shell.style.right = `${Math.round(rightPx)}px`;
+        shell.style.left = "auto";
+      } else {
+        shell.style.width = "";
+        shell.style.top = "";
+        shell.style.right = "";
+        shell.style.left = "";
+      }
+      shell.classList.remove("is-closing");
+    }
+    bd?.classList.add("open");
+    shell?.classList.add("open");
+    if (shell) {
+      animateSubwindowMorph(shell, trigger, true);
+      const pill = shell.querySelector(".header-search-pill");
+      const panel = shell.querySelector(".header-search-panel");
+      if (pill && !prefersReducedMotion() && typeof pill.animate === "function") {
+        try { pill._hsPillAnim?.cancel?.(); } catch {}
+        pill._hsPillAnim = pill.animate([
+          { opacity: 0.4, transform: "translateX(8px)" },
+          { opacity: 1, transform: "translateX(0)" }
+        ], { duration: 240, delay: 40, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "none" });
+      }
+      if (panel && !prefersReducedMotion() && typeof panel.animate === "function") {
+        try { panel._hsInnerAnim?.cancel?.(); } catch {}
+        panel._hsInnerAnim = panel.animate([
+          { opacity: 0, transform: "translateY(-10px)" },
+          { opacity: 1, transform: "translateY(0)" }
+        ], { duration: 260, delay: 75, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "none" });
+      }
+    }
     const inp = $("#header-search-input");
     if (inp) {
-      setTimeout(() => { inp.focus(); inp.select?.(); }, 40);
+      setTimeout(() => { inp.focus(); inp.select?.(); }, 70);
       this.runQuery(inp.value || "");
     }
   },
 
-  close() {
+  close(immediate = false) {
+    if (!this.isOpen && !$("#header-search-shell")?.classList.contains("open")) return;
     this.isOpen = false;
-    $("#topnav-search-btn")?.setAttribute("aria-expanded", "false");
+    const trigger = $("#topnav-search-btn");
+    trigger?.setAttribute("aria-expanded", "false");
     $("#header-search-backdrop")?.classList.remove("open");
-    $("#header-search-shell")?.classList.remove("open");
+    const shell = $("#header-search-shell");
+    if (!shell) return;
+    if (immediate) {
+      try { shell._orcMorphAnim?.cancel?.(); } catch {}
+      shell.classList.remove("open", "is-closing", "is-morphing");
+      return;
+    }
+    shell.classList.add("is-closing");
+    animateSubwindowMorph(shell, trigger, false, () => {
+      if (!this.isOpen) shell.classList.remove("open", "is-closing");
+    });
   },
 
   toggle() {
@@ -8977,7 +9468,7 @@ const UserDropdown = {
           ${ICONS.bookmark}<span>Watchlist</span>
         </a>
         <button type="button" class="user-menu-item" data-um-action="watchparty" role="menuitem">
-          ${ICONS.party}<span>Watch Party</span><span class="user-menu-item-badge">LIVE</span>
+          ${ICONS.party}<span>Watch Party</span>
         </button>
       </div>
       <div class="user-menu-divider"></div>
@@ -9096,19 +9587,43 @@ const UserDropdown = {
 
   open() {
     this.refresh();
-    if (typeof HeaderSearch !== "undefined") HeaderSearch.close();
-    $("#notif-popover")?.classList.remove("open");
+    if (typeof HeaderSearch !== "undefined" && HeaderSearch.isOpen) HeaderSearch.close(true);
+    if (typeof closeNotificationsPopover === "function") closeNotificationsPopover(true);
     this.isOpen = true;
-    $("#topnav-user-btn")?.setAttribute("aria-expanded", "true");
-    $("#user-menu-backdrop")?.classList.add("open");
-    $("#user-menu-popover")?.classList.add("open");
+    const trigger = $("#topnav-user-btn");
+    trigger?.setAttribute("aria-expanded", "true");
+    const bd = $("#user-menu-backdrop");
+    const pop = $("#user-menu-popover");
+    if (pop && trigger) {
+      const tr = trigger.getBoundingClientRect();
+      const popW = Math.min(312, window.innerWidth - 24);
+      const rightPx = Math.max(12, Math.min(window.innerWidth - popW - 12, window.innerWidth - tr.right - 4));
+      pop.style.top = `${Math.max(12, Math.round(tr.bottom + 10))}px`;
+      pop.style.right = `${Math.round(rightPx)}px`;
+    }
+    pop?.classList.remove("is-closing");
+    bd?.classList.add("open");
+    pop?.classList.add("open");
+    if (pop) animateSubwindowMorph(pop, trigger, true);
   },
 
-  close() {
+  close(immediate = false) {
+    if (!this.isOpen && !$("#user-menu-popover")?.classList.contains("open")) return;
     this.isOpen = false;
-    $("#topnav-user-btn")?.setAttribute("aria-expanded", "false");
+    const trigger = $("#topnav-user-btn");
+    trigger?.setAttribute("aria-expanded", "false");
     $("#user-menu-backdrop")?.classList.remove("open");
-    $("#user-menu-popover")?.classList.remove("open");
+    const pop = $("#user-menu-popover");
+    if (!pop) return;
+    if (immediate) {
+      try { pop._orcMorphAnim?.cancel?.(); } catch {}
+      pop.classList.remove("open", "is-closing", "is-morphing");
+      return;
+    }
+    pop.classList.add("is-closing");
+    animateSubwindowMorph(pop, trigger, false, () => {
+      if (!this.isOpen) pop.classList.remove("open", "is-closing");
+    });
   },
 
   toggle() {
@@ -9139,9 +9654,15 @@ function openProfileEditModal() {
     modal.id = "profile-edit-modal";
     modal.className = "modal-overlay";
     modal.innerHTML = `
-      <div class="party-modal-card modal-box" style="max-width:420px">
-        <button type="button" class="modal-close" id="profile-edit-close" aria-label="Close">✕</button>
-        <h2 style="font-size:1.12rem;font-weight:800;margin:0 0 14px">Edit Profile Appearance</h2>
+      <div class="subwin-card subwin-dialog-sm" role="dialog" aria-modal="true" style="max-width:420px">
+        <div class="subwin-header">
+          <div>
+            <h2 class="subwin-title">Edit Profile Appearance</h2>
+            <p class="subwin-sub">Update display name &amp; avatar</p>
+          </div>
+          <button type="button" class="subwin-close modal-close" id="profile-edit-close" aria-label="Close">✕</button>
+        </div>
+        <div class="subwin-divider"></div>
         <div class="party-field">
           <label for="pe-username">Display Name</label>
           <input type="text" id="pe-username" class="party-input" maxlength="32" placeholder="Your display name" />
@@ -9154,7 +9675,7 @@ function openProfileEditModal() {
           <label for="pe-avatar-file">Or Upload Image</label>
           <input type="file" id="pe-avatar-file" accept="image/*" class="party-input" style="padding:8px 10px" />
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="display:flex;gap:8px;margin-top:12px">
           <button type="button" class="user-menu-btn-secondary" id="pe-reset-btn">Clear PFP</button>
           <button type="button" class="user-menu-btn-primary" id="pe-save-btn">Save Profile</button>
         </div>
@@ -9660,14 +10181,18 @@ function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts
   let modal = $("#party-modal");
   if (!modal) {
     modal = document.createElement("div");
-    modal.className = "modal-overlay";
+    modal.className = "modal-overlay party-modal-overlay";
     modal.id = "party-modal";
     modal.innerHTML = `
-      <div class="party-modal-card modal-box">
-        <button type="button" class="modal-close" id="party-close" aria-label="Close">✕</button>
-        <h2 style="font-size:1.18rem;font-weight:800;margin:0;display:flex;align-items:center;gap:9px">
-          ${ICONS.party}<span>Watch Party</span>
-        </h2>
+      <div class="party-modal-card subwin-card" role="dialog" aria-modal="true">
+        <div class="party-modal-head">
+          <div>
+            <h2>${ICONS.party}<span>Watch Party</span></h2>
+            <p class="subwin-sub">Sync playback with friends in real time</p>
+          </div>
+          <button type="button" class="subwin-close party-modal-close" id="party-close" aria-label="Close">✕</button>
+        </div>
+        <div class="subwin-divider"></div>
         <div class="party-modal-tabs">
           <button type="button" class="party-modal-tab active" data-pm-tab="host">Host Party</button>
           <button type="button" class="party-modal-tab" data-pm-tab="join">Join Party</button>
@@ -9773,6 +10298,7 @@ function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts
           </div>`;
         btn.addEventListener("click", () => {
           picked = { id: String(it.id), type: t, title: name, poster: it.poster_path || "", season: 1, episode: 1 };
+          pickerList.querySelectorAll(".party-picker-row").forEach(r => r.classList.toggle("active", r === btn));
           renderPicked();
         });
         pickerList.appendChild(btn);

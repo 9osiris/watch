@@ -511,7 +511,8 @@ test("Phase 7: Cleanup regression suite", () => {
 
   // 45. Plain-language update log
   assert.ok(read("orc-script.js").includes("WHAT'S NEW"));
-  assert.ok(read("orc-script.js").includes("Anime Hub, Watch Party rooms, animated search, and seamless tab transitions"));
+  assert.ok(read("orc-script.js").includes("Anime Hub, Watch Party &amp; Morph Search"));
+  assert.ok(read("orc-script.js").includes("host or join Watch Party rooms"));
 });
 
 test("Phase 8 & UI Directives regression suite", () => {
@@ -590,9 +591,10 @@ test("Phase 9: Search morph, user dropdown, anime page, privacy redesign, watch 
   assert.ok(privacyHtml.includes('class="legal-body"'));
   assert.ok(privacyHtml.includes("https://watch.osiris.rocks/privacy"));
 
-  // Adblocker recommendations on Settings (desktop + mobile)
+  // Adblocker recommendations on Settings (desktop + mobile) placed above Appearance
   const settingsHtml = read("settings.html");
   assert.ok(settingsHtml.includes('id="settings-adblock-section"'));
+  assert.ok(settingsHtml.indexOf('id="settings-adblock-section"') < settingsHtml.indexOf("<h2>Appearance</h2>"));
   assert.ok(settingsHtml.includes("uBlock Origin"));
   assert.ok(settingsHtml.includes("AdGuard"));
 
@@ -606,4 +608,30 @@ test("Phase 9: Search morph, user dropdown, anime page, privacy redesign, watch 
   assert.ok(css.includes(".player-skel-overlay"));
   assert.ok(css.includes(".adblock-rec-card"));
   assert.ok(css.includes(".party-hud"));
+});
+
+test("unified subwindows, origin-morph animations, New Episodes fixes, and mobile/scrollbar polish", () => {
+  const script = read("orc-script.js");
+  const css = read("orc-styles.css");
+  const sw = read("sw.js");
+
+  assert.ok(sw.includes('CACHE_NAME = "orc-static-v43"'));
+  assert.ok(script.includes("animateSubwindowMorph"));
+  assert.ok(script.includes("getSavedTvShowsForNotif"));
+  assert.ok(script.includes("todayStart"));
+  assert.ok(script.includes("mobile-pill-indicator"));
+  assert.ok(script.includes("--orc-enter-x"));
+  assert.ok(script.includes("cmd-palette-ico"));
+  assert.match(script, /surprise-modal-box[^"]*subwin-card/);
+  assert.match(script, /devlog-card[^"]*subwin-card/);
+  assert.match(script, /cmd-palette-dialog[^"]*subwin-card/);
+
+  assert.ok(css.includes(".mobile-pill-indicator"));
+  assert.ok(css.includes(".account-avatar-badge.is-guest"));
+  assert.ok(css.includes("scrollbar-width: none;"));
+  assert.ok(css.includes(".anime-filter-strip .genre-pill"));
+  assert.ok(css.includes("@media (hover: none) and (pointer: coarse), (max-width: 768px)"));
+  assert.ok(css.includes(".party-hud-actions"));
+  assert.ok(css.includes(":where(.subwin-close)"));
+  assert.ok(css.includes(".party-modal-head .subwin-close"));
 });
