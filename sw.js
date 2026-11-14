@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v43";
+const CACHE_NAME = "orc-static-v44";
 const TMDB_CACHE_NAME = "orc-tmdb-runtime-v2";
 const TMDB_CACHE_MAX_ENTRIES = 200;
 const TMDB_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours

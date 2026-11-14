@@ -615,10 +615,12 @@ test("unified subwindows, origin-morph animations, New Episodes fixes, and mobil
   const css = read("orc-styles.css");
   const sw = read("sw.js");
 
-  assert.ok(sw.includes('CACHE_NAME = "orc-static-v43"'));
+  assert.ok(sw.includes('CACHE_NAME = "orc-static-v44"'));
   assert.ok(script.includes("animateSubwindowMorph"));
   assert.ok(script.includes("getSavedTvShowsForNotif"));
   assert.ok(script.includes("todayStart"));
+  assert.ok(script.includes("dt.getFullYear() !== now.getFullYear()"));
+  assert.ok(script.includes("Latest from your watchlist"));
   assert.ok(script.includes("mobile-pill-indicator"));
   assert.ok(script.includes("--orc-enter-x"));
   assert.ok(script.includes("cmd-palette-ico"));
@@ -634,4 +636,45 @@ test("unified subwindows, origin-morph animations, New Episodes fixes, and mobil
   assert.ok(css.includes(".party-hud-actions"));
   assert.ok(css.includes(":where(.subwin-close)"));
   assert.ok(css.includes(".party-modal-head .subwin-close"));
+  assert.match(css, /\.header-search-tabs\s*\{[^}]*flex-shrink:\s*0;/s);
+  assert.match(css, /\.adblock-rec-badge\s*\{[^}]*border:\s*0;/s);
+  assert.match(css, /\.anime-filter-strip\s*\{[^}]*justify-content:\s*flex-start;/s);
+  assert.ok(css.includes(".hero.is-paused .hero-dot.active .hero-dot-fill"));
+  assert.ok(css.includes(".header-search-clear-recent"));
+
+  assert.ok(script.includes("_heroSwapToken"));
+  assert.ok(script.includes("_heroLoadToken"));
+  assert.ok(script.includes("_heroSlideSeq"));
+  assert.ok(script.includes("_bleedToken"));
+  assert.ok(script.includes("pauseBtn.dataset.bound"));
+  assert.ok(script.includes("touchstart"));
+  assert.ok(script.includes("clearRecentBtn"));
+  assert.ok(script.includes("RecentSearches.clear"));
+  assert.ok(script.includes("stepHeroSlide"));
+  assert.ok(css.includes(".hero-nav-btn"));
+  assert.ok(read("index.html").includes('id="hero-prev-btn"'));
+  assert.ok(read("anime.html").includes('id="hero-next-btn"'));
+});
+
+test("My List instant filter, Header Search tab cache, and Discover active filter continuity", () => {
+  const listHtml = read("list.html");
+  const searchHtml = read("search.html");
+  const script = read("orc-script.js");
+  const css = read("orc-styles.css");
+
+  assert.ok(listHtml.includes('id="list-filter-input"'));
+  assert.ok(listHtml.includes('id="list-filter-clear"'));
+  assert.ok(searchHtml.includes('id="discover-active-filters"'));
+
+  assert.ok(css.includes(".list-filter-wrap"));
+  assert.ok(css.includes(".list-empty-actions"));
+  assert.ok(css.includes(".discover-active-filters"));
+  assert.ok(css.includes(".discover-active-chip"));
+
+  assert.ok(script.includes("list-empty-actions"));
+  assert.ok(script.includes("list-clear-filter-btn"));
+  assert.ok(script.includes("tabCache: new Map()"));
+  assert.ok(script.includes("renderActiveFilters"));
+  assert.ok(script.includes("DISCOVER_FILTER_META"));
+  assert.ok(script.includes('params.get("ai") === "1"'));
 });

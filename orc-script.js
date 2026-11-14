@@ -256,8 +256,11 @@ function formatNotifAirDate(airDate) {
   if (diffDays === 0) return "Today";
   if (diffDays === -1) return "Yesterday";
   if (diffDays === 1) return "Tomorrow";
-  if (diffDays > 1 && diffDays <= 7) return `Airs ${dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (diffDays > 1 && diffDays <= 10) return `Airs ${dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  const fmtOpts = dt.getFullYear() !== now.getFullYear()
+    ? { month: "short", day: "numeric", year: "numeric" }
+    : { month: "short", day: "numeric" };
+  return dt.toLocaleDateString(undefined, fmtOpts);
 }
 
 function getSavedTvShowsForNotif() {
@@ -289,7 +292,8 @@ async function fetchWatchlistNewEpisodes(opts = {}) {
     $("#topnav-bell-btn")?.classList.remove("has-unread");
     return { hasShows: false, recent: [], latest: [], failed: false };
   }
-  const sig = tvShows.slice(0, 14).map(s => String(s.id)).sort().join(",");
+  const trackedShows = tvShows.slice(0, 24);
+  const sig = trackedShows.map(s => String(s.id)).sort().join(",");
   const fresh = !opts.force && _notifCache.data && _notifCache.sig === sig && (Date.now() - _notifCache.ts < 60000);
   if (fresh) {
     $("#topnav-bell-btn")?.classList.toggle("has-unread", (_notifCache.data.recent || []).length > 0);
@@ -298,14 +302,14 @@ async function fetchWatchlistNewEpisodes(opts = {}) {
 
   const nowDate = new Date();
   const todayStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
-  const twoWeeksAgo = todayStart - 14 * 86400000;
-  const nextWeek = todayStart + 8 * 86400000;
+  const threeWeeksAgo = todayStart - 21 * 86400000;
+  const nextTenDays = todayStart + 10 * 86400000;
   const recent = [];
   const latest = [];
   let okCount = 0;
   let failCount = 0;
 
-  await Promise.allSettled(tvShows.slice(0, 14).map(async show => {
+  await Promise.allSettled(trackedShows.map(async show => {
     try {
       const d = await tmdb(`/tv/${show.id}`);
       if (!d || typeof d !== "object") {
@@ -324,7 +328,7 @@ async function fetchWatchlistNewEpisodes(opts = {}) {
       let addedUpcomingToday = false;
       if (nextEp && nextEp.air_date) {
         const nextMs = new Date(`${nextEp.air_date}T00:00:00`).getTime();
-        if (!Number.isNaN(nextMs) && nextMs >= todayStart && nextMs <= nextWeek) {
+        if (!Number.isNaN(nextMs) && nextMs >= todayStart && nextMs <= nextTenDays) {
           addedUpcomingToday = nextMs === todayStart;
           recent.push({ show: enrichedShow, ep: nextEp, airMs: nextMs, upcoming: true });
         }
@@ -334,7 +338,7 @@ async function fetchWatchlistNewEpisodes(opts = {}) {
         if (!Number.isNaN(airMs)) {
           latest.push({ show: enrichedShow, ep: lastEp, airMs, upcoming: false });
           const sameAsNext = nextEp && nextEp.season_number === lastEp.season_number && nextEp.episode_number === lastEp.episode_number;
-          if (!sameAsNext && !(addedUpcomingToday && airMs === todayStart) && airMs >= twoWeeksAgo && airMs <= todayStart + 86400000) {
+          if (!sameAsNext && !(addedUpcomingToday && airMs === todayStart) && airMs >= threeWeeksAgo && airMs <= todayStart + 86400000) {
             recent.push({ show: enrichedShow, ep: lastEp, airMs, upcoming: false });
           }
         }
@@ -388,7 +392,7 @@ function buildNotifItemsHtml(data) {
     return data.recent.map(renderEntry).join("");
   }
   if (data.latest.length) {
-    return `<div class="notif-empty-state is-compact">No new episodes this week</div><div class="notif-section-label">Latest from your shows</div>${data.latest.map(renderEntry).join("")}`;
+    return `<div class="notif-section-label">Latest from your watchlist</div>${data.latest.map(renderEntry).join("")}`;
   }
   return `<div class="notif-empty-state">No new episodes this week</div>`;
 }
@@ -2441,12 +2445,24 @@ const RecentSearches = {
     safeSetItem(this.key, JSON.stringify(next));
     SupabaseSync.pushUserMetadata();
   },
+  clear() {
+    safeSetItem(this.key, "[]");
+    SupabaseSync.pushUserMetadata();
+  },
 };
 
 const Folders = {
   key: "orc_folders",
   get() { try { return JSON.parse(safeGetItem(this.key) || "[]"); } catch { return []; } },
-  save(list) { safeSetItem(this.key, JSON.stringify(list)); SupabaseSync.pushUserMetadata(); },
+  save(list) {
+    safeSetItem(this.key, JSON.stringify(list));
+    SupabaseSync.pushUserMetadata();
+    if (typeof invalidateNotifCache === "function") invalidateNotifCache();
+    if (typeof fetchWatchlistNewEpisodes === "function") {
+      clearTimeout(window._orcNotifRefreshTimer);
+      window._orcNotifRefreshTimer = setTimeout(() => fetchWatchlistNewEpisodes().catch(() => {}), 150);
+    }
+  },
   addFolder(name) {
     const list = this.get();
     list.push({ id: "f_" + Date.now(), name, items: [] });
@@ -3785,6 +3801,7 @@ function extractHeroAmbientColors(imgUrl) {
 }
 
 let _bleedSlot = 0;
+let _bleedToken = 0;
 
 function buildBleedGradient(left, center, right) {
   const lStr = `${left[0]},${left[1]},${left[2]}`;
@@ -3802,7 +3819,9 @@ function applyHeroColorBleed(url) {
     const elA = $("#hero-color-bleed-a");
     const elB = $("#hero-color-bleed-b");
     if (!elA || !elB || !url) { resolve(); return; }
+    const bleedToken = ++_bleedToken;
     extractHeroAmbientColors(url).then(colors => {
+      if (bleedToken !== _bleedToken) { resolve(); return; }
       const next = _bleedSlot % 2 === 0 ? elB : elA;
       const cur  = _bleedSlot % 2 === 0 ? elA : elB;
 
@@ -3851,42 +3870,111 @@ function applyDetailBackdrop(backdropPath) {
   }
 }
 
+let _heroSwapToken = 0;
+let _heroLoadToken = 0;
+let _heroSlideSeq = 0;
+let _heroSwapResolvePending = null;
+
 function swapHeroBackdrop(url) {
-  return new Promise(resolve => {
+  if (_heroSwapResolvePending) {
+    const prevResolve = _heroSwapResolvePending;
+    _heroSwapResolvePending = null;
+    prevResolve();
+  }
+  return new Promise(rawResolve => {
     const a = $("#hero-backdrop-a");
     const b = $("#hero-backdrop-b");
-    if (!url || !a || !b) { resolve(); return; }
+    const swapToken = ++_heroSwapToken;
+    const resolve = () => {
+      if (_heroSwapResolvePending === resolve) _heroSwapResolvePending = null;
+      rawResolve();
+    };
+    _heroSwapResolvePending = resolve;
+
+    if (!a || !b) { resolve(); return; }
+
+    a.onload = a.onerror = null;
+    b.onload = b.onerror = null;
+
+    if (!url) {
+      a.classList.remove("is-active");
+      b.classList.remove("is-active");
+      a.removeAttribute("src");
+      b.removeAttribute("src");
+      delete a.dataset.swapToken;
+      delete b.dataset.swapToken;
+      resolve();
+      return;
+    }
 
     const fastUrl = url.replace("/original/", "/w780/");
     applyHeroColorBleed(fastUrl);
-    const next = heroImgSlot % 2 === 0 ? b : a;
-    const cur = heroImgSlot % 2 === 0 ? a : b;
 
-    let swapped = false;
-    const finishSwap = () => {
-      if (swapped) return;
-      swapped = true;
+    const cur = b.classList.contains("is-active") ? b : a;
+    const next = cur === a ? b : a;
+
+    const scheduleUpgrade = targetImg => {
+      if (isMobile() || fastUrl === url) return;
+      const hi = new Image();
+      hi.onload = async () => {
+        if (swapToken !== _heroSwapToken || !targetImg.classList.contains("is-active") || targetImg.dataset.swapToken !== String(swapToken)) return;
+        try { if (typeof hi.decode === "function") await hi.decode(); } catch {}
+        if (swapToken !== _heroSwapToken || !targetImg.classList.contains("is-active") || targetImg.dataset.swapToken !== String(swapToken)) return;
+        targetImg.src = url;
+      };
+      hi.src = url;
+    };
+
+    if (cur.getAttribute("src") && (cur.src === fastUrl || cur.src === url) && cur.classList.contains("is-active") && cur.complete && cur.naturalWidth > 0) {
+      cur.dataset.swapToken = String(swapToken);
+      next.classList.remove("is-active");
+      if (cur.src !== url) scheduleUpgrade(cur);
+      resolve();
+      return;
+    }
+
+    let settled = false;
+    let triedFallback = false;
+    const activateNext = async () => {
+      if (settled) return;
+      if (swapToken !== _heroSwapToken) {
+        settled = true;
+        resolve();
+        return;
+      }
+      try {
+        if (next.complete && next.naturalWidth > 0 && typeof next.decode === "function") {
+          await next.decode();
+        }
+      } catch {}
+      if (settled || swapToken !== _heroSwapToken) {
+        if (!settled) { settled = true; resolve(); }
+        return;
+      }
+      settled = true;
+      next.onload = next.onerror = null;
+      next.dataset.swapToken = String(swapToken);
       cur.classList.remove("is-active");
       next.classList.add("is-active");
       heroImgSlot++;
       resolve();
-      if (!isMobile() && fastUrl !== url) {
-        const hi = new Image();
-        hi.onload = () => {
-          if (next.classList.contains("is-active")) next.src = url;
-        };
-        hi.src = url;
-      }
+      if (next.naturalWidth > 0 && next.src !== url) scheduleUpgrade(next);
     };
 
-    if ((next.src === fastUrl || next.src === url) && next.classList.contains("is-active")) {
-      resolve();
-      return;
-    }
-    next.onload = finishSwap;
-    next.onerror = finishSwap;
+    next.onload = () => activateNext();
+    next.onerror = () => {
+      if (swapToken !== _heroSwapToken) { settled = true; resolve(); return; }
+      if (!triedFallback && fastUrl !== url) {
+        triedFallback = true;
+        next.src = url;
+        if (next.complete && next.naturalWidth > 0) activateNext();
+        return;
+      }
+      activateNext();
+    };
+    next.dataset.swapToken = String(swapToken);
     next.src = fastUrl;
-    if (next.complete && next.naturalWidth > 0) finishSwap();
+    if (next.complete && next.naturalWidth > 0) activateNext();
   });
 }
 
@@ -3915,51 +4003,108 @@ function pickHeroItems(results) {
 
 let heroUserPaused = false;
 let heroHovered = false;
+let _heroTimerStart = 0;
+let _heroRemainingMs = HERO_INTERVAL;
 
-function startHeroTimer() {
-  if (heroUserPaused || heroHovered || prefersReducedMotion() || heroSlides.length < 2) return;
-  clearInterval(heroTimer);
-  heroTimer = setInterval(() => setHeroSlide((heroIndex + 1) % heroSlides.length, true), HERO_INTERVAL);
+function syncHeroPauseControls() {
+  const pauseBtn = $("#hero-pause-btn");
+  const prevBtn = $("#hero-prev-btn");
+  const nextBtn = $("#hero-next-btn");
+  const heroEl = $(".hero");
+  const hasMultiple = heroSlides.length >= 2;
+  if (prevBtn) prevBtn.hidden = !hasMultiple;
+  if (nextBtn) nextBtn.hidden = !hasMultiple;
+  const effectivelyPaused = heroUserPaused || heroHovered || document.hidden;
+  if (heroEl) heroEl.classList.toggle("is-paused", effectivelyPaused);
+  if (!pauseBtn) return;
+  pauseBtn.setAttribute("aria-label", heroUserPaused ? "Play carousel" : "Pause carousel");
+  pauseBtn.setAttribute("title", heroUserPaused ? "Play carousel" : "Pause carousel");
+  pauseBtn.setAttribute("aria-pressed", heroUserPaused ? "true" : "false");
+  const pauseIco = pauseBtn.querySelector(".icon-pause");
+  const playIco = pauseBtn.querySelector(".icon-play");
+  if (pauseIco) pauseIco.style.display = heroUserPaused ? "none" : "block";
+  if (playIco) playIco.style.display = heroUserPaused ? "block" : "none";
 }
 
-function stopHeroTimer() {
-  clearInterval(heroTimer);
+function stopHeroTimer(preserveRemaining = false) {
+  clearTimeout(heroTimer);
+  heroTimer = null;
+  if (preserveRemaining && _heroTimerStart > 0) {
+    const elapsed = Date.now() - _heroTimerStart;
+    _heroRemainingMs = Math.max(250, _heroRemainingMs - elapsed);
+  } else if (!preserveRemaining) {
+    _heroRemainingMs = HERO_INTERVAL;
+  }
+  _heroTimerStart = 0;
+  syncHeroPauseControls();
+}
+
+function startHeroTimer(resetInterval = false) {
+  clearTimeout(heroTimer);
+  heroTimer = null;
+  if (resetInterval) _heroRemainingMs = HERO_INTERVAL;
+  if (heroUserPaused || heroHovered || document.hidden || prefersReducedMotion() || heroSlides.length < 2) {
+    _heroTimerStart = 0;
+    syncHeroPauseControls();
+    return;
+  }
+  const delay = Math.max(250, _heroRemainingMs || HERO_INTERVAL);
+  _heroTimerStart = Date.now();
+  syncHeroPauseControls();
+  heroTimer = setTimeout(() => {
+    _heroTimerStart = 0;
+    _heroRemainingMs = HERO_INTERVAL;
+    if (heroUserPaused || heroHovered || document.hidden || heroSlides.length < 2) {
+      syncHeroPauseControls();
+      return;
+    }
+    setHeroSlide((heroIndex + 1) % heroSlides.length, true);
+  }, delay);
+}
+
+function stepHeroSlide(targetOrDelta, absolute = false) {
+  if (heroSlides.length < 2) return;
+  const focusedDot = document.activeElement?.classList?.contains("hero-dot");
+  const nextIndex = absolute
+    ? ((targetOrDelta % heroSlides.length) + heroSlides.length) % heroSlides.length
+    : (heroIndex + targetOrDelta + heroSlides.length) % heroSlides.length;
+  setHeroSlide(nextIndex, true);
+  if (focusedDot) $$(".hero-dot")[nextIndex]?.focus?.();
 }
 
 function initHeroPauseControls() {
   const pauseBtn = $("#hero-pause-btn");
-  if (!pauseBtn) return;
-  const updateBtn = () => {
-    pauseBtn.setAttribute("aria-label", heroUserPaused ? "Play carousel" : "Pause carousel");
-    pauseBtn.setAttribute("title", heroUserPaused ? "Play carousel" : "Pause carousel");
-    const pauseIco = pauseBtn.querySelector(".icon-pause");
-    const playIco = pauseBtn.querySelector(".icon-play");
-    if (pauseIco) pauseIco.style.display = heroUserPaused ? "none" : "block";
-    if (playIco) playIco.style.display = heroUserPaused ? "block" : "none";
-  };
+  const prevBtn = $("#hero-prev-btn");
+  const nextBtn = $("#hero-next-btn");
+  syncHeroPauseControls();
+  if (prevBtn && prevBtn.dataset.bound !== "1") {
+    prevBtn.dataset.bound = "1";
+    prevBtn.addEventListener("click", () => stepHeroSlide(-1));
+  }
+  if (nextBtn && nextBtn.dataset.bound !== "1") {
+    nextBtn.dataset.bound = "1";
+    nextBtn.addEventListener("click", () => stepHeroSlide(1));
+  }
+  if (!pauseBtn || pauseBtn.dataset.bound === "1") return;
+  pauseBtn.dataset.bound = "1";
   pauseBtn.addEventListener("click", () => {
     heroUserPaused = !heroUserPaused;
-    if (heroUserPaused) stopHeroTimer();
-    else startHeroTimer();
-    updateBtn();
+    if (heroUserPaused) {
+      stopHeroTimer(true);
+    } else {
+      heroHovered = false;
+      startHeroTimer();
+    }
   });
-  updateBtn();
 }
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    stopHeroTimer();
+    stopHeroTimer(true);
   } else if (!heroUserPaused && !heroHovered) {
     startHeroTimer();
-  initHeroPauseControls();
-  const heroSection = $(".hero");
-  if (heroSection && !heroSection._focusBound) {
-    heroSection._focusBound = true;
-    heroSection.addEventListener("focusin", () => stopHeroTimer());
-    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
-    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
-    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
-  }
+  } else {
+    syncHeroPauseControls();
   }
 });
 
@@ -3974,18 +4119,7 @@ function buildHeroDots() {
   ).join("");
   dots.querySelectorAll(".hero-dot").forEach((btn, i) => {
     btn.addEventListener("click", () => {
-      clearInterval(heroTimer);
       setHeroSlide(i, true);
-      startHeroTimer();
-  initHeroPauseControls();
-  const heroSection = $(".hero");
-  if (heroSection && !heroSection._focusBound) {
-    heroSection._focusBound = true;
-    heroSection.addEventListener("focusin", () => stopHeroTimer());
-    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
-    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
-    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
-  }
     });
   });
   restartDotFill(0);
@@ -3994,6 +4128,7 @@ function buildHeroDots() {
 function restartDotFill(i) {
   $$(".hero-dot").forEach((d, j) => {
     d.classList.toggle("active", j === i);
+    d.setAttribute("aria-current", j === i ? "true" : "false");
     const fill = d.querySelector(".hero-dot-fill");
     if (!fill) return;
     fill.style.animation = "none";
@@ -4003,26 +4138,39 @@ function restartDotFill(i) {
 }
 
 async function setHeroSlide(i, animate = false) {
-  if (!heroSlides.length || heroFading) return;
-  heroIndex = i;
-  if (animate) {
-    heroFading = true;
-    $(".hero")?.classList.add("hero-fading");
+  if (!heroSlides.length) return;
+  const seq = ++_heroSlideSeq;
+  const targetIndex = ((i % heroSlides.length) + heroSlides.length) % heroSlides.length;
+  heroIndex = targetIndex;
+  heroFading = true;
+  clearTimeout(heroTimer);
+  heroTimer = null;
+  _heroTimerStart = 0;
+  _heroRemainingMs = HERO_INTERVAL;
+  const heroEl = $(".hero");
+  if (animate && !prefersReducedMotion()) {
+    heroEl?.classList.add("hero-fading");
     await new Promise(r => setTimeout(r, 170));
+    if (seq !== _heroSlideSeq) return;
   }
   try {
-    await loadHero(heroSlides[i]);
+    await loadHero(heroSlides[targetIndex]);
+    if (seq !== _heroSlideSeq) return;
     if (animate) {
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      $(".hero")?.classList.remove("hero-fading");
+      if (seq !== _heroSlideSeq) return;
+      heroEl?.classList.remove("hero-fading");
     }
-  } catch (err) { console.warn('Caught error:', err);
-    $(".hero")?.classList.remove("hero-fading");
+  } catch (err) {
+    console.warn("Caught error:", err);
+    if (seq === _heroSlideSeq) heroEl?.classList.remove("hero-fading");
   } finally {
-    if (animate) heroFading = false;
+    if (seq === _heroSlideSeq) heroFading = false;
   }
-  restartDotFill(i);
-  const nextSlide = heroSlides[(i + 1) % heroSlides.length];
+  if (seq !== _heroSlideSeq) return;
+  restartDotFill(targetIndex);
+  startHeroTimer(true);
+  const nextSlide = heroSlides[(targetIndex + 1) % heroSlides.length];
   if (nextSlide?.backdrop_path) {
     const pImg = new Image();
     pImg.src = `${IMG_W780}${nextSlide.backdrop_path}`;
@@ -4036,23 +4184,71 @@ async function setHeroSlide(i, animate = false) {
 
 function initHeroCarousel(slides) {
   if (!slides.length) return;
-  stopHeroTimer();
+  stopHeroTimer(false);
+  _heroSlideSeq++;
   heroIndex = 0;
   heroImgSlot = 0;
   heroFading = false;
+  heroUserPaused = false;
   heroHovered = false;
   heroSlides = slides;
   buildHeroDots();
   loadHero(slides[0]);
-  startHeroTimer();
+  startHeroTimer(true);
   initHeroPauseControls();
   const heroSection = $(".hero");
-  if (heroSection && !heroSection._focusBound) {
-    heroSection._focusBound = true;
-    heroSection.addEventListener("focusin", () => stopHeroTimer());
-    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
-    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
-    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+  const heroContent = $(".hero-content");
+  if (heroContent && !heroContent._focusBound) {
+    heroContent._focusBound = true;
+    heroContent.addEventListener("focusin", () => { heroHovered = true; stopHeroTimer(true); });
+    heroContent.addEventListener("focusout", e => {
+      if (heroContent.contains(e.relatedTarget)) return;
+      heroHovered = false;
+      if (!heroUserPaused && !document.hidden) startHeroTimer();
+    });
+    if (window.matchMedia?.("(hover: hover) and (pointer: fine)")?.matches) {
+      heroContent.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(true); });
+      heroContent.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+    }
+  }
+  if (heroSection && !heroSection._kbdBound) {
+    heroSection._kbdBound = true;
+    heroSection.addEventListener("keydown", e => {
+      if (heroSlides.length < 2 || e.altKey || e.ctrlKey || e.metaKey) return;
+      const tag = document.activeElement?.tagName?.toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || document.activeElement?.isContentEditable) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepHeroSlide(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepHeroSlide(1);
+      } else if (e.key === "Home" && document.activeElement?.closest(".hero-carousel-controls")) {
+        e.preventDefault();
+        stepHeroSlide(0, true);
+      } else if (e.key === "End" && document.activeElement?.closest(".hero-carousel-controls")) {
+        e.preventDefault();
+        stepHeroSlide(heroSlides.length - 1, true);
+      }
+    });
+  }
+  if (heroSection && !heroSection._swipeBound) {
+    heroSection._swipeBound = true;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    heroSection.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    heroSection.addEventListener("touchend", e => {
+      if (heroSlides.length < 2 || !e.changedTouches.length) return;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        setHeroSlide(dx < 0 ? heroIndex + 1 : heroIndex - 1, true);
+      }
+    }, { passive: true });
   }
   slides.slice(1, 3).forEach(s => {
     if (s.backdrop_path) {
@@ -4072,6 +4268,7 @@ let heroBound = false;
 
 async function loadHero(item) {
   if (!item) return;
+  const loadToken = ++_heroLoadToken;
   heroData = item;
   bindHeroActions();
   updateHeroListState();
@@ -4087,7 +4284,10 @@ async function loadHero(item) {
     $("#hero-title").textContent = title;
   }
 
-  swapHeroBackdrop(backdrop);
+  const swapPromise = Promise.race([
+    swapHeroBackdrop(backdrop),
+    new Promise(r => setTimeout(r, 1200)),
+  ]);
 
   try {
     let d = heroDetailCache[cacheKey];
@@ -4095,6 +4295,7 @@ async function loadHero(item) {
       d = await tmdb(`/${realType}/${id}?append_to_response=images,videos`);
       heroDetailCache[cacheKey] = d;
     }
+    if (loadToken !== _heroLoadToken) return;
     heroData._detail = d;
     heroData._type = realType;
 
@@ -4126,9 +4327,14 @@ async function loadHero(item) {
     if ($("#hero-meta")) $("#hero-meta").innerHTML = metaParts.join("");
 
     // Auto-play trailer popups disabled
-  } catch (err) { console.warn('Caught error:', err);
+  } catch (err) {
+    console.warn("Caught error:", err);
+    if (loadToken !== _heroLoadToken) return;
     if ($("#hero-title")) $("#hero-title").textContent = title;
   }
+
+  await swapPromise;
+  if (loadToken !== _heroLoadToken) return;
 
   bindHeroActions();
   updateHeroListState();
@@ -4150,13 +4356,6 @@ function bindHeroActions() {
   if (playBtn?.dataset.heroBound === "1") return;
   if (playBtn) playBtn.dataset.heroBound = "1";
   heroBound = true;
-
-  const heroContent = $(".hero-content") || $("#hero");
-  if (heroContent && !heroContent.dataset.pauseBound) {
-    heroContent.dataset.pauseBound = "1";
-    heroContent.addEventListener("mouseenter", () => clearInterval(heroTimer));
-    heroContent.addEventListener("mouseleave", () => startHeroTimer());
-  }
 
   $("#hero-play-btn")?.addEventListener("click", () => {
     if (!heroData) return;
@@ -6092,7 +6291,7 @@ async function initTvPage() {
 
 function initSearchPage() {
   const params = new URLSearchParams(location.search);
-  const filter = params.get("type") || "all";
+  const filter = params.get("type") || (params.get("ai") === "1" ? "ai" : "all");
   const genreId = params.get("genre");
   const providerId = params.get("provider");
   initSidebar(filter === "movie" ? "movies" : filter === "tv" ? "tv" : "search");
@@ -6102,12 +6301,79 @@ function initSearchPage() {
   const status = $("#search-status");
   const grid = $("#search-results");
   const recentBox = $("#search-recent");
+  const activeFiltersEl = $("#discover-active-filters");
   const chips = $$(".filter-chip");
   let current = ["movie", "tv", "ai"].includes(filter) ? filter : "all";
   let timer, lastQ = "";
   let searchPage = 1;
   let isFetchingMore = false;
   let hasMorePages = true;
+
+  const DISCOVER_FILTER_META = [
+    { sel: "#filter-genre", label: "Genre" },
+    { sel: "#filter-provider", label: "Service" },
+    { sel: "#filter-era", label: "Era" },
+    { sel: "#filter-rating", label: "Rating" },
+  ];
+
+  const getActiveDiscoverFilters = () => DISCOVER_FILTER_META.map(meta => {
+    const el = $(meta.sel);
+    const defaultVal = el?.querySelector("option")?.value || "all";
+    if (!el || !el.value || el.value === defaultVal) return null;
+    const optText = el.selectedOptions?.[0]?.textContent?.trim() || el.value;
+    return { sel: meta.sel, el, label: meta.label, text: optText, defaultVal };
+  }).filter(Boolean);
+
+  function renderActiveFilters() {
+    if (!activeFiltersEl) return;
+    const q = input?.value.trim() || "";
+    const active = current === "ai" || !!q ? [] : getActiveDiscoverFilters();
+    if (!active.length) {
+      activeFiltersEl.hidden = true;
+      activeFiltersEl.replaceChildren();
+      return;
+    }
+    activeFiltersEl.hidden = false;
+    activeFiltersEl.replaceChildren();
+    active.forEach(item => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "discover-active-chip";
+      chip.dataset.filterSel = item.sel;
+      chip.setAttribute("aria-label", `Remove ${item.label}: ${item.text}`);
+      const keySpan = document.createElement("span");
+      keySpan.className = "discover-active-chip-key";
+      keySpan.textContent = `${item.label}:`;
+      const valSpan = document.createElement("span");
+      valSpan.textContent = item.text;
+      const xSpan = document.createElement("span");
+      xSpan.className = "discover-active-chip-x";
+      xSpan.setAttribute("aria-hidden", "true");
+      xSpan.textContent = "✕";
+      chip.append(keySpan, valSpan, xSpan);
+      chip.addEventListener("click", () => {
+        item.el.value = item.defaultVal;
+        const curQ = input?.value.trim() || "";
+        syncFiltersToUrl(curQ);
+        doSearch(curQ);
+      });
+      activeFiltersEl.appendChild(chip);
+    });
+    const clearAllBtn = document.createElement("button");
+    clearAllBtn.type = "button";
+    clearAllBtn.className = "discover-clear-filters";
+    clearAllBtn.textContent = "Clear all";
+    clearAllBtn.addEventListener("click", () => {
+      DISCOVER_FILTER_META.forEach(meta => {
+        const el = $(meta.sel);
+        if (el) el.value = el.querySelector("option")?.value || "all";
+      });
+      const curQ = input?.value.trim() || "";
+      syncFiltersToUrl(curQ);
+      doSearch(curQ);
+    });
+    activeFiltersEl.appendChild(clearAllBtn);
+  }
 
   const closeInstantSearch = input ? initInstantSearch(input, () => current !== "ai") : null;
 
@@ -6138,7 +6404,7 @@ function initSearchPage() {
   function renderRecent() {
     if (!recentBox || !input) return;
     const q = input.value.trim();
-    if (current === "ai" || q || genreId) { recentBox.hidden = true; return; }
+    if (current === "ai" || q || getActiveDiscoverFilters().length) { recentBox.hidden = true; return; }
     const recent = RecentSearches.get();
     if (!recent.length) { recentBox.hidden = true; return; }
     recentBox.hidden = false;
@@ -6156,13 +6422,21 @@ function initSearchPage() {
 
   const syncSearchMode = () => {
     const isAI = current === "ai";
+    const hasQuery = !!input?.value.trim();
     if (mediaTypeSelect) mediaTypeSelect.value = current;
     document.body.classList.toggle("is-ai-search", isAI);
     aiController?.setEnabled(isAI);
+    if (!isAI) {
+      const summaryEl = $("#ai-results-summary");
+      if (summaryEl) { summaryEl.hidden = true; summaryEl.replaceChildren(); }
+      grid?.removeAttribute("aria-busy");
+      status?.classList.remove("is-busy");
+    }
     chips.forEach(c => { c.classList.toggle("on", c.dataset.filter === current); c.setAttribute("aria-pressed", String(c.dataset.filter === current)); });
     if (aiSubmit) aiSubmit.hidden = !isAI;
     if (aiHelp) aiHelp.hidden = !isAI;
-    if (filtersBar) filtersBar.hidden = isAI;
+    if (filtersBar) filtersBar.hidden = isAI || hasQuery;
+    renderActiveFilters();
     if (!input) return;
     input.placeholder = isAI ? "Describe a vibe, plot, era, or movies like…" : "Titles, actors, keywords…";
     input.setAttribute("aria-label", isAI ? "Describe movies or TV shows you want to watch" : "Search titles, actors, and keywords");
@@ -6214,7 +6488,10 @@ function initSearchPage() {
     }
     status.classList.remove("is-busy");
 
-    if (recentBox) recentBox.hidden = !!q;
+    if (recentBox) {
+      if (q || getActiveDiscoverFilters().length) recentBox.hidden = true;
+      else renderRecent();
+    }
     if (!append && status) status.textContent = "Loading…";
 
     try {
@@ -6435,6 +6712,7 @@ function initSearchPage() {
     const sort = $("#filter-sort")?.value;
     if (sort && sort !== "pop") u.searchParams.set("sort", sort); else u.searchParams.delete("sort");
     history.replaceState(null, "", u);
+    renderActiveFilters();
   };
 
   // Sync initial dropdown states from URL parameters (Item 30)
@@ -6477,10 +6755,13 @@ function initSearchPage() {
   if (input) {
     input.value = q;
     if (clear) clear.style.display = q ? "flex" : "none";
+    if (filtersBar) filtersBar.hidden = current === "ai" || !!q.trim();
+    renderActiveFilters();
     input.addEventListener("input", () => {
       const val = input.value.trim();
       if (clear) clear.style.display = input.value ? "flex" : "none";
       if (filtersBar) filtersBar.hidden = current === "ai" || !!val;
+      renderActiveFilters();
       clearTimeout(timer);
       if (!val) renderRecent();
       if (current === "ai") { if (!val) doSearch(""); return; }
@@ -6495,8 +6776,18 @@ function initSearchPage() {
       doSearch(input.value.trim());
     });
     doSearch(q);
+  } else {
+    renderActiveFilters();
   }
-  clear?.addEventListener("click", () => { input.value = ""; clear.style.display = "none"; closeInstantSearch?.(); doSearch(""); if (!isMobile() && !isTouch()) input.focus(); });
+  clear?.addEventListener("click", () => {
+    input.value = "";
+    clear.style.display = "none";
+    if (filtersBar) filtersBar.hidden = current === "ai";
+    renderActiveFilters();
+    closeInstantSearch?.();
+    doSearch("");
+    if (!isMobile() && !isTouch()) input.focus();
+  });
   renderRecent();
 }
 
@@ -7296,10 +7587,16 @@ async function initListPage() {
   const rawList = MyList.get();
   if (wlCount) wlCount.textContent = rawList.length;
 
-  const emptyState = (msg, submsg) => {
-    grid.innerHTML = `<div class="no-results list-empty"><div class="list-empty-ico">${ICONS.list}</div><h3>${msg}</h3><p>${submsg}</p></div>`;
+  const emptyState = (msg, submsg, actionsHtml = "") => {
+    grid.innerHTML = `<div class="no-results list-empty"><div class="list-empty-ico">${ICONS.list}</div><h3>${msg}</h3><p>${submsg}</p>${actionsHtml}</div>`;
     if (status) status.textContent = "";
   };
+
+  const exploreActionsHtml = `
+    <div class="list-empty-actions">
+      <a href="${routeUrl("search")}" class="btn-play list-empty-cta">Explore Discover</a>
+      <a href="${routeUrl("anime")}" class="btn-ghost list-empty-cta-secondary">Browse Anime</a>
+    </div>`;
 
   const initialUrlTab = new URLSearchParams(location.search).get("tab");
   let loadedItems = [];
@@ -7307,7 +7604,26 @@ async function initListPage() {
   let currentTab = (initialUrlTab === "history" || initialUrlTab === "folders") ? initialUrlTab : "watchlist";
   let currentType = "all";
   let currentSort = "recent";
+  let currentSearch = "";
   let currentFolderId = null;
+  let currentFolderHeader = null;
+
+  const filterInput = $("#list-filter-input");
+  const filterClear = $("#list-filter-clear");
+
+  const resetListSearch = () => {
+    currentSearch = "";
+    if (filterInput) filterInput.value = "";
+    if (filterClear) filterClear.hidden = true;
+  };
+
+  const resetAllListFilters = () => {
+    currentType = "all";
+    $("#list-filter-chips")?.querySelectorAll(".filter-chip").forEach(c => {
+      c.classList.toggle("on", c.dataset.type === "all");
+    });
+    resetListSearch();
+  };
 
   // Concurrency-capped enricher (max 6 parallel requests)
   async function enrichItemsConcurrently(items, mapFn, concurrency = 6) {
@@ -7332,6 +7648,11 @@ async function initListPage() {
     if (filterRow) filterRow.style.display = (currentTab === "watchlist" || currentTab === "history" || currentTab === "folder_items") ? "" : "none";
     if (sortSelect) sortSelect.style.display = (currentTab === "watchlist" || currentTab === "history" || currentTab === "folder_items") ? "" : "none";
     if (newFolderBtn) newFolderBtn.style.display = currentTab === "folders" ? "" : "none";
+    if (filterInput) {
+      const isFoldersTab = currentTab === "folders";
+      filterInput.placeholder = isFoldersTab ? "Filter folders…" : "Filter titles…";
+      filterInput.setAttribute("aria-label", isFoldersTab ? "Filter folders by name" : "Filter titles by name");
+    }
 
     // Update aria-selected on tab buttons
     $$(".list-tab-btn").forEach(t => {
@@ -7341,13 +7662,112 @@ async function initListPage() {
     });
   };
 
+  const renderFoldersGrid = (fList = Folders.get()) => {
+    if (currentTab !== "folders") return;
+    if (!fList.length) {
+      const folderEmptyActions = `
+        <div class="list-empty-actions">
+          <button type="button" class="btn-play list-empty-new-folder">Create Folder</button>
+          <a href="${routeUrl("search")}" class="btn-ghost list-empty-cta-secondary">Explore Discover</a>
+        </div>`;
+      emptyState("No folders yet", "Create custom collections to organize your favorite titles.", folderEmptyActions);
+      grid.querySelector(".list-empty-new-folder")?.addEventListener("click", () => $("#btn-new-folder")?.click());
+      return;
+    }
+
+    const q = currentSearch.trim().toLowerCase();
+    const filtered = q ? fList.filter(f => (f.name || "").toLowerCase().includes(q)) : fList;
+    grid.textContent = "";
+    if (status) {
+      status.textContent = `${filtered.length} ${filtered.length === 1 ? "folder" : "folders"}${q ? ` matching "${currentSearch.trim()}"` : ""}`;
+    }
+
+    if (!filtered.length) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "no-results list-empty";
+      emptyDiv.innerHTML = `
+        <h3>No folders match your filter</h3>
+        <p>No folders matched "${esc(currentSearch.trim())}".</p>
+        <div class="list-empty-actions">
+          <button type="button" class="btn-ghost list-clear-filter-btn">Clear filter</button>
+        </div>`;
+      emptyDiv.querySelector(".list-clear-filter-btn")?.addEventListener("click", () => {
+        resetListSearch();
+        renderFoldersGrid();
+      });
+      grid.appendChild(emptyDiv);
+      return;
+    }
+
+    filtered.forEach(f => {
+      const c = document.createElement("div");
+      c.className = "folder-card";
+      c.setAttribute("role", "button");
+      c.setAttribute("tabindex", "0");
+      c.setAttribute("aria-label", `Folder: ${f.name}, ${f.items.length} items`);
+      c.style = "position:relative;background:var(--bg-2);border-radius:16px;padding:22px;cursor:pointer;display:flex;flex-direction:column;align-items:center;text-align:center;transition:transform 0.2s var(--ease), background 0.2s var(--ease);box-shadow:0 4px 14px rgba(0,0,0,0.12);border:1px solid var(--border-2);outline:none";
+
+      c.innerHTML = `
+        <div style="color:var(--accent);margin-bottom:12px">${ICONS.list}</div>
+        <h3 style="font-size:1.1rem;margin-bottom:6px;color:var(--text);font-weight:800">${esc(f.name)}</h3>
+        <p style="font-size:0.85rem;color:var(--text-2);margin:0 0 14px">${f.items.length} ${f.items.length === 1 ? "item" : "items"}</p>
+        <div style="display:flex;gap:6px;margin-top:auto" class="folder-actions-row">
+          <button type="button" class="btn-ghost folder-rename-btn" style="padding:6px 12px;font-size:0.78rem" title="Rename folder">Rename</button>
+          <button type="button" class="btn-ghost folder-delete-btn" style="padding:6px 12px;font-size:0.78rem;color:#ef4444" title="Delete folder">Delete</button>
+        </div>
+      `;
+
+      const openFolder = () => {
+        resetListSearch();
+        currentFolderId = f.id;
+        currentTab = "folder_items";
+        loadData();
+      };
+
+      c.addEventListener("click", e => {
+        if (e.target.closest(".folder-rename-btn, .folder-delete-btn")) return;
+        openFolder();
+      });
+
+      c.addEventListener("keydown", e => {
+        if (e.target.closest(".folder-rename-btn, .folder-delete-btn")) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openFolder();
+        }
+      });
+
+      c.querySelector(".folder-rename-btn")?.addEventListener("click", e => {
+        e.stopPropagation();
+        const newName = prompt("Rename folder to:", f.name);
+        if (newName && newName.trim() && newName.trim() !== f.name) {
+          Folders.renameFolder(f.id, newName);
+          toast("Folder renamed");
+          loadData();
+        }
+      });
+
+      c.querySelector(".folder-delete-btn")?.addEventListener("click", e => {
+        e.stopPropagation();
+        showConfirmModal("Delete Folder?", `Delete folder "${f.name}" and all organized contents?`, () => {
+          Folders.removeFolder(f.id);
+          toast("Folder deleted");
+          loadData();
+        });
+      });
+
+      grid.appendChild(c);
+    });
+  };
+
   const loadData = async () => {
     syncControlsUI();
+    if (currentTab !== "folder_items") currentFolderHeader = null;
 
     if (currentTab === "watchlist") {
       const stored = MyList.get();
       if (!stored.length) {
-        emptyState("Your watchlist is empty", "Add movies and series using the + icon on their cards.");
+        emptyState("Your watchlist is empty", "Add movies and series using the + icon on their cards.", exploreActionsHtml);
         if (wlCount) wlCount.textContent = "0";
         return;
       }
@@ -7381,6 +7801,7 @@ async function initListPage() {
           };
         }
       }, 6).then(enriched => {
+        if (currentTab !== "watchlist") return;
         loadedItems = dedupeItems(enriched);
         renderListGrid();
       });
@@ -7392,7 +7813,7 @@ async function initListPage() {
         .sort((a, b) => (b.savedAt || b.lastUpdated || 0) - (a.savedAt || a.lastUpdated || 0));
 
       if (!progList.length) {
-        emptyState("No watch history", "Start watching titles and they will appear here.");
+        emptyState("No watch history", "Start watching titles and they will appear here.", exploreActionsHtml);
         return;
       }
 
@@ -7426,80 +7847,13 @@ async function initListPage() {
           };
         }
       }, 6).then(enriched => {
+        if (currentTab !== "history") return;
         historyItems = dedupeItems(enriched);
         renderListGrid();
       });
 
     } else if (currentTab === "folders") {
-      const fList = Folders.get();
-      if (!fList.length) {
-        emptyState("No folders yet", "Create custom collections to organize your favorite titles.");
-        return;
-      }
-      grid.textContent = "";
-      if (status) status.textContent = `${fList.length} ${fList.length === 1 ? "folder" : "folders"}`;
-
-      fList.forEach(f => {
-        const c = document.createElement("div");
-        c.className = "folder-card";
-        c.setAttribute("role", "button");
-        c.setAttribute("tabindex", "0");
-        c.setAttribute("aria-label", `Folder: ${f.name}, ${f.items.length} items`);
-        c.style = "position:relative;background:var(--bg-2);border-radius:16px;padding:22px;cursor:pointer;display:flex;flex-direction:column;align-items:center;text-align:center;transition:transform 0.2s var(--ease), background 0.2s var(--ease);box-shadow:0 4px 14px rgba(0,0,0,0.12);border:1px solid var(--border-2);outline:none";
-
-        c.innerHTML = `
-          <div style="color:var(--accent);margin-bottom:12px">${ICONS.list}</div>
-          <h3 style="font-size:1.1rem;margin-bottom:6px;color:var(--text);font-weight:800">${esc(f.name)}</h3>
-          <p style="font-size:0.85rem;color:var(--text-2);margin:0 0 14px">${f.items.length} ${f.items.length === 1 ? "item" : "items"}</p>
-          <div style="display:flex;gap:6px;margin-top:auto" class="folder-actions-row">
-            <button type="button" class="btn-ghost folder-rename-btn" style="padding:6px 12px;font-size:0.78rem" title="Rename folder">Rename</button>
-            <button type="button" class="btn-ghost folder-delete-btn" style="padding:6px 12px;font-size:0.78rem;color:#ef4444" title="Delete folder">Delete</button>
-          </div>
-        `;
-
-        // Card click / enter / space navigation
-        const openFolder = () => {
-          currentFolderId = f.id;
-          currentTab = "folder_items";
-          loadData();
-        };
-
-        c.addEventListener("click", e => {
-          if (e.target.closest(".folder-rename-btn, .folder-delete-btn")) return;
-          openFolder();
-        });
-
-        c.addEventListener("keydown", e => {
-          if (e.target.closest(".folder-rename-btn, .folder-delete-btn")) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            openFolder();
-          }
-        });
-
-        // Rename folder
-        c.querySelector(".folder-rename-btn")?.addEventListener("click", e => {
-          e.stopPropagation();
-          const newName = prompt("Rename folder to:", f.name);
-          if (newName && newName.trim() && newName.trim() !== f.name) {
-            Folders.renameFolder(f.id, newName);
-            toast("Folder renamed");
-            loadData();
-          }
-        });
-
-        // Delete folder
-        c.querySelector(".folder-delete-btn")?.addEventListener("click", e => {
-          e.stopPropagation();
-          showConfirmModal("Delete Folder?", `Delete folder "${f.name}" and all organized contents?`, () => {
-            Folders.removeFolder(f.id);
-            toast("Folder deleted");
-            loadData();
-          });
-        });
-
-        grid.appendChild(c);
-      });
+      renderFoldersGrid();
 
     } else if (currentTab === "folder_items") {
       const fList = Folders.get();
@@ -7513,14 +7867,24 @@ async function initListPage() {
         <h2 style="font-size:1.25rem;font-weight:800;margin:0">${esc(folder.name)}</h2>
       `;
 
-      headerBar.querySelector(".folder-back-btn")?.addEventListener("click", () => {
+      const goBackToFolders = () => {
+        resetListSearch();
         currentTab = "folders";
         currentFolderId = null;
+        currentFolderHeader = null;
         loadData();
-      });
+      };
+      headerBar.querySelector(".folder-back-btn")?.addEventListener("click", goBackToFolders);
+      currentFolderHeader = headerBar;
 
       if (!folder.items.length) {
-        emptyState(`Folder: ${esc(folder.name)}`, "This folder is currently empty.");
+        const folderItemEmptyActions = `
+          <div class="list-empty-actions">
+            <a href="${routeUrl("search")}" class="btn-play list-empty-cta">Explore Discover</a>
+            <button type="button" class="btn-ghost list-empty-back-folders">Back to Folders</button>
+          </div>`;
+        emptyState(`Folder: ${esc(folder.name)}`, "This folder is currently empty.", folderItemEmptyActions);
+        grid.querySelector(".list-empty-back-folders")?.addEventListener("click", goBackToFolders);
         grid.prepend(headerBar);
         return;
       }
@@ -7535,7 +7899,7 @@ async function initListPage() {
       }));
       renderListGrid(headerBar);
 
-      // Enrich folder items concurrently
+      const activeFolderId = folder.id;
       enrichItemsConcurrently(folder.items, async (i) => {
         try {
           const d = await tmdb(i.type === "tv" ? `/tv/${i.id}` : `/movie/${i.id}`);
@@ -7549,6 +7913,7 @@ async function initListPage() {
           };
         }
       }, 6).then(enriched => {
+        if (currentTab !== "folder_items" || currentFolderId !== activeFolderId) return;
         loadedItems = dedupeItems(enriched);
         renderListGrid(headerBar);
       });
@@ -7563,6 +7928,11 @@ async function initListPage() {
       items = items.filter(it => (it._type || (it.title ? "movie" : "tv")) === currentType);
     }
 
+    const q = currentSearch.trim().toLowerCase();
+    if (q) {
+      items = items.filter(it => (it.title || it.name || "").toLowerCase().includes(q));
+    }
+
     if (currentSort === "rating") {
       items.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
     } else if (currentSort === "title") {
@@ -7572,19 +7942,29 @@ async function initListPage() {
     }
 
     if (status && currentTab !== "folder_items") {
-      status.textContent = `${items.length} ${items.length === 1 ? "title" : "titles"}`;
+      status.textContent = `${items.length} ${items.length === 1 ? "title" : "titles"}${q ? ` matching "${currentSearch.trim()}"` : ""}`;
     } else if (status && currentTab === "folder_items") {
       const folder = Folders.get().find(f => f.id === currentFolderId);
-      status.textContent = folder ? `Folder: ${folder.name} (${items.length})` : "";
+      status.textContent = folder ? `Folder: ${folder.name} (${items.length})${q ? ` · "${currentSearch.trim()}"` : ""}` : "";
     }
 
     grid.textContent = "";
-    if (prependedEl) grid.appendChild(prependedEl);
+    const topEl = prependedEl || (currentTab === "folder_items" ? currentFolderHeader : null);
+    if (topEl) grid.appendChild(topEl);
 
     if (!items.length) {
       const emptyDiv = document.createElement("div");
-      emptyDiv.className = "no-results";
-      emptyDiv.innerHTML = `<h3>No titles match filter</h3><p>Try switching filters.</p>`;
+      emptyDiv.className = "no-results list-empty";
+      emptyDiv.innerHTML = `
+        <h3>No titles match filter</h3>
+        <p>${q ? `No titles matched "${esc(currentSearch.trim())}".` : "Try switching filters or clearing the search."}</p>
+        <div class="list-empty-actions">
+          <button type="button" class="btn-ghost list-clear-filter-btn">Clear filter</button>
+        </div>`;
+      emptyDiv.querySelector(".list-clear-filter-btn")?.addEventListener("click", () => {
+        resetAllListFilters();
+        renderListGrid();
+      });
       grid.appendChild(emptyDiv);
       return;
     }
@@ -7628,6 +8008,7 @@ async function initListPage() {
   const tabs = $$(".list-tab-btn");
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
+      resetListSearch();
       currentTab = tab.dataset.tab;
       currentFolderId = null;
       loadData();
@@ -7646,6 +8027,31 @@ async function initListPage() {
       });
     });
   }
+
+  // Wire instant title / folder filter search
+  if (filterInput) {
+    filterInput.addEventListener("input", () => {
+      currentSearch = filterInput.value;
+      if (filterClear) filterClear.hidden = !filterInput.value;
+      if (currentTab === "folders") renderFoldersGrid();
+      else renderListGrid();
+    });
+    filterInput.addEventListener("keydown", e => {
+      if (e.key === "Escape" && filterInput.value) {
+        e.preventDefault();
+        e.stopPropagation();
+        resetListSearch();
+        if (currentTab === "folders") renderFoldersGrid();
+        else renderListGrid();
+      }
+    });
+  }
+  filterClear?.addEventListener("click", () => {
+    resetListSearch();
+    if (currentTab === "folders") renderFoldersGrid();
+    else renderListGrid();
+    if (!isMobile() && !isTouch()) filterInput?.focus();
+  });
 
   // Wire sort dropdown (Item 14)
   const sortSelect = $("#list-sort-select");
@@ -9061,6 +9467,8 @@ const HeaderSearch = {
   lastItems: [],
   debounceTimer: null,
   reqToken: 0,
+  tabCache: new Map(),
+  cacheAdultOk: null,
 
   ensureDom() {
     if ($("#header-search-shell")) return;
@@ -9289,7 +9697,20 @@ const HeaderSearch = {
       if (recents.length) {
         const lbl = document.createElement("div");
         lbl.className = "header-search-section-label";
-        lbl.textContent = "Recent Searches";
+        const lblText = document.createElement("span");
+        lblText.textContent = "Recent Searches";
+        const clearRecentBtn = document.createElement("button");
+        clearRecentBtn.type = "button";
+        clearRecentBtn.className = "header-search-clear-recent";
+        clearRecentBtn.textContent = "Clear";
+        clearRecentBtn.setAttribute("aria-label", "Clear recent searches");
+        clearRecentBtn.addEventListener("click", e => {
+          e.stopPropagation();
+          RecentSearches.clear();
+          this.renderRows(listEl, items, forcedType, q);
+          $("#header-search-input")?.focus();
+        });
+        lbl.append(lblText, clearRecentBtn);
         listEl.appendChild(lbl);
         const chipRow = document.createElement("div");
         chipRow.className = "header-search-chips";
@@ -9352,6 +9773,19 @@ const HeaderSearch = {
     const q = (rawQuery || "").trim();
     const adultOk = SETTINGS.get(SETTINGS.hideAdultKey, "1") === "0";
 
+    if (this.cacheAdultOk !== adultOk) {
+      this.tabCache.clear();
+      this.cacheAdultOk = adultOk;
+    }
+    const cacheKey = `${adultOk ? 1 : 0}:${this.activeTab}:${q.toLowerCase()}`;
+    const cached = this.tabCache.get(cacheKey);
+    if (cached) {
+      this.tabCache.delete(cacheKey);
+      this.tabCache.set(cacheKey, cached);
+      this.renderRows(listEl, cached.results, cached.forcedType, q);
+      return;
+    }
+
     listEl.innerHTML = Array.from({ length: 4 }, () => `
       <div class="header-search-skel-row">
         <div class="header-search-skel-poster skel-pulse"></div>
@@ -9413,6 +9847,11 @@ const HeaderSearch = {
 
       if (token !== this.reqToken) return;
       if (!adultOk) results = results.filter(x => !x.adult);
+      if (this.tabCache.size >= 24) {
+        const oldestKey = this.tabCache.keys().next().value;
+        if (oldestKey !== undefined) this.tabCache.delete(oldestKey);
+      }
+      this.tabCache.set(cacheKey, { results: results.slice(), forcedType });
       this.renderRows(listEl, results, forcedType, q);
     } catch (err) {
       if (token !== this.reqToken) return;

@@ -92,7 +92,14 @@
           <button type="button" class="filter-chip" data-type="movie">Movies</button>
           <button type="button" class="filter-chip" data-type="tv">Series</button>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+        <div class="list-controls-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+          <div class="list-filter-wrap" id="list-filter-wrap">
+            <span class="list-filter-ico" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </span>
+            <input type="search" id="list-filter-input" class="list-filter-input" placeholder="Filter titles…" aria-label="Filter titles by name" autocomplete="off" spellcheck="false" />
+            <button type="button" id="list-filter-clear" class="list-filter-clear" aria-label="Clear list filter" hidden>✕</button>
+          </div>
           <select id="list-sort-select" class="list-sort-select" aria-label="Sort List">
             <option value="recent">Recently Added</option>
             <option value="release">Release Date</option>
