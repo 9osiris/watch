@@ -1,6 +1,49 @@
 {
   "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/robots.txt",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, s-maxage=86400" }
+      ]
+    },
+    {
+      "source": "/(list|settings|search)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, follow" }
+      ]
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap?type=index"
+    },
+    {
+      "source": "/sitemap-static.xml",
+      "destination": "/api/sitemap?type=static"
+    },
+    {
+      "source": "/sitemap-movies.xml",
+      "destination": "/api/sitemap?type=movies"
+    },
+    {
+      "source": "/sitemap-tv.xml",
+      "destination": "/api/sitemap?type=tv"
+    },
+    {
+      "source": "/sitemap-anime.xml",
+      "destination": "/api/sitemap?type=anime"
+    },
+    {
+      "source": "/movie/:id(\\d+)",
+      "destination": "/api/ssr?route=movie&id=:id"
+    },
+    {
+      "source": "/tv/:id(\\d+)",
+      "destination": "/api/ssr?route=tv&id=:id"
+    },
     {
       "source": "/movie",
       "destination": "/movie.html"
@@ -49,6 +92,12 @@
   "redirects": [
     {
       "source": "/:path*",
+      "has": [{ "type": "header", "key": "x-forwarded-proto", "value": "http" }],
+      "destination": "https://watch.osiris.rocks/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
       "has": [{ "type": "host", "value": "osiris.rocks" }],
       "destination": "https://watch.osiris.rocks/:path*",
       "permanent": true
@@ -56,6 +105,12 @@
     {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "www.osiris.rocks" }],
+      "destination": "https://watch.osiris.rocks/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.watch.osiris.rocks" }],
       "destination": "https://watch.osiris.rocks/:path*",
       "permanent": true
     },

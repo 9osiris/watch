@@ -1008,6 +1008,44 @@ function renderKeywords(container, keywords, type) {
 const IMG_W185 = "https://image.tmdb.org/t/p/w185";
 const IMG_W300 = "https://image.tmdb.org/t/p/w300";
 
+function ensureTrackArrows(track) {
+  if (!track || !track.parentElement) return;
+  let container = track.closest(".row-track-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.className = "row-track-container detail-scroll-container";
+    track.parentElement.insertBefore(container, track);
+    container.appendChild(track);
+  }
+  if (!container.querySelector(".row-arrow.left")) {
+    const leftBtn = document.createElement("button");
+    leftBtn.type = "button";
+    leftBtn.className = "row-arrow left";
+    leftBtn.setAttribute("aria-label", "Previous");
+    leftBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>`;
+    leftBtn.addEventListener("click", () => track.scrollBy({ left: -360, behavior: "smooth" }));
+    container.insertBefore(leftBtn, track);
+  }
+  if (!container.querySelector(".row-arrow.right")) {
+    const rightBtn = document.createElement("button");
+    rightBtn.type = "button";
+    rightBtn.className = "row-arrow right";
+    rightBtn.setAttribute("aria-label", "Next");
+    rightBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>`;
+    rightBtn.addEventListener("click", () => track.scrollBy({ left: 360, behavior: "smooth" }));
+    container.appendChild(rightBtn);
+  }
+  if (typeof initRowDrag === "function") initRowDrag(track);
+  if (typeof initRowKeyboard === "function") initRowKeyboard(track);
+}
+
+function castInitials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function renderCastRow(cast) {
   const section = $("#cast-section");
   const row = $("#cast-row");
@@ -1019,13 +1057,15 @@ function renderCastRow(cast) {
     d.type = "button";
     d.className = "cast-item";
     d.setAttribute("aria-label", `${a.name}${a.character ? `, as ${a.character}` : ""}`);
-    d.innerHTML = `${a.profile_path ? `<img src="${esc(IMG_W185 + a.profile_path)}" alt="${esc(a.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : `<div class="cast-placeholder"></div>`}<div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="role" title="${esc(a.character || "")}">${esc(a.character || "")}</div>`;
+    const initials = esc(castInitials(a.name));
+    d.innerHTML = `${a.profile_path ? `<img src="${esc(IMG_W185 + a.profile_path)}" alt="${esc(a.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : `<div class="cast-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><span class="cast-initials">${initials}</span></div>`}<div class="name" title="${esc(a.name)}">${esc(a.name)}</div><div class="role" title="${esc(a.character || "")}">${esc(a.character || "")}</div>`;
     const prewarmPerson = () => { if (a.id) tmdb(`/person/${a.id}?append_to_response=combined_credits`).catch(() => {}); };
     d.addEventListener("mouseenter", prewarmPerson, { passive: true, once: true });
     d.addEventListener("touchstart", prewarmPerson, { passive: true, once: true });
     d.addEventListener("click", () => openPersonModal(a.id, a));
     row.appendChild(d);
   });
+  ensureTrackArrows(row);
 }
 function renderCardRow(sectionSel, rowSel, items, type) {
   const section = $(sectionSel);
@@ -1034,6 +1074,7 @@ function renderCardRow(sectionSel, rowSel, items, type) {
   section.style.display = "";
   row.textContent = "";
   items.forEach(it => row.appendChild(buildCard(it, type)));
+  ensureTrackArrows(row);
 }
 function ensureRecommendSection(seedTitle = "", isWatched = false) {
   let sec = $("#recommend-section");
@@ -1050,6 +1091,8 @@ function ensureRecommendSection(seedTitle = "", isWatched = false) {
       </div>
       <div class="similar-row" id="recommend-row"></div>`;
     $("#similar-section")?.before(sec);
+    const recRow = sec.querySelector(".similar-row");
+    if (recRow) ensureTrackArrows(recRow);
   } else {
     const prefEl = sec.querySelector("#detail-syw-prefix") || sec.querySelector(".syw-prefix");
     if (prefEl) prefEl.textContent = prefixText;
@@ -1241,18 +1284,34 @@ function checkStorageQuota() {
 }
 function applyGlobalSettings() {
   checkStorageQuota();
+  const themePref = SETTINGS.get(SETTINGS.themeKey, "dark") === "light" ? "light" : "dark";
   let hex = SETTINGS.get(SETTINGS.accentKey, ACCENT) || ACCENT;
   hex = String(hex).replace("#", "");
   if (!/^[0-9a-fA-F]{6}$/.test(hex)) hex = ACCENT;
-  const r = parseInt(hex.slice(0, 2), 16) || 59;
-  const g = parseInt(hex.slice(2, 4), 16) || 130;
-  const b = parseInt(hex.slice(4, 6), 16) || 246;
+  let r = parseInt(hex.slice(0, 2), 16);
+  let g = parseInt(hex.slice(2, 4), 16);
+  let b = parseInt(hex.slice(4, 6), 16);
+  if ([r, g, b].some(Number.isNaN)) { r = 59; g = 130; b = 246; hex = ACCENT; }
+
+  if (themePref === "light") {
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    if (lum > 0.36) {
+      const clamped = mixHex(`#${hex}`, "#0f172a", Math.min(0.45, Math.max(0.18, (lum - 0.25) * 0.75))).replace("#", "");
+      if (/^[0-9a-fA-F]{6}$/.test(clamped)) {
+        hex = clamped;
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      }
+    }
+  }
+  const effLum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   document.documentElement.style.setProperty("--accent", `#${hex}`);
   document.documentElement.style.setProperty("--accent-rgb", `${r}, ${g}, ${b}`);
   document.documentElement.style.setProperty("--accent-dim", `color-mix(in srgb, #${hex} 78%, #000)`);
-  document.documentElement.style.setProperty("--accent-soft", `rgba(${r}, ${g}, ${b}, 0.14)`);
+  document.documentElement.style.setProperty("--accent-soft", `rgba(${r}, ${g}, ${b}, ${themePref === "light" ? "0.16" : "0.14"})`);
+  document.documentElement.style.setProperty("--accent-contrast", effLum > 0.56 ? "#0b0b0d" : "#ffffff");
 
-  const themePref = SETTINGS.get(SETTINGS.themeKey, "dark") === "light" ? "light" : "dark";
   const rootEl = document.documentElement;
   rootEl.setAttribute("data-theme", themePref);
   rootEl.style.colorScheme = themePref;
@@ -1504,8 +1563,24 @@ function togglePlayerFullscreen() {
   }
 }
 
-function loadPlayerFrame(frameEl, url) {
+const _timedOutProviders = new Set();
+
+function resetPlayerSessionState() {
+  _timedOutProviders.clear();
+}
+
+function pickNextHealthyProvider(currentId) {
+  const idx = PROVIDERS.findIndex(p => p.id === currentId);
+  for (let offset = 1; offset <= PROVIDERS.length; offset++) {
+    const candidate = PROVIDERS[(Math.max(0, idx) + offset) % PROVIDERS.length];
+    if (!_timedOutProviders.has(candidate.id)) return candidate;
+  }
+  return PROVIDERS[(Math.max(0, idx) + 1) % PROVIDERS.length];
+}
+
+function loadPlayerFrame(frameEl, url, opts = {}) {
   if (!frameEl) return;
+  frameEl._cleanupPlayerTimers?.();
   frameEl.innerHTML = `
     <div class="player-skel-overlay player-loading" aria-hidden="true">
       <div class="player-skel-shimmer skel-pulse"></div>
@@ -1524,39 +1599,65 @@ function loadPlayerFrame(frameEl, url) {
     frameEl.innerHTML = `<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:0.85rem;padding:20px;text-align:center">Could not load this stream source.</p>`;
     return;
   }
-  const clearLoading = () => frameEl.querySelectorAll(".player-loading, .player-skel-overlay").forEach(n => n.remove());
+  const clearLoading = () => {
+    frameEl.querySelectorAll(".player-loading, .player-skel-overlay, .player-slow-banner").forEach(n => n.remove());
+  };
+  const switchToNextProvider = () => {
+    clearTimers();
+    frameEl.querySelectorAll(".player-fallback-overlay, .player-slow-banner").forEach(n => n.remove());
+    const cur = getProvider();
+    _timedOutProviders.add(cur);
+    const next = pickNextHealthyProvider(cur);
+    setProvider(next.id);
+    $$(".provider-tab[data-provider-id]").forEach(b => b.classList.toggle("active", b.dataset.providerId === next.id));
+    toast(`Switched to ${next.name}`);
+    if (typeof opts.onSwitch === "function") {
+      opts.onSwitch(next);
+      return;
+    }
+    const type = $("#ep-block") ? "tv" : "movie";
+    const id = new URLSearchParams(location.search).get("id");
+    if (type === "tv") {
+      const s = $("#season-select")?.value || new URLSearchParams(location.search).get("season") || 1;
+      const epOn = $(".ep-row.on")?.dataset.ep || new URLSearchParams(location.search).get("episode") || 1;
+      loadPlayerFrame(frameEl, providerUrl("tv", id, s, epOn), opts);
+    } else {
+      loadPlayerFrame(frameEl, providerUrl("movie", id), opts);
+    }
+  };
+  const slowTimer = setTimeout(() => {
+    if (!frameEl.querySelector(".player-skel-overlay") || frameEl.querySelector(".player-fallback-overlay")) return;
+    const next = pickNextHealthyProvider(getProvider());
+    const banner = document.createElement("div");
+    banner.className = "player-slow-banner";
+    banner.innerHTML = `<span>Slow stream?</span><button type="button" class="player-slow-btn">Try ${esc(next.name)}</button>`;
+    banner.querySelector(".player-slow-btn")?.addEventListener("click", switchToNextProvider);
+    frameEl.appendChild(banner);
+  }, 4500);
   const failTimer = setTimeout(() => {
+    _timedOutProviders.add(getProvider());
     clearLoading();
     if (!frameEl.querySelector(".player-fallback-overlay")) {
+      const next = pickNextHealthyProvider(getProvider());
       const overlay = document.createElement("div");
       overlay.className = "player-fallback-overlay";
       overlay.innerHTML = `
         <p>Stream source taking too long or blocked by provider?</p>
-        <button type="button" class="player-fallback-btn" id="fallback-switch-btn">Switch Stream Provider</button>
+        <button type="button" class="player-fallback-btn" id="fallback-switch-btn">Switch to ${esc(next.name)}</button>
       `;
-      overlay.querySelector("#fallback-switch-btn")?.addEventListener("click", () => {
-        overlay.remove();
-        const cur = getProvider();
-        const idx = PROVIDERS.findIndex(p => p.id === cur);
-        const next = PROVIDERS[(idx + 1) % PROVIDERS.length];
-        setProvider(next.id);
-        $$(".provider-tab").forEach(b => b.classList.remove("active"));
-        toast(`Switched to ${next.name}`);
-        const type = $("#ep-block") ? "tv" : "movie";
-        const id = new URLSearchParams(location.search).get("id");
-        if (type === "tv") {
-          const s = $("#season-select")?.value || 1;
-          const epOn = $(".ep-row.on")?.dataset.ep || 1;
-          loadPlayerFrame(frameEl, providerUrl("tv", id, s, epOn));
-        } else {
-          loadPlayerFrame(frameEl, providerUrl("movie", id));
-        }
-      });
+      overlay.querySelector("#fallback-switch-btn")?.addEventListener("click", switchToNextProvider);
       frameEl.appendChild(overlay);
     }
   }, 10000);
+  function clearTimers() {
+    clearTimeout(slowTimer);
+    clearTimeout(failTimer);
+  }
+  frameEl._cleanupPlayerTimers = clearTimers;
+  const sig = opts.signal || (typeof pageSignal === "function" ? pageSignal() : null);
+  sig?.addEventListener("abort", clearTimers, { once: true });
 
-  iframe.addEventListener("load", () => { clearTimeout(failTimer); clearLoading(); });
+  iframe.addEventListener("load", () => { clearTimers(); clearLoading(); });
   frameEl.appendChild(iframe);
 }
 
@@ -2464,9 +2565,13 @@ const Folders = {
     }
   },
   addFolder(name) {
+    const clean = String(name || "").trim();
+    if (!clean) return null;
     const list = this.get();
-    list.push({ id: "f_" + Date.now(), name, items: [] });
+    const created = { id: `f_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, name: clean, items: [] };
+    list.push(created);
     this.save(list);
+    return created;
   },
   removeFolder(id) {
     this.save(this.get().filter(f => f.id !== id));
@@ -2522,6 +2627,36 @@ const Progress = {
     delete all[`${type}_${id}`];
     this.saveAll(all);
   },
+  clearAll() {
+    this.saveAll({});
+  }
+};
+
+const WatchedEpisodes = {
+  key: "orc_watched_eps",
+  get() { try { return JSON.parse(safeGetItem(this.key) || "{}"); } catch { return {}; } },
+  saveAll(allObj) { safeSetItem(this.key, JSON.stringify(allObj)); },
+  save(id, season, episode) {
+    if (!id || !season || !episode) return;
+    const all = this.get();
+    const sid = String(id);
+    if (!all[sid] || typeof all[sid] !== "object") all[sid] = {};
+    all[sid][`${season}_${episode}`] = Date.now();
+    this.saveAll(all);
+  },
+  remove(id, season, episode) {
+    const all = this.get();
+    const sid = String(id);
+    if (all[sid]) {
+      delete all[sid][`${season}_${episode}`];
+      if (!Object.keys(all[sid]).length) delete all[sid];
+      this.saveAll(all);
+    }
+  },
+  has(id, season, episode) {
+    const all = this.get();
+    return Boolean(all[String(id)]?.[`${season}_${episode}`]);
+  }
 };
 
 const RecentViewed = {
@@ -2535,6 +2670,9 @@ const RecentViewed = {
     const mediaType = type === "tv" ? "tv" : "movie";
     const title = (item.title || item.name || "").trim();
     if (!title) return;
+    const genreIds = Array.isArray(item.genre_ids)
+      ? item.genre_ids.filter(Number.isSafeInteger).slice(0, 5)
+      : (Array.isArray(item.genres) ? item.genres.map(g => g?.id).filter(Number.isSafeInteger).slice(0, 5) : []);
     const entry = {
       id: Number(item.id) || item.id,
       mediaType,
@@ -2543,10 +2681,192 @@ const RecentViewed = {
       backdrop_path: item.backdrop_path || "",
       release_date: item.release_date || item.first_air_date || "",
       vote_average: item.vote_average || 0,
+      genre_ids: genreIds,
       viewedAt: Date.now()
     };
     const existing = this.get().filter(x => !(String(x.id) === String(entry.id) && x.mediaType === mediaType));
     safeSetItem(this.key, JSON.stringify([entry, ...existing].slice(0, this.max)));
+  }
+};
+
+const RecentAISearches = {
+  key: "orc_recent_ai",
+  max: 5,
+  get() { try { return JSON.parse(safeGetItem(this.key) || "[]"); } catch { return []; } },
+  add(q) {
+    const clean = (q || "").trim().slice(0, 200);
+    if (clean.length < 3) return;
+    const next = [clean, ...this.get().filter(x => x.toLowerCase() !== clean.toLowerCase())].slice(0, this.max);
+    safeSetItem(this.key, JSON.stringify(next));
+  }
+};
+
+const TASTE_GENRE_NAMES = {
+  28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime", 99: "Documentary",
+  18: "Drama", 10751: "Family", 14: "Fantasy", 36: "History", 27: "Horror", 10402: "Music",
+  9648: "Mystery", 10749: "Romance", 878: "Science Fiction", 10770: "TV Movie", 53: "Thriller",
+  10752: "War", 37: "Western", 10759: "Action & Adventure", 10762: "Kids", 10763: "News",
+  10764: "Reality", 10765: "Sci-Fi & Fantasy", 10766: "Soap", 10767: "Talk", 10768: "War & Politics"
+};
+
+const TasteAnalytics = {
+  _lookupMeta(type, id) {
+    try {
+      const prefix = `/${type}/${id}`;
+      for (const [k, v] of _tmdbPersisted.entries()) {
+        if (k.startsWith(prefix) && (k.length === prefix.length || k[prefix.length] === "?") && v?.data?.id) {
+          return v.data;
+        }
+      }
+      const rv = RecentViewed.get().find(x => String(x.id) === String(id) && x.mediaType === type);
+      if (rv) return rv;
+    } catch {}
+    return null;
+  },
+  _extractGenres(obj) {
+    if (!obj) return [];
+    const out = [];
+    if (Array.isArray(obj.genres)) obj.genres.forEach(g => { if (g?.name) out.push(g.name); else if (TASTE_GENRE_NAMES[g?.id]) out.push(TASTE_GENRE_NAMES[g.id]); });
+    if (Array.isArray(obj.genre_ids)) obj.genre_ids.forEach(gid => { if (TASTE_GENRE_NAMES[gid]) out.push(TASTE_GENRE_NAMES[gid]); });
+    return [...new Set(out)].slice(0, 4);
+  },
+  collect() {
+    const progressItems = Progress.getAll();
+    const myList = MyList.get();
+    const folders = Folders.get();
+    const recent = RecentViewed.get();
+    const genreWeights = new Map();
+    const decadeWeights = new Map();
+    let movieCount = 0, tvCount = 0, completedCount = 0;
+
+    const addSignals = (meta, fallbackType, weight) => {
+      const kind = fallbackType === "tv" ? "tv" : "movie";
+      if (kind === "tv") tvCount++; else movieCount++;
+      this._extractGenres(meta).forEach(g => genreWeights.set(g, (genreWeights.get(g) || 0) + weight));
+      const dt = meta?.release_date || meta?.first_air_date || "";
+      const y = Number(String(dt).slice(0, 4));
+      if (Number.isFinite(y) && y >= 1920 && y <= 2100) {
+        const dec = `${Math.floor(y / 10) * 10}s`;
+        decadeWeights.set(dec, (decadeWeights.get(dec) || 0) + weight);
+      }
+    };
+
+    const recentWatched = [];
+    const seenWatch = new Set();
+    progressItems.forEach(p => {
+      const type = (p.mediaType || p.type) === "tv" ? "tv" : "movie";
+      const key = `${type}_${p.id}`;
+      seenWatch.add(key);
+      if ((p.progress || 0) >= 85) completedCount++;
+      const meta = this._lookupMeta(type, p.id);
+      const weight = (p.progress || 0) >= 80 ? 2.0 : 1.4;
+      addSignals(meta, type, weight);
+      const title = (p.title || p.name || meta?.title || meta?.name || "").trim();
+      if (title && recentWatched.length < 10) {
+        const y = Number(String(meta?.release_date || meta?.first_air_date || "").slice(0, 4));
+        recentWatched.push({
+          title: title.slice(0, 120),
+          type,
+          ...(Number.isFinite(p.progress) ? { progress: Math.round(Math.max(0, Math.min(100, p.progress))) } : {}),
+          ...(Number.isFinite(y) && y >= 1870 && y <= new Date().getFullYear() ? { year: y } : {}),
+          genres: this._extractGenres(meta).slice(0, 3)
+        });
+      }
+    });
+    recent.forEach(rv => {
+      const type = rv.mediaType === "tv" ? "tv" : "movie";
+      const key = `${type}_${rv.id}`;
+      if (seenWatch.has(key)) return;
+      const meta = this._lookupMeta(type, rv.id) || rv;
+      addSignals(meta, type, 0.9);
+      const title = (meta?.title || meta?.name || rv.title || "").trim();
+      if (title && recentWatched.length < 10) {
+        const y = Number(String(meta?.release_date || meta?.first_air_date || "").slice(0, 4));
+        recentWatched.push({
+          title: title.slice(0, 120),
+          type,
+          ...(Number.isFinite(y) && y >= 1870 && y <= new Date().getFullYear() ? { year: y } : {}),
+          genres: this._extractGenres(meta).slice(0, 3)
+        });
+      }
+    });
+
+    const savedList = [];
+    const seenSaved = new Set();
+    myList.forEach(it => {
+      const type = it.type === "tv" ? "tv" : "movie";
+      const meta = this._lookupMeta(type, it.id);
+      addSignals(meta, type, 1.2);
+      const title = (it.title || it.name || meta?.title || meta?.name || "").trim();
+      if (title && !seenSaved.has(`${type}_${it.id}`) && savedList.length < 12) {
+        seenSaved.add(`${type}_${it.id}`);
+        savedList.push({ title: title.slice(0, 120), type, genres: this._extractGenres(meta).slice(0, 3) });
+      }
+    });
+    folders.forEach(f => {
+      (f.items || []).forEach(it => {
+        const type = it.type === "tv" ? "tv" : "movie";
+        const meta = this._lookupMeta(type, it.id);
+        addSignals(meta, type, 1.1);
+        const title = (it.title || it.name || meta?.title || meta?.name || "").trim();
+        if (title && !seenSaved.has(`${type}_${it.id}`) && savedList.length < 12) {
+          seenSaved.add(`${type}_${it.id}`);
+          savedList.push({ title: title.slice(0, 120), type, folder: String(f.name || "").trim().slice(0, 60) || null, genres: this._extractGenres(meta).slice(0, 3) });
+        }
+      });
+    });
+
+    const topGenres = [...genreWeights.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g).slice(0, 6);
+    const preferredEra = [...decadeWeights.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const totalTyped = movieCount + tvCount;
+    const mediaPreference = !totalTyped ? "all" : (movieCount > tvCount * 2 ? "movie" : tvCount > movieCount * 2 ? "tv" : "all");
+    const folderNames = folders.map(f => String(f.name || "").trim()).filter(Boolean).slice(0, 6);
+    const watchedCount = progressItems.length || recent.length;
+    const savedCount = myList.length + folders.reduce((acc, f) => acc + (f.items?.length || 0), 0);
+    return { watchedCount, savedCount, movieCount, tvCount, completedCount, totalProgress: progressItems.length, topGenres, preferredEra, mediaPreference, folderNames, recentWatched, savedList };
+  },
+  summarize() {
+    const d = this.collect();
+    const total = d.movieCount + d.tvCount;
+    const movPct = total ? Math.round((d.movieCount / total) * 100) : 50;
+    const formatMix = total ? `${movPct}% Movies / ${100 - movPct}% Series` : "Balanced";
+    const completionStyle = d.totalProgress ? (d.completedCount / d.totalProgress >= 0.55 ? "Finisher" : "Explorer") : "New profile";
+    const sampleTitles = [...new Set([...d.recentWatched.map(x => x.title), ...d.savedList.map(x => x.title)])].slice(0, 6);
+    const g1 = d.topGenres[0], g2 = d.topGenres[1];
+    const quickPickPrompt = g1
+      ? `Recommend a ${d.mediaPreference === "tv" ? "series" : "movie"} for me tonight in ${g1}${g2 ? ` and ${g2}` : ""} based on my watch history and My List`
+      : "Recommend critically acclaimed titles for me tonight based on my My List";
+    const suggestedPrompts = [];
+    if (g1) suggestedPrompts.push(`Acclaimed ${g1.toLowerCase()} picks matching my watch history`);
+    if (d.folderNames.length) suggestedPrompts.push(`Something new like my "${d.folderNames[0]}" folder, no horror`);
+    suggestedPrompts.push("Hidden gems aligned with my My List under 110 minutes");
+    if (d.preferredEra) suggestedPrompts.push(`Top ${d.preferredEra} picks I haven't watched yet`);
+    return {
+      watchedCount: d.watchedCount,
+      savedCount: d.savedCount,
+      topGenres: d.topGenres,
+      preferredEra: d.preferredEra,
+      formatMix,
+      completionStyle,
+      folders: d.folderNames,
+      sampleTitles,
+      quickPickPrompt,
+      suggestedPrompts: [...new Set(suggestedPrompts)].slice(0, 3)
+    };
+  },
+  buildProfile() {
+    const d = this.collect();
+    if (!d.watchedCount && !d.savedCount && !d.recentWatched.length && !d.savedList.length) return null;
+    const profile = {
+      mediaPreference: d.mediaPreference,
+      topGenres: d.topGenres,
+      folders: d.folderNames,
+      recentWatched: d.recentWatched,
+      savedList: d.savedList,
+      analyticsSummary: `${d.watchedCount} watched, ${d.savedCount} saved${d.topGenres.length ? `, leans ${d.topGenres.slice(0, 3).join("/")}` : ""}${d.preferredEra ? `, prefers ${d.preferredEra}` : ""}`.slice(0, 240)
+    };
+    if (d.preferredEra) profile.preferredEra = d.preferredEra;
+    return profile;
   }
 };
 
@@ -2760,14 +3080,14 @@ function prewarmNavKey(key) {
 
 function setMetaTags({ title, description, image, url } = {}) {
   if (title) {
-    document.title = `${title} — ${BRAND}`;
+    document.title = `${title} | ${BRAND}`;
     let ogTitle = document.querySelector('meta[property="og:title"]');
     if (!ogTitle) {
       ogTitle = document.createElement("meta");
       ogTitle.setAttribute("property", "og:title");
       document.head.appendChild(ogTitle);
     }
-    ogTitle.setAttribute("content", `${title} — ${BRAND}`);
+    ogTitle.setAttribute("content", `${title} | ${BRAND}`);
   }
   if (description) {
     let descMeta = document.querySelector('meta[name="description"]');
@@ -2993,11 +3313,12 @@ function toast(msg) {
     t.setAttribute("aria-live", "polite");
     document.body.appendChild(t);
   }
+  t.classList.remove("toast-interactive");
   t.classList.toggle("toast-mobile", isMobile());
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 2400);
+  t._timer = setTimeout(() => t.classList.remove("show", "toast-interactive"), 2400);
 }
 
 async function sharePageLink(title) {
@@ -3103,9 +3424,14 @@ function buildCard(item, type = "movie", opts = {}) {
   const kind = mediaType(item, type);
   const title = item.title || item.name || "Untitled";
   const img = posterUrl(item.poster_path);
-  const href = kind === "tv" ? `${routeUrl("tv")}?id=${id}` : `${routeUrl("movie")}?id=${id}`;
+  const progObj = opts.progressItem || Progress.getItem(id, kind);
+  const deepSeason = progObj?.season ? parseInt(progObj.season, 10) : 0;
+  const deepEpisode = progObj?.episode ? parseInt(progObj.episode, 10) : 0;
+  const href = kind === "tv"
+    ? `${routeUrl("tv")}?id=${id}${deepSeason > 0 && deepEpisode > 0 ? `&season=${deepSeason}&episode=${deepEpisode}` : ""}`
+    : `${routeUrl("movie")}?id=${id}`;
   const saved = MyList.has(id, kind);
-  const prog = opts.progressValue ?? Progress.getItem(id, kind)?.progress;
+  const prog = opts.progressValue ?? progObj?.progress;
   const watched = prog && prog >= 95;
   const y = year(item.release_date || item.first_air_date);
 
@@ -3117,6 +3443,7 @@ function buildCard(item, type = "movie", opts = {}) {
       ${opts.rank && opts.top10Today ? `<span class="top10-today-card-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z"/></svg>${opts.rank}</span>` : opts.rank ? `<span class="rank">${opts.rank}</span>` : ""}
       ${prog && prog > 2 ? `<span class="progress-badge">${Math.round(prog)}%</span>` : aiRec?.matchPct ? `<span class="card-ai-badge">${aiRec.rankedByAI ? "AI · " : ""}${aiRec.matchPct}% Match</span>` : ""}
       ${!opts.rank && (!prog || prog <= 2) && Number.isFinite(item.vote_average) && item.vote_average >= 6 ? `<span class="card-rating">★ ${(typeof item.vote_average === "number" ? item.vote_average.toFixed(1) : "")}</span>` : ""}
+      ${opts.showEpisodeBadge && kind === "tv" && deepSeason > 0 && deepEpisode > 0 ? `<span class="card-resume-badge">S${deepSeason} E${deepEpisode}</span>` : ""}
       ${img ? `<img class="card-img" src="${esc(img)}" alt="${esc(title)}" loading="${opts.eager ? "eager" : "lazy"}"${opts.eager ? ' fetchpriority="high"' : ""} draggable="false" decoding="async" />` : `<div class="no-img-poster">${ICONS.film}<span>${esc(title)}</span></div>`}
       ${prog ? `<div class="progress-bar"><span style="width:${Math.min(prog, 100)}%"></span></div>` : ""}
       <div class="card-foot">
@@ -3126,6 +3453,7 @@ function buildCard(item, type = "movie", opts = {}) {
       </div>
     </a>
     <div class="card-quick">
+      <button type="button" class="card-icon-btn card-info-btn" aria-label="Quick preview ${esc(title)}" title="Quick preview"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       <button type="button" class="card-icon-btn save-btn${saved ? " saved" : ""}" aria-label="Save ${esc(title)}" aria-pressed="${saved ? "true" : "false"}">${saved ? ICONS.check : ICONS.plus}</button>
     </div>`;
 
@@ -3163,7 +3491,13 @@ function buildCard(item, type = "movie", opts = {}) {
   card.addEventListener("touchstart", prefetchDetail, { passive: true, once: true });
 
   card.addEventListener("click", e => {
-    if (e.target.closest(".save-btn") || e.target.closest(".cw-remove-btn")) {
+    if (e.target.closest(".save-btn") || e.target.closest(".cw-remove-btn") || e.target.closest(".card-info-btn")) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (card.dataset.longPressTriggered === "1") {
+      card.dataset.longPressTriggered = "0";
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -3175,13 +3509,25 @@ function buildCard(item, type = "movie", opts = {}) {
   });
 
   card.addEventListener("keydown", e => {
-    if (e.target.closest(".save-btn")) return;
+    if (e.target.closest(".save-btn") || e.target.closest(".card-info-btn")) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (posterUrl(item.poster_path) || "");
       navigateWithLoader(href, bg, title, { id, type: kind, item });
     }
   });
+
+  const infoBtnEl = card.querySelector(".card-info-btn");
+  if (infoBtnEl) {
+    ["touchstart", "pointerdown"].forEach(evt => {
+      infoBtnEl.addEventListener(evt, e => e.stopPropagation(), { passive: true });
+    });
+    infoBtnEl.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      showTouchPreviewSheet(item, kind, infoBtnEl);
+    });
+  }
 
   const saveBtnEl = card.querySelector(".save-btn");
   if (saveBtnEl) {
@@ -3215,9 +3561,117 @@ function buildCard(item, type = "movie", opts = {}) {
         }, 150);
       }
     });
+  } else {
+    let lpTimer = null;
+    let lpStartX = 0;
+    let lpStartY = 0;
+    card.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1 || e.target.closest("button")) return;
+      lpStartX = e.touches[0].clientX;
+      lpStartY = e.touches[0].clientY;
+      card.dataset.longPressTriggered = "0";
+      lpTimer = setTimeout(() => {
+        lpTimer = null;
+        card.dataset.longPressTriggered = "1";
+        showTouchPreviewSheet(item, kind, card);
+      }, 520);
+    }, { passive: true });
+    card.addEventListener("touchmove", e => {
+      if (!lpTimer || !e.touches.length) return;
+      if (Math.abs(e.touches[0].clientX - lpStartX) > 10 || Math.abs(e.touches[0].clientY - lpStartY) > 10) {
+        clearTimeout(lpTimer);
+        lpTimer = null;
+      }
+    }, { passive: true });
+    const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+    card.addEventListener("touchend", cancelLp, { passive: true });
+    card.addEventListener("touchcancel", cancelLp, { passive: true });
   }
 
   return card;
+}
+
+function showTouchPreviewSheet(item, type = "movie", triggerEl = null) {
+  if (!item || !item.id) return;
+  const kind = mediaType(item, type);
+  const id = item.id;
+  const title = item.title || item.name || "Untitled";
+  const y = year(item.release_date || item.first_air_date);
+  const rating = Number.isFinite(item.vote_average) && item.vote_average > 0 ? item.vote_average.toFixed(1) : "";
+  const poster = posterUrl(item.poster_path);
+  const progObj = Progress.getItem(id, kind);
+  const deepSeason = progObj?.season ? parseInt(progObj.season, 10) : 0;
+  const deepEpisode = progObj?.episode ? parseInt(progObj.episode, 10) : 0;
+  const href = kind === "tv"
+    ? `${routeUrl("tv")}?id=${id}${deepSeason > 0 && deepEpisode > 0 ? `&season=${deepSeason}&episode=${deepEpisode}` : ""}`
+    : `${routeUrl("movie")}?id=${id}`;
+
+  let modal = $("#touch-preview-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "touch-preview-modal";
+    modal.className = "modal-overlay touch-preview-overlay";
+    document.body.appendChild(modal);
+    modal.addEventListener("click", e => {
+      if (e.target === modal || e.target.closest(".modal-close-btn")) closeModal(modal);
+    });
+  }
+
+  const saved = MyList.has(id, kind) || Folders.get().some(f => Folders.hasItem(f.id, id, kind));
+  const synopsis = (item.overview || "").trim() || "Open title details for full cast, episodes, and streams.";
+
+  modal.innerHTML = `
+    <div class="subwin-card touch-preview-sheet" role="dialog" aria-modal="true" aria-label="Preview ${esc(title)}">
+      <div class="tp-head">
+        ${poster ? `<img class="tp-poster" src="${esc(poster)}" alt="${esc(title)}" />` : `<div class="tp-poster tp-poster-empty">${ICONS.film}</div>`}
+        <div class="tp-meta-col">
+          <div class="tp-title-row">
+            <h2 class="tp-title">${esc(title)}</h2>
+            <button type="button" class="subwin-close modal-close-btn" aria-label="Close">✕</button>
+          </div>
+          <div class="tp-meta">
+            ${rating ? `<span class="score">★ ${rating}</span>` : ""}
+            ${y ? `<span>${esc(y)}</span>` : ""}
+            <span>${kind === "tv" ? "Series" : "Movie"}</span>
+            ${deepSeason > 0 && deepEpisode > 0 ? `<span class="tp-ep-pill">S${deepSeason} E${deepEpisode}</span>` : ""}
+          </div>
+        </div>
+      </div>
+      <p class="tp-overview">${esc(synopsis)}</p>
+      <div class="tp-actions">
+        <button type="button" class="btn-play tp-play-btn">${ICONS.play || ""}<span>${progObj?.progress >= 5 && progObj?.progress < 98 ? "Resume" : "Play"}</span></button>
+        <button type="button" class="btn-ghost tp-trailer-btn" style="display:none">Trailer</button>
+        <button type="button" class="btn-ghost tp-save-btn">${saved ? "✓ Saved" : "+ Save"}</button>
+      </div>
+    </div>`;
+
+  modal.querySelector(".tp-play-btn")?.addEventListener("click", () => {
+    closeModal(modal);
+    const bg = item.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${item.backdrop_path}` : (poster || "");
+    navigateWithLoader(href, bg, title, { id, type: kind, item });
+  });
+
+  const saveActionBtn = modal.querySelector(".tp-save-btn");
+  saveActionBtn?.addEventListener("click", () => {
+    openSaveModal({ id, type: kind, title, poster: item.poster_path }, nowSaved => {
+      if (saveActionBtn) saveActionBtn.textContent = nowSaved ? "✓ Saved" : "+ Save";
+    });
+  });
+
+  const trailerBtn = modal.querySelector(".tp-trailer-btn");
+  tmdb(`/${kind}/${id}/videos`).then(v => {
+    const tr = pickTrailer(v);
+    if (tr?.key && trailerBtn && modal.isConnected) {
+      trailerBtn.style.display = "";
+      trailerBtn.addEventListener("click", () => {
+        closeModal(modal);
+        openTrailer(tr.key);
+      });
+    }
+  }).catch(() => {});
+
+  _lastMorphTrigger = triggerEl || _lastMorphTrigger;
+  openModal(modal);
 }
 
 function skeletons(n = 8) {
@@ -3254,50 +3708,100 @@ function openSaveModal(item, onToggle) {
     });
   }
 
-  const savedInWL = MyList.has(item.id, item.type);
-  const folders = Folders.get();
-  
   modal.innerHTML = `
     <div class="subwin-card subwin-dialog-sm" role="dialog" aria-modal="true">
       <div class="subwin-header">
         <div>
           <h2 class="subwin-title">Save to...</h2>
-          <p class="subwin-sub">Watchlist &amp; custom folders</p>
+          <p class="subwin-sub">Toggle multiple destinations</p>
         </div>
-        <button type="button" class="subwin-close modal-close-btn" aria-label="Close">✕</button>
+        <button type="button" class="subwin-close modal-close-btn" aria-label="Done / Close">✕</button>
       </div>
       <div class="subwin-divider"></div>
-      <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto">
-        <button type="button" class="save-opt-btn subwin-list-btn ${savedInWL ? 'active' : ''}" data-target="watchlist">
-          <div style="width:18px;height:18px;display:flex;align-items:center">${ICONS.list}</div> <span>Watchlist</span> ${savedInWL ? '<div style="margin-left:auto;width:18px;height:18px;display:flex;align-items:center">'+ICONS.check+'</div>' : ''}
-        </button>
-        ${folders.length > 0 ? `<div class="subwin-divider is-inset"></div>` : ''}
-        ${folders.map(f => {
-          const inF = Folders.hasItem(f.id, item.id, item.type);
-          return `<button type="button" class="save-opt-btn subwin-list-btn ${inF ? 'active' : ''}" data-folder-id="${f.id}">
-            <div style="width:18px;height:18px;display:flex;align-items:center">${ICONS.list}</div> <span>${esc(f.name)}</span> ${inF ? '<div style="margin-left:auto;width:18px;height:18px;display:flex;align-items:center">'+ICONS.check+'</div>' : ''}
-          </button>`;
-        }).join("")}
-      </div>
+      <div id="save-modal-list" style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto"></div>
+      <form class="save-inline-create" id="save-inline-create-form">
+        <input type="text" id="save-new-folder-name" class="save-inline-input" maxlength="40" placeholder="New folder name..." autocomplete="off" />
+        <button type="submit" class="glass-chip save-inline-btn">+ New folder</button>
+      </form>
     </div>
   `;
-  
-  modal.querySelectorAll(".save-opt-btn").forEach(b => {
-    b.addEventListener("click", () => {
-      let added = false;
-      if (b.dataset.target === "watchlist") {
-        added = MyList.toggle(item);
-      } else {
-        Folders.toggleItem(b.dataset.folderId, item);
-        added = Folders.hasItem(b.dataset.folderId, item.id, item.type);
-      }
-      
-      const nowSaved = MyList.has(item.id, item.type) || Folders.get().some(f => Folders.hasItem(f.id, item.id, item.type));
-      if (onToggle) onToggle(nowSaved, added);
-      
-      closeModal(modal);
-      toast(added ? "Added to list" : "Removed from list");
+
+  const listEl = modal.querySelector("#save-modal-list");
+  const renderDestinations = () => {
+    const wlList = MyList.get();
+    const savedInWL = MyList.has(item.id, item.type);
+    const folders = Folders.get();
+    listEl.innerHTML = `
+      <button type="button" class="save-opt-btn subwin-list-btn ${savedInWL ? "active" : ""}" data-target="watchlist" aria-pressed="${savedInWL ? "true" : "false"}">
+        <div style="width:18px;height:18px;display:flex;align-items:center">${ICONS.list}</div>
+        <span>Watchlist</span>
+        <span class="save-count-pill">${wlList.length}</span>
+        ${savedInWL ? `<div style="margin-left:6px;width:18px;height:18px;display:flex;align-items:center">${ICONS.check}</div>` : ""}
+      </button>
+      ${folders.length > 0 ? `<div class="subwin-divider is-inset"></div>` : ""}
+      ${folders.map(f => {
+        const inF = Folders.hasItem(f.id, item.id, item.type);
+        const fCount = (f.items || []).length;
+        return `<button type="button" class="save-opt-btn subwin-list-btn ${inF ? "active" : ""}" data-folder-id="${esc(f.id)}" aria-pressed="${inF ? "true" : "false"}">
+          <div style="width:18px;height:18px;display:flex;align-items:center">${ICONS.list}</div>
+          <span>${esc(f.name)}</span>
+          <span class="save-count-pill">${fCount}</span>
+          ${inF ? `<div style="margin-left:6px;width:18px;height:18px;display:flex;align-items:center">${ICONS.check}</div>` : ""}
+        </button>`;
+      }).join("")}
+    `;
+
+    listEl.querySelectorAll(".save-opt-btn").forEach(b => {
+      b.addEventListener("click", () => {
+        let added = false;
+        let destLabel = "Watchlist";
+        if (b.dataset.target === "watchlist") {
+          added = MyList.toggle(item);
+        } else {
+          const fid = b.dataset.folderId;
+          const folderObj = Folders.get().find(f => f.id === fid);
+          if (folderObj) destLabel = folderObj.name;
+          Folders.toggleItem(fid, item);
+          added = Folders.hasItem(fid, item.id, item.type);
+        }
+        const nowSaved = MyList.has(item.id, item.type) || Folders.get().some(f => Folders.hasItem(f.id, item.id, item.type));
+        if (onToggle) onToggle(nowSaved, added);
+        renderDestinations();
+        toast(added ? `Saved to ${destLabel}` : `Removed from ${destLabel}`);
+      });
     });
+  };
+
+  renderDestinations();
+
+  const createForm = modal.querySelector("#save-inline-create-form");
+  const createInput = modal.querySelector("#save-new-folder-name");
+  createForm?.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = createInput?.value.trim() || "";
+    if (!name) {
+      createInput?.focus();
+      return;
+    }
+    const existing = Folders.get().find(f => f.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      if (!Folders.hasItem(existing.id, item.id, item.type)) Folders.toggleItem(existing.id, item);
+      if (createInput) createInput.value = "";
+      const nowSaved = MyList.has(item.id, item.type) || Folders.get().some(f => Folders.hasItem(f.id, item.id, item.type));
+      if (onToggle) onToggle(nowSaved, true);
+      renderDestinations();
+      toast(`Saved to ${existing.name}`);
+      return;
+    }
+    const created = Folders.addFolder(name);
+    if (created) {
+      Folders.toggleItem(created.id, item);
+      if (createInput) createInput.value = "";
+      const nowSaved = MyList.has(item.id, item.type) || Folders.get().some(f => Folders.hasItem(f.id, item.id, item.type));
+      if (onToggle) onToggle(nowSaved, true);
+      renderDestinations();
+      toast(`Created "${created.name}" & saved`);
+    }
   });
 
   openModal(modal);
@@ -4015,10 +4519,16 @@ function syncHeroPauseControls() {
   if (prevBtn) prevBtn.hidden = !hasMultiple;
   if (nextBtn) nextBtn.hidden = !hasMultiple;
   const effectivelyPaused = heroUserPaused || heroHovered || document.hidden;
-  if (heroEl) heroEl.classList.toggle("is-paused", effectivelyPaused);
+  if (heroEl) {
+    heroEl.classList.toggle("is-paused", effectivelyPaused);
+    heroEl.classList.toggle("is-user-paused", heroUserPaused);
+    heroEl.classList.toggle("is-hover-paused", !heroUserPaused && heroHovered);
+  }
   if (!pauseBtn) return;
-  pauseBtn.setAttribute("aria-label", heroUserPaused ? "Play carousel" : "Pause carousel");
-  pauseBtn.setAttribute("title", heroUserPaused ? "Play carousel" : "Pause carousel");
+  pauseBtn.classList.toggle("is-paused", heroUserPaused);
+  pauseBtn.classList.toggle("is-hover-paused", !heroUserPaused && heroHovered);
+  pauseBtn.setAttribute("aria-label", heroUserPaused ? "Play carousel" : (heroHovered ? "Paused on hover (click to lock pause)" : "Pause carousel"));
+  pauseBtn.setAttribute("title", heroUserPaused ? "Play carousel" : (heroHovered ? "Paused while hovering · Click to pause" : "Pause carousel"));
   pauseBtn.setAttribute("aria-pressed", heroUserPaused ? "true" : "false");
   const pauseIco = pauseBtn.querySelector(".icon-pause");
   const playIco = pauseBtn.querySelector(".icon-play");
@@ -4232,24 +4742,6 @@ function initHeroCarousel(slides) {
       }
     });
   }
-  if (heroSection && !heroSection._swipeBound) {
-    heroSection._swipeBound = true;
-    let touchStartX = 0;
-    let touchStartY = 0;
-    heroSection.addEventListener("touchstart", e => {
-      if (e.touches.length !== 1) return;
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    }, { passive: true });
-    heroSection.addEventListener("touchend", e => {
-      if (heroSlides.length < 2 || !e.changedTouches.length) return;
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-        setHeroSlide(dx < 0 ? heroIndex + 1 : heroIndex - 1, true);
-      }
-    }, { passive: true });
-  }
   slides.slice(1, 3).forEach(s => {
     if (s.backdrop_path) {
       const pre = new Image();
@@ -4421,6 +4913,8 @@ function initGenreStrip() {
       if (!row) return;
       const titleEl = row.querySelector(".row-title");
       if (titleEl) titleEl.textContent = g.name;
+      const seeAllEl = row.querySelector(".row-see-all");
+      if (seeAllEl) seeAllEl.href = `${routeUrl("search")}?type=movie&genre=${encodeURIComponent(g.id)}&sort=pop`;
       const track = row.querySelector(".row-track");
       track.textContent = ""; skeletons(10).forEach(s => track.appendChild(s));
       row.scrollIntoView({ behavior: "auto", block: "nearest" });
@@ -4589,7 +5083,10 @@ async function renderContinueWatchingRow() {
   const wrap = document.createElement("div");
   wrap.className = "row-wrapper continue-watching-wrapper visible";
   wrap.innerHTML = `
-    <div class="row-header"><h2 class="row-title">Continue Watching</h2></div>
+    <div class="row-header">
+      <h2 class="row-title">Continue Watching</h2>
+      <button type="button" class="row-see-all cw-clear-btn" aria-label="Clear Continue Watching">Clear</button>
+    </div>
     <div class="row-track-container">
       <button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button>
       <div class="row-track continue-watching-track"></div>
@@ -4599,11 +5096,23 @@ async function renderContinueWatchingRow() {
   track.append(...skeletons(Math.min(validItems.length, 6)));
   container.prepend(wrap);
 
+  wrap.querySelector(".cw-clear-btn")?.addEventListener("click", () => {
+    const backup = Progress.get();
+    showConfirmModal("Clear Continue Watching?", "Remove all in-progress titles from your Continue Watching row?", () => {
+      Progress.clearAll();
+      wrap.remove();
+      showUndoToast("Cleared Continue Watching", () => {
+        Progress.saveAll(backup);
+        renderContinueWatchingRow();
+      });
+    });
+  });
+
   try {
     const settled = await Promise.allSettled(validItems.slice(0, 10).map(it => {
       const type = (it.mediaType || it.type) === "tv" ? "tv" : "movie";
       const id = it.id || it.mediaId;
-      return tmdb(`/${type}/${id}`).then(d => ({ d, type, progress: it.progress }));
+      return tmdb(`/${type}/${id}`).then(d => ({ d, type, progress: it.progress, item: it }));
     }));
     const loaded = settled.filter(r => r.status === "fulfilled" && r.value?.d).map(r => r.value);
     if (!loaded.length) {
@@ -4611,8 +5120,8 @@ async function renderContinueWatchingRow() {
       return;
     }
     track.textContent = "";
-    loaded.forEach(({ d, type, progress }) => {
-      const cardEl = buildCard(d, type, { progressValue: progress });
+    loaded.forEach(({ d, type, progress, item: progEntry }) => {
+      const cardEl = buildCard(d, type, { progressValue: progress, progressItem: progEntry, showEpisodeBadge: true });
       const quick = cardEl.querySelector(".card-quick");
       if (quick) {
         const removeBtn = document.createElement("button");
@@ -4624,12 +5133,20 @@ async function renderContinueWatchingRow() {
         removeBtn.addEventListener("click", e => {
           e.preventDefault();
           e.stopPropagation();
+          const snapshot = Progress.getItem(d.id, type) || progEntry;
           Progress.remove(d.id, type);
           cardEl.remove();
           if (!track.querySelector(".media-card")) {
             wrap.remove();
           }
-          toast("Removed from Continue Watching");
+          showUndoToast("Removed from Continue Watching", () => {
+            if (snapshot) Progress.save(d.id, type, snapshot);
+            if ($("#categories") && !$(".continue-watching-wrapper")) renderContinueWatchingRow();
+            else if ($("#categories") && $(".continue-watching-wrapper")) {
+              $(".continue-watching-wrapper").remove();
+              renderContinueWatchingRow();
+            }
+          });
         });
         quick.appendChild(removeBtn);
       }
@@ -4648,7 +5165,21 @@ async function renderContinueWatchingRow() {
 
 function initHeroSwipe() {
   const heroEl = $("#hero") || $(".hero");
-  if (!heroEl || heroEl.dataset.swipeBound) return;
+  if (!heroEl) return;
+
+  initHeroPauseControls();
+  if (!heroEl.dataset.focusBound) {
+    heroEl.dataset.focusBound = "1";
+    heroEl.addEventListener("focusin", () => stopHeroTimer(true));
+    heroEl.addEventListener("focusout", e => {
+      if (e.relatedTarget && heroEl.contains(e.relatedTarget)) return;
+      if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer();
+    });
+    heroEl.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(true); });
+    heroEl.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
+  }
+
+  if (heroEl.dataset.swipeBound) return;
   heroEl.dataset.swipeBound = "1";
 
   let touchStartX = 0;
@@ -4656,7 +5187,7 @@ function initHeroSwipe() {
 
   heroEl.addEventListener("touchstart", e => {
     if (e.touches.length !== 1) return;
-    if (e.target.closest("button, a, .hero-actions, .hero-dots")) {
+    if (e.target.closest("button, a, .hero-actions, .hero-dots, .hero-carousel-controls")) {
       touchStartX = 0;
       touchStartY = 0;
       return;
@@ -4666,29 +5197,16 @@ function initHeroSwipe() {
   }, { passive: true });
 
   heroEl.addEventListener("touchend", e => {
-    if (!touchStartX) return;
+    if (!touchStartX || heroSlides.length < 2) return;
     const touchEndX = e.changedTouches[0].clientX;
     const touchEndY = e.changedTouches[0].clientY;
     const deltaX = touchEndX - touchStartX;
     const deltaY = touchEndY - touchStartY;
 
     if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY)) {
-      clearInterval(heroTimer);
-      if (deltaX < 0) {
-        setHeroSlide((heroIndex + 1) % heroSlides.length, true);
-      } else {
-        setHeroSlide((heroIndex - 1 + heroSlides.length) % heroSlides.length, true);
-      }
-      startHeroTimer();
-  initHeroPauseControls();
-  const heroSection = $(".hero");
-  if (heroSection && !heroSection._focusBound) {
-    heroSection._focusBound = true;
-    heroSection.addEventListener("focusin", () => stopHeroTimer());
-    heroSection.addEventListener("focusout", () => { if (!heroUserPaused && !heroHovered && !document.hidden) startHeroTimer(); });
-    heroSection.addEventListener("mouseenter", () => { heroHovered = true; stopHeroTimer(); });
-    heroSection.addEventListener("mouseleave", () => { heroHovered = false; if (!heroUserPaused && !document.hidden) startHeroTimer(); });
-  }
+      stopHeroTimer();
+      stepHeroSlide(deltaX < 0 ? 1 : -1);
+      startHeroTimer(true);
     }
     touchStartX = 0;
     touchStartY = 0;
@@ -5446,23 +5964,23 @@ async function initHomePage() {
   el.appendChild(chanRow);
 
   const cats = [
-    { title: "Top 10 Today", path: "/trending/all/day", type: "movie", top10Today: true, eager: true },
-    { title: "Top 10 Movies", path: "/trending/movie/week", type: "movie", top10Side: true, eager: true },
-    { title: "Top 10 TV Shows", path: "/trending/tv/week", type: "tv", top10Side: true, eager: true },
-    { title: "Trending Movies", path: "/trending/movie/day", type: "movie" },
-    { title: "Trending Series", path: "/trending/tv/day", type: "tv" },
-    { title: "Upcoming Episodes", path: "/tv/on_the_air", type: "tv" },
-    { title: "New Seasons Airing Now", path: "/tv/airing_today", type: "tv" },
-    { title: "Recommended for You", path: "/trending/all/week", type: "movie", id: "trending" },
-    { title: "Award Winners", path: "/movie/top_rated", type: "movie" },
-    { title: "Best by Decade", path: "/discover/movie?sort_by=vote_average.desc&primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31", type: "movie" },
+    { title: "Top 10 Today", path: "/trending/all/day", type: "movie", top10Today: true, eager: true, seeAll: `${routeUrl("search")}?sort=pop` },
+    { title: "Top 10 Movies", path: "/trending/movie/week", type: "movie", top10Side: true, eager: true, seeAll: `${routeUrl("search")}?type=movie&sort=pop` },
+    { title: "Top 10 TV Shows", path: "/trending/tv/week", type: "tv", top10Side: true, eager: true, seeAll: `${routeUrl("search")}?type=tv&sort=pop` },
+    { title: "Trending Movies", path: "/trending/movie/day", type: "movie", seeAll: `${routeUrl("search")}?type=movie&sort=pop` },
+    { title: "Trending Series", path: "/trending/tv/day", type: "tv", seeAll: `${routeUrl("search")}?type=tv&sort=pop` },
+    { title: "Upcoming Episodes", path: "/tv/on_the_air", type: "tv", seeAll: `${routeUrl("search")}?type=tv&sort=newest` },
+    { title: "New Seasons Airing Now", path: "/tv/airing_today", type: "tv", seeAll: `${routeUrl("search")}?type=tv&sort=newest` },
+    { title: "Recommended for You", path: "/trending/all/week", type: "movie", id: "trending", seeAll: `${routeUrl("search")}?type=ai` },
+    { title: "Award Winners", path: "/movie/top_rated", type: "movie", seeAll: `${routeUrl("search")}?type=movie&sort=rating&rating=8` },
+    { title: "Best by Decade", path: "/discover/movie?sort_by=vote_average.desc&primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31", type: "movie", seeAll: `${routeUrl("search")}?type=movie&era=classic&sort=rating` },
   ];
 
   const catRowEls = cats.map(c => {
     const w = document.createElement("div");
     w.className = `row-wrapper visible${c.top10Today ? " top10-today-row" : ""}${c.top10Side ? " top10-side-row" : ""}`;
-    const badge = "";
-    w.innerHTML = `<div class="row-header"><h2 class="row-title">${esc(c.title)}${badge}</h2></div><div class="row-track-container"><button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button><div class="row-track${c.top10Side ? " top10-side-track" : ""}"></div><button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button></div>`;
+    const seeAllHtml = c.seeAll ? `<a class="row-see-all" href="${c.seeAll}" aria-label="See all ${esc(c.title)}">See all →</a>` : "";
+    w.innerHTML = `<div class="row-header"><h2 class="row-title">${esc(c.title)}</h2>${seeAllHtml}</div><div class="row-track-container"><button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button><div class="row-track${c.top10Side ? " top10-side-track" : ""}"></div><button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button></div>`;
     const track = w.querySelector(".row-track");
     track.append(...skeletons(8));
     const scroll = 360;
@@ -5527,20 +6045,23 @@ async function initHomePage() {
 
   // Provider-curated rows — fetched non-blocking from TMDB discover API
   const STREAM_PROVIDERS = [
-    { title: "Trending on Netflix",    id: 8,    type: "movie",  icon: "N" },
-    { title: "Trending on Prime Video", id: 9,    type: "movie",  icon: "P" },
-    { title: "Trending on Disney+",    id: 337,  type: "movie",  icon: "D" },
-    { title: "Trending on Max",         id: 1899, type: "tv",    icon: "M" },
-    { title: "Trending on Apple TV+",  id: 350,  type: "movie",  icon: "A" },
-    { title: "Trending on Hulu",       id: 15,   type: "tv",    icon: "H" },
+    { title: "Trending on Netflix",    id: 8,    slug: "netflix", type: "movie", icon: "N" },
+    { title: "Trending on Prime Video", id: 9,   slug: "prime",   type: "movie", icon: "P" },
+    { title: "Trending on Disney+",    id: 337,  slug: "disney",  type: "movie", icon: "D" },
+    { title: "Trending on Max",         id: 1899, slug: "hbo",    type: "tv",    icon: "M" },
+    { title: "Trending on Apple TV+",  id: 350,  slug: "apple",   type: "movie", icon: "A" },
+    { title: "Trending on Hulu",       id: 15,   slug: "hulu",    type: "tv",    icon: "H" },
   ];
+  const watchRegion = SETTINGS.get("orc_watch_region", "US") || "US";
 
   STREAM_PROVIDERS.forEach(sp => {
     const pw = document.createElement("div");
     pw.className = "row-wrapper provider-row";
+    const seeAllHref = `${routeUrl("search")}?type=${sp.type}&provider=${encodeURIComponent(sp.slug)}&sort=pop`;
     pw.innerHTML = `
       <div class="row-header">
         <h2 class="row-title">${esc(sp.title)}</h2>
+        <a class="row-see-all" href="${seeAllHref}" aria-label="See all ${esc(sp.title)}">See all →</a>
       </div>
       <div class="row-track-container">
         <button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button>
@@ -5555,7 +6076,7 @@ async function initHomePage() {
     el.appendChild(pw);
     observeLazyRow(pw, async () => {
       try {
-        const res = await tmdb(`/discover/${sp.type}?with_watch_providers=${sp.id}&watch_region=US&sort_by=popularity.desc`);
+        const res = await tmdb(`/discover/${sp.type}?with_watch_providers=${sp.id}&watch_region=${encodeURIComponent(watchRegion)}&sort_by=popularity.desc`);
         const provItems = dedupeItems(res.results || []);
         if (provItems.length) {
           pt.textContent = "";
@@ -5573,7 +6094,7 @@ async function initHomePage() {
   const gRow = document.createElement("div");
   gRow.id = "genre-row";
   gRow.className = "row-wrapper visible";
-  gRow.innerHTML = `<div class="row-header"><h2 class="row-title">${GENRES[0].name}</h2></div><div class="row-track-container"><button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button><div class="row-track"></div><button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button></div>`;
+  gRow.innerHTML = `<div class="row-header"><h2 class="row-title">${GENRES[0].name}</h2><a class="row-see-all" href="${routeUrl("search")}?type=movie&genre=${GENRES[0].id}&sort=pop">See all →</a></div><div class="row-track-container"><button class="row-arrow left" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg></button><div class="row-track"></div><button class="row-arrow right" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg></button></div>`;
   const gTrack = gRow.querySelector(".row-track");
   gTrack.append(...skeletons(8));
   gRow.querySelector(".row-arrow.left")?.addEventListener("click", () => gTrack.scrollBy({ left: -360, behavior: "smooth" }));
@@ -5617,6 +6138,74 @@ async function initHomePage() {
   }
 }
 
+function syncTheaterButtons() {
+  const active = document.body.classList.contains("theater-mode");
+  $$(".player-theater-btn").forEach(btn => {
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+    btn.title = active ? "Exit Theater Mode (T / Esc)" : "Theater Mode (T)";
+  });
+}
+
+function toggleTheaterMode(force) {
+  if (!$(".player-wrap")) return false;
+  const next = typeof force === "boolean" ? force : !document.body.classList.contains("theater-mode");
+  document.body.classList.toggle("theater-mode", next);
+  syncTheaterButtons();
+  if (next) {
+    const frame = $("#player-frame");
+    const rect = frame?.getBoundingClientRect();
+    if (rect && (rect.top < 0 || rect.top > window.innerHeight * 0.65)) {
+      frame.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+  return next;
+}
+
+function renderPlayerSplash(frameEl, { label = "Start Playback", subLabel = "", backdropPath = "", onStart } = {}) {
+  if (!frameEl) return;
+  frameEl._cleanupPlayerTimers?.();
+  frameEl.innerHTML = `
+    <div class="player-poster-splash" id="player-splash">
+      <button type="button" class="player-splash-play-btn splash-play-btn" aria-label="${esc(label)}">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <span class="player-splash-label">${esc(label)}</span>
+      ${subLabel ? `<span class="player-splash-sub">${esc(subLabel)}</span>` : ""}
+    </div>`;
+  const splash = frameEl.querySelector("#player-splash");
+  if (splash && backdropPath) {
+    splash.style.backgroundImage = `url("${IMG_W780}${backdropPath}")`;
+  }
+  splash?.addEventListener("click", () => {
+    if (typeof onStart === "function") onStart();
+  });
+}
+
+function updatePlayerSplash(frameEl, { label, subLabel, backdropPath } = {}) {
+  const splash = frameEl?.querySelector("#player-splash");
+  if (!splash) return;
+  if (backdropPath) splash.style.backgroundImage = `url("${IMG_W780}${backdropPath}")`;
+  if (label) {
+    const lbl = splash.querySelector(".player-splash-label");
+    if (lbl) lbl.textContent = label;
+    splash.querySelector(".player-splash-play-btn")?.setAttribute("aria-label", label);
+  }
+  if (subLabel !== undefined) {
+    let sub = splash.querySelector(".player-splash-sub");
+    if (subLabel) {
+      if (!sub) {
+        sub = document.createElement("span");
+        sub.className = "player-splash-sub";
+        splash.appendChild(sub);
+      }
+      sub.textContent = subLabel;
+    } else if (sub) {
+      sub.remove();
+    }
+  }
+}
+
 function renderProviders(container, type, id, s, e, onChange) {
   if (!container) return;
   container.className = "provider-tabs";
@@ -5632,12 +6221,22 @@ function renderProviders(container, type, id, s, e, onChange) {
     btn.innerHTML = `${p.name}${recBadge}${trackBadge}`;
     btn.addEventListener("click", () => {
       setProvider(p.id);
-      $$(".provider-tab").forEach(b => b.classList.remove("active"));
+      $$(".provider-tab[data-provider-id]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       onChange(providerUrl(type, id, s, e));
     });
     container.appendChild(btn);
   });
+  if ($("#player-frame") && container.id === "provider-bar") {
+    const theaterBtn = document.createElement("button");
+    theaterBtn.type = "button";
+    theaterBtn.className = "provider-tab player-theater-btn";
+    theaterBtn.id = "player-theater-btn";
+    theaterBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 15h20"/></svg><span>Theater</span>`;
+    theaterBtn.addEventListener("click", () => toggleTheaterMode());
+    container.appendChild(theaterBtn);
+    syncTheaterButtons();
+  }
 }
 
 function renderDetailError(header, message, retryFn) {
@@ -5662,7 +6261,7 @@ function renderDetailError(header, message, retryFn) {
 }
 
 async function initMoviePage() {
-  const rawId = new URLSearchParams(location.search).get("id");
+  const rawId = new URLSearchParams(location.search).get("id") || location.pathname.match(/^\/movie\/(\d+)/)?.[1];
   if (!rawId) {
     location.replace(routeUrl("search") + "?type=movie");
     return;
@@ -5691,7 +6290,10 @@ async function initMoviePage() {
   initPlayerGuard();
 
   let playerStarted = SETTINGS.get(SETTINGS.playOnOpenKey) === "1";
-  const load = url => loadPlayerFrame(frame, url);
+  const load = url => loadPlayerFrame(frame, url, {
+    signal: pageSignal(),
+    onSwitch: () => WatchPartyManager?.onHostPlaybackChange?.({ provider: getProvider(), action: "provider" })
+  });
   const startPlayer = () => {
     playerStarted = true;
     load(providerUrl("movie", id, 1, 1));
@@ -5703,24 +6305,24 @@ async function initMoviePage() {
     WatchPartyManager?.onHostPlaybackChange?.({ provider: getProvider(), action: "play" });
   });
 
+  const seed = consumeNavSeed(id, "movie");
+  const initResumeSeed = resumeLabel(Progress.getItem(id, "movie"));
   if (playerStarted) {
     load(providerUrl("movie", id, 1, 1));
   } else {
-    frame.innerHTML = `
-      <div class="player-poster-splash" id="player-splash">
-        <button type="button" class="splash-play-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start Playback</button>
-      </div>`;
-    $("#player-splash")?.addEventListener("click", () => {
-      startPlayer();
+    renderPlayerSplash(frame, {
+      label: initResumeSeed ? "Resume Playback" : "Start Playback",
+      subLabel: initResumeSeed || "",
+      backdropPath: seed?.backdrop_path || "",
+      onStart: startPlayer
     });
   }
 
-  const seed = consumeNavSeed(id, "movie");
   if (seed) {
     document.title = `${seed.title || "Movie"} — ${BRAND}`;
     if (seed.backdrop_path) applyDetailBackdrop(seed.backdrop_path);
     const savedSeed = MyList.has(id, "movie");
-    const resumeSeed = resumeLabel(Progress.getItem(id, "movie"));
+    const resumeSeed = initResumeSeed;
     header.innerHTML = `
       <h1 class="detail-title">${esc(seed.title || "")}</h1>
       <div class="detail-meta">
@@ -5743,29 +6345,20 @@ async function initMoviePage() {
   }
 
   let m;
+  let usedSeedFallback = false;
   try {
     m = await tmdb(`/movie/${id}?append_to_response=images,credits,similar,videos,recommendations,external_ids,release_dates`);
   } catch (err) { console.warn('Caught error:', err);
     try {
       m = await tmdb(`/movie/${id}`);
-    } catch (err) { console.warn('Caught error:', err);
+    } catch (err2) { console.warn('Caught error:', err2);
       m = seed || null;
+      if (seed) usedSeedFallback = true;
     }
   }
 
   if (!m) {
-    if (header) {
-      header.innerHTML = `
-        <div class="detail-error-box">
-          <h2>Could Not Load Details</h2>
-          <p>Failed to retrieve movie information. Please check your connection and retry.</p>
-          <div class="detail-actions">
-            <button type="button" class="btn-play" onclick="location.reload()">Retry</button>
-            <a href="${homeUrl()}" class="btn-ghost">Go Home</a>
-          </div>
-        </div>`;
-      LiquidGlass.glassify(header);
-    }
+    renderDetailError(header, "Failed to retrieve movie information. Please check your connection and retry.", () => initMoviePage());
     return;
   }
 
@@ -5777,6 +6370,13 @@ async function initMoviePage() {
     const trailer = pickTrailer(m.videos);
     const cert = (m.release_dates?.results || []).find(r => r.iso_3166_1 === "US")?.release_dates?.map(d => d.certification).find(Boolean);
     const resume = resumeLabel(Progress.getItem(m.id, "movie"));
+    if (!playerStarted) {
+      updatePlayerSplash(frame, {
+        label: resume ? "Resume Playback" : "Start Playback",
+        subLabel: resume || "",
+        backdropPath: m.backdrop_path || seed?.backdrop_path || ""
+      });
+    }
 
     const logos = m.images?.logos || [];
     const logoObj = logos.find(l => l.iso_639_1 === "en") || logos.find(l => !l.iso_639_1) || logos[0];
@@ -5787,6 +6387,7 @@ async function initMoviePage() {
     header.innerHTML = `
       ${titleHtml}
       ${m.tagline ? `<p class="detail-tagline">${esc(m.tagline)}</p>` : ""}
+      ${usedSeedFallback ? `<div class="detail-seed-notice"><span>Limited preview loaded. Full details could not be reached.</span><button type="button" class="glass-chip" id="detail-retry-full">Retry details</button></div>` : ""}
       ${m.belongs_to_collection ? `<a class="collection-banner" href="${routeUrl("search")}?type=movie&q=${encodeURIComponent(m.belongs_to_collection.name)}">Part of ${esc(m.belongs_to_collection.name)}</a>` : ""}
       <div class="detail-meta">
         ${m.vote_average ? `<span class="score">★ ${m.vote_average.toFixed(1)}</span>` : ""}
@@ -5807,6 +6408,9 @@ async function initMoviePage() {
       </div>`;
 
     LiquidGlass.glassify(header);
+    if (usedSeedFallback) {
+      $("#detail-retry-full")?.addEventListener("click", () => initMoviePage());
+    }
     window._orcDetailControls = {
       type: "movie",
       id,
@@ -5903,7 +6507,7 @@ async function initMoviePage() {
     renderCardRow("#similar-section", "#similar-row", sim, "movie");
   } catch (e) {
     console.error(e);
-    renderDetailError(header, "Couldn't display this title.");
+    renderDetailError(header, "Couldn't display this title.", () => initMoviePage());
     return;
   }
 
@@ -5919,7 +6523,7 @@ async function initTvPage() {
   checkPlayLoader();
   initPlayerGuard();
   const params = new URLSearchParams(location.search);
-  const rawId = params.get("id");
+  const rawId = params.get("id") || location.pathname.match(/^\/tv\/(\d+)/)?.[1];
   if (!rawId) {
     location.replace(routeUrl("search") + "?type=tv");
     return;
@@ -5941,11 +6545,40 @@ async function initTvPage() {
     return;
   }
   const id = String(parseInt(rawId, 10));
-  let season = parseInt(params.get("season") || "1", 10);
-  let episode = parseInt(params.get("episode") || "1", 10);
+  const rawSeasonParam = params.get("season");
+  const rawEpisodeParam = params.get("episode");
+  const hasExplicitSeason = rawSeasonParam !== null && Number.isFinite(parseInt(rawSeasonParam, 10));
+  const hasExplicitEpisode = rawEpisodeParam !== null && Number.isFinite(parseInt(rawEpisodeParam, 10));
+  let season = hasExplicitSeason ? Math.max(0, parseInt(rawSeasonParam, 10)) : 1;
+  let episode = hasExplicitEpisode ? Math.max(1, parseInt(rawEpisodeParam, 10)) : 1;
   let playerStarted = SETTINGS.get(SETTINGS.playOnOpenKey) === "1";
 
+  const tvLoadOpts = {
+    signal: pageSignal(),
+    onSwitch: () => WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider(), action: "provider" })
+  };
+  const tvLoad = url => {
+    if (frame) loadPlayerFrame(frame, url, tvLoadOpts);
+  };
+
   const seed = consumeNavSeed(id, "tv");
+  const initTvProg = Progress.getItem(id, "tv");
+  const seedSeason = !hasExplicitSeason && initTvProg?.season !== undefined && initTvProg?.season !== null ? (parseInt(initTvProg.season, 10) || season) : season;
+  const seedEpisode = !hasExplicitEpisode && !hasExplicitSeason && initTvProg?.episode ? (parseInt(initTvProg.episode, 10) || episode) : episode;
+  const seedResume = initTvProg?.progress >= 5 && initTvProg.progress < 98 && parseInt(initTvProg.season, 10) === seedSeason && parseInt(initTvProg.episode, 10) === seedEpisode;
+  if (frame && !playerStarted) {
+    renderPlayerSplash(frame, {
+      label: `${seedResume ? "Resume" : "Play"} S${seedSeason} E${seedEpisode}`,
+      subLabel: seedResume ? `${Math.round(initTvProg.progress)}% watched` : "",
+      backdropPath: seed?.backdrop_path || "",
+      onStart: () => {
+        playerStarted = true;
+        tvLoad(providerUrl("tv", id, seedSeason, seedEpisode));
+        WatchPartyManager?.onHostPlaybackChange?.({ season: seedSeason, episode: seedEpisode, provider: getProvider(), action: "play" });
+      }
+    });
+  }
+
   if (seed) {
     document.title = `${seed.name || seed.title || "Series"} — ${BRAND}`;
     if (seed.backdrop_path) applyDetailBackdrop(seed.backdrop_path);
@@ -5958,42 +6591,34 @@ async function initTvPage() {
         <span>${year(seed.first_air_date || seed.release_date)}</span>
       </div>
       <p class="detail-overview">${esc(seed.overview || "")}</p>
+      ${seedResume ? `<p class="detail-resume">Resume S${seedSeason} E${seedEpisode} · ${Math.round(initTvProg.progress)}% watched</p>` : ""}
       <div class="detail-actions">
-        <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play</button>
+        <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${seedResume ? "Resume" : "Play"}</button>
         <button class="btn-ghost" id="detail-save">${savedSeed ? "✓ Saved" : "+ My List"}</button>
         <button class="btn-ghost btn-icon-text" id="detail-watch-party">${ICONS.party}<span>Watch Party</span></button>
         <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
       </div>`;
-    LiquidGlass.glassify(header);
+    if (header) LiquidGlass.glassify(header);
     $("#detail-watch-party")?.addEventListener("click", () => {
       openWatchPartyModal(seed.name || seed.title || "Series", id, "tv", { poster: seed.poster_path || "", season, episode });
     });
   }
 
   let show;
+  let usedSeedFallback = false;
   try {
     show = await tmdb(`/tv/${id}?append_to_response=images,credits,similar,recommendations,videos,external_ids,content_ratings`);
   } catch (err) { console.warn('Caught error:', err);
     try {
       show = await tmdb(`/tv/${id}`);
-    } catch (err) { console.warn('Caught error:', err);
+    } catch (err2) { console.warn('Caught error:', err2);
       show = seed || null;
+      if (seed) usedSeedFallback = true;
     }
   }
 
   if (!show) {
-    if (header) {
-      header.innerHTML = `
-        <div class="detail-error-box">
-          <h2>Could Not Load Series</h2>
-          <p>Failed to retrieve series information. Please check your connection and retry.</p>
-          <div class="detail-actions">
-            <button type="button" class="btn-play" onclick="location.reload()">Retry</button>
-            <a href="${homeUrl()}" class="btn-ghost">Go Home</a>
-          </div>
-        </div>`;
-      LiquidGlass.glassify(header);
-    }
+    renderDetailError(header, "Failed to retrieve series information. Please check your connection and retry.", () => initTvPage());
     return;
   }
 
@@ -6008,15 +6633,22 @@ async function initTvPage() {
     const prog = Progress.getItem(show.id, "tv");
     const seasons = (show.seasons || []).filter(s => s.season_number >= 0);
     const seasonNums = seasons.map(s => s.season_number);
+    if (!hasExplicitSeason && prog?.season !== undefined && prog?.season !== null) {
+      const ps = parseInt(prog.season, 10);
+      if (Number.isFinite(ps) && (!seasonNums.length || seasonNums.includes(ps))) season = ps;
+    }
+    if (!hasExplicitEpisode && !hasExplicitSeason && prog?.episode) {
+      const pe = parseInt(prog.episode, 10);
+      if (Number.isFinite(pe) && pe >= 1) episode = pe;
+    }
     if (seasonNums.length && !seasonNums.includes(season)) season = seasonNums[0];
     if (!Number.isFinite(episode) || episode < 1) episode = 1;
-    if (prog?.season) {
-      season = parseInt(prog.season, 10) || season;
-      if (prog.episode) episode = parseInt(prog.episode, 10) || episode;
-    }
-    const resume = prog?.progress >= 5 && prog.progress < 98
+    const isResumingEp = prog?.progress >= 5 && prog.progress < 98 && parseInt(prog.season, 10) === season && parseInt(prog.episode, 10) === episode;
+    const resume = isResumingEp
       ? `Resume S${season} E${episode} · ${Math.round(prog.progress)}% watched`
-      : "";
+      : (prog?.progress >= 5 && prog.progress < 98 && prog.season
+        ? `In progress: S${prog.season} E${prog.episode || 1}`
+        : "");
 
     const logos = show.images?.logos || [];
     const logoObj = logos.find(l => l.iso_639_1 === "en") || logos.find(l => !l.iso_639_1) || logos[0];
@@ -6027,6 +6659,7 @@ async function initTvPage() {
     if (header) header.innerHTML = `
       ${titleHtml}
       ${show.tagline ? `<p class="detail-tagline">${esc(show.tagline)}</p>` : ""}
+      ${usedSeedFallback ? `<div class="detail-seed-notice"><span>Limited preview loaded. Full details could not be reached.</span><button type="button" class="glass-chip" id="detail-retry-full">Retry details</button></div>` : ""}
       <div class="detail-meta">
         ${show.vote_average ? `<span class="score">★ ${show.vote_average.toFixed(1)}</span>` : ""}
         ${show.vote_count ? `<span>${fmtVotes(show.vote_count)}</span>` : ""}
@@ -6039,14 +6672,19 @@ async function initTvPage() {
       <p class="detail-overview">${esc(show.overview || "")}</p>
       ${resume ? `<p class="detail-resume">${esc(resume)}</p>` : ""}
       <div class="detail-actions">
-        <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${resume ? "Resume" : "Play"}</button>
+        <button type="button" class="btn-play" id="detail-play"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> ${isResumingEp ? "Resume" : "Play"}</button>
         ${trailer ? `<button class="btn-ghost" id="detail-trailer">Trailer</button>` : ""}
         <button class="btn-ghost" id="detail-save">${saved ? "✓ Saved" : "+ My List"}</button>
         <button class="btn-ghost btn-icon-text" id="detail-watch-party">${ICONS.party}<span>Watch Party</span></button>
         <button class="btn-ghost btn-icon-text" id="detail-share">${ICONS.share}<span>Share</span></button>
       </div>`;
 
-    LiquidGlass.glassify(header);
+    if (header) {
+      LiquidGlass.glassify(header);
+      if (usedSeedFallback) {
+        $("#detail-retry-full")?.addEventListener("click", () => initTvPage());
+      }
+    }
     window._orcDetailControls = {
       type: "tv",
       id,
@@ -6088,7 +6726,7 @@ async function initTvPage() {
     };
     const startTvPlayer = () => {
       playerStarted = true;
-      loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+      tvLoad(providerUrl("tv", id, season, episode));
       WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider(), action: "play" });
     };
     $("#detail-play")?.addEventListener("click", (e) => {
@@ -6107,15 +6745,15 @@ async function initTvPage() {
     });
 
     const update = () => {
+      const splashResume = prog?.progress >= 5 && prog.progress < 98 && parseInt(prog.season, 10) === season && parseInt(prog.episode, 10) === episode;
       if (playerStarted) {
-        loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+        tvLoad(providerUrl("tv", id, season, episode));
       } else {
-        frame.innerHTML = `
-          <div class="player-poster-splash" id="player-splash">
-            <button type="button" class="splash-play-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Play S${season} E${episode}</button>
-          </div>`;
-        $("#player-splash")?.addEventListener("click", () => {
-          startTvPlayer();
+        renderPlayerSplash(frame, {
+          label: `${splashResume ? "Resume" : "Play"} S${season} E${episode}`,
+          subLabel: splashResume ? `${Math.round(prog.progress)}% watched` : "",
+          backdropPath: show.backdrop_path || seed?.backdrop_path || "",
+          onStart: startTvPlayer
         });
       }
       const u = new URL(location.href);
@@ -6124,6 +6762,81 @@ async function initTvPage() {
       history.replaceState(null, "", u);
       WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider() });
     };
+
+    let epReverseOrder = false;
+    const epControlsBar = $(".ep-controls-bar");
+    const applyEpisodeFilter = () => {
+      const epGrid = $("#ep-grid");
+      if (!epGrid) return;
+      const q = ($("#ep-search-input")?.value || "").toLowerCase().trim();
+      let visibleCount = 0;
+      $$(".ep-row", epGrid).forEach(r => {
+        const titleText = r.querySelector(".ep-row-title")?.textContent.toLowerCase() || "";
+        const numText = r.querySelector(".ep-row-num")?.textContent || "";
+        const match = !q || titleText.includes(q) || numText.includes(q);
+        r.style.display = match ? "" : "none";
+        if (match) visibleCount++;
+      });
+      let emptyEl = epGrid.querySelector("#ep-filter-empty");
+      if (!visibleCount && $$(".ep-row", epGrid).length > 0) {
+        if (!emptyEl) {
+          emptyEl = document.createElement("div");
+          emptyEl.id = "ep-filter-empty";
+          emptyEl.className = "ep-filter-empty";
+          epGrid.appendChild(emptyEl);
+        }
+        emptyEl.innerHTML = `<p>No episodes match "${esc(q)}".</p><button type="button" class="glass-chip" id="ep-clear-filter-btn">Clear filter</button>`;
+        emptyEl.querySelector("#ep-clear-filter-btn")?.addEventListener("click", () => {
+          const inp = $("#ep-search-input");
+          if (inp) { inp.value = ""; inp.focus(); }
+          applyEpisodeFilter();
+        });
+      } else if (emptyEl) {
+        emptyEl.remove();
+      }
+    };
+
+    if (epControlsBar && !epControlsBar.dataset.toolsBound) {
+      epControlsBar.dataset.toolsBound = "1";
+      $("#ep-search-input")?.addEventListener("input", applyEpisodeFilter, { signal: pageSignal() });
+      let sortBtn = $("#ep-sort-btn");
+      if (!sortBtn) {
+        sortBtn = document.createElement("button");
+        sortBtn.type = "button";
+        sortBtn.id = "ep-sort-btn";
+        sortBtn.className = "glass-chip ep-tool-btn";
+        sortBtn.textContent = "1 -> N";
+        sortBtn.title = "Reverse episode order";
+        epControlsBar.appendChild(sortBtn);
+      }
+      sortBtn.addEventListener("click", () => {
+        epReverseOrder = !epReverseOrder;
+        sortBtn.textContent = epReverseOrder ? "N -> 1" : "1 -> N";
+        sortBtn.classList.toggle("active", epReverseOrder);
+        const curSel = Number($("#season-select")?.value ?? season);
+        loadEps(curSel);
+      }, { signal: pageSignal() });
+      let jumpBtn = $("#ep-jump-btn");
+      if (!jumpBtn) {
+        jumpBtn = document.createElement("button");
+        jumpBtn.type = "button";
+        jumpBtn.id = "ep-jump-btn";
+        jumpBtn.className = "glass-chip ep-tool-btn";
+        jumpBtn.textContent = "Current";
+        jumpBtn.title = "Jump to active episode";
+        epControlsBar.appendChild(jumpBtn);
+      }
+      jumpBtn.addEventListener("click", () => {
+        const activeRow = $(".ep-row.on", $("#ep-grid"));
+        if (activeRow) {
+          if (activeRow.style.display === "none" && $("#ep-search-input")) {
+            $("#ep-search-input").value = "";
+            applyEpisodeFilter();
+          }
+          activeRow.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, { signal: pageSignal() });
+    }
 
     async function loadEps(sn) {
       $("#ep-grid").innerHTML = Array.from({ length: 4 }, () => `
@@ -6139,17 +6852,21 @@ async function initTvPage() {
       try {
         const sd = await tmdb(`/tv/${id}/season/${sn}`);
         $("#ep-grid").textContent = "";
-        const eps = sd.episodes || [];
-        if (!eps.length) {
+        const rawEps = sd.episodes || [];
+        if (!rawEps.length) {
           $("#ep-grid").innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);">No episodes have aired for this season yet.</div>`;
           if ($("#detail-play")) $("#detail-play").disabled = true;
           return;
         }
-        if (eps.length && !eps.some(ep => ep.episode_number === episode)) episode = eps[0].episode_number;
+        if (rawEps.length && !rawEps.some(ep => ep.episode_number === episode)) episode = rawEps[0].episode_number;
+        const eps = epReverseOrder ? [...rawEps].reverse() : rawEps;
+        const todayIso = new Date().toISOString().slice(0, 10);
         eps.forEach(ep => {
+          const isUnaired = Boolean(ep.air_date && /^\d{4}-\d{2}-\d{2}$/.test(ep.air_date) && ep.air_date > todayIso);
+          const isWatchedEp = WatchedEpisodes.has(id, sn, ep.episode_number);
           const el = document.createElement("button");
           el.type = "button";
-          el.className = `ep-row${ep.episode_number === episode && sn === season ? " on" : ""}`;
+          el.className = `ep-row${ep.episode_number === episode && sn === season ? " on" : ""}${isUnaired ? " is-unaired" : ""}${isWatchedEp ? " is-watched-ep" : ""}`;
           el.dataset.ep = ep.episode_number;
           let air = "";
           if (ep.air_date) {
@@ -6164,10 +6881,9 @@ async function initTvPage() {
           const dur = ep.runtime ? `${ep.runtime}m` : "";
           el.innerHTML = `
             <span class="ep-row-num">${ep.episode_number}</span>
-            ${WatchedEpisodes.has(id, sn, ep.episode_number) ? '<span class="ep-watched-check" title="Watched" style="color:var(--accent);margin-left:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></span>' : ''}
-            <div class="ep-row-thumb">${ep.still_path ? `<img src="${esc(IMG_W300 + ep.still_path)}" alt="${esc(ep.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : ""}</div>
+            <div class="ep-row-thumb">${ep.still_path ? `<img src="${esc(IMG_W300 + ep.still_path)}" alt="${esc(ep.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : ""}${isWatchedEp ? '<span class="ep-watched-check" title="Watched" aria-label="Watched"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></span>' : ""}</div>
             <div class="ep-row-body">
-              <div class="ep-row-title">${esc(ep.name || `Episode ${ep.episode_number}`)}</div>
+              <div class="ep-row-title">${esc(ep.name || `Episode ${ep.episode_number}`)}${isUnaired ? '<span class="ep-unaired-badge">Upcoming</span>' : ""}</div>
               ${air ? `<div class="ep-row-date">${air}</div>` : ""}
               <div class="ep-row-desc">${esc(ep.overview || "")}</div>
             </div>
@@ -6185,15 +6901,7 @@ async function initTvPage() {
           });
           $("#ep-grid").appendChild(el);
         });
-
-        $("#ep-search-input")?.addEventListener("input", e => {
-          const q = e.target.value.toLowerCase().trim();
-          $$(".ep-row", $("#ep-grid")).forEach(r => {
-            const titleText = r.querySelector(".ep-row-title")?.textContent.toLowerCase() || "";
-            const numText = r.querySelector(".ep-row-num")?.textContent || "";
-            r.style.display = (!q || titleText.includes(q) || numText.includes(q)) ? "" : "none";
-          });
-        });
+        applyEpisodeFilter();
       } catch (err) { console.warn('Caught error:', err);
         $("#ep-grid").innerHTML = `<p style="color:var(--text-muted);padding:20px;text-align:center">Episodes unavailable.</p>`;
       }
@@ -6201,7 +6909,7 @@ async function initTvPage() {
 
     renderProviders($("#provider-bar"), "tv", id, season, episode, () => {
       playerStarted = true;
-      loadPlayerFrame(frame, providerUrl("tv", id, season, episode));
+      tvLoad(providerUrl("tv", id, season, episode));
       WatchPartyManager?.onHostPlaybackChange?.({ season, episode, provider: getProvider(), action: "provider" });
     });
     if (seasons.length && $("#season-select")) {
@@ -6285,7 +6993,7 @@ async function initTvPage() {
     }).catch(() => {});
   } catch (e) {
     console.error(e);
-    renderDetailError(header, "Couldn't load this show. Check your connection and try again.");
+    renderDetailError(header, "Couldn't load this show. Check your connection and try again.", () => initTvPage());
   }
 }
 
@@ -6390,9 +7098,14 @@ function initSearchPage() {
     renderCard: buildCard,
     hideAdult: () => SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0",
     hideWatched: () => SETTINGS.get(SETTINGS.hideWatchedKey) === "1",
+    getWatchRegion: () => SETTINGS.get("orc_watch_region", "US"),
+    getTasteSnapshot: () => TasteAnalytics.summarize(),
+    getProfile: () => TasteAnalytics.buildProfile(),
+    getRecentPrompts: () => RecentAISearches.get(),
+    onRecordPrompt: q => RecentAISearches.add(q),
     exclude: hide => hide ? Progress.getAll().filter(item => item.progress >= 95 && Number.isSafeInteger(Number(item.id)))
       .map(item => `${item.mediaType === "tv" || item.type === "tv" ? "tv" : "movie"}_${item.id}`) : [],
-    onQuery: q => { input.value = q; if (clear) clear.style.display = q ? "flex" : "none"; doSearch(q); }
+    onQuery: (q, extraOpts) => { input.value = q; if (clear) clear.style.display = q ? "flex" : "none"; doSearch(q, false, 1, extraOpts); }
   }) : null;
 
   function setBusy(busy) {
@@ -6460,10 +7173,10 @@ function initSearchPage() {
   aiSubmit?.addEventListener("click", () => doSearch(input?.value.trim() || ""));
 
   let searchAbortController = null;
-  async function doSearch(q, append = false, targetPage = 1) {
+  async function doSearch(q, append = false, targetPage = 1, extraOpts = {}) {
     if (searchAbortController) searchAbortController.abort();
     searchAbortController = new AbortController();
-    const searchOpts = { signal: searchAbortController.signal };
+    const searchOpts = { signal: searchAbortController.signal, ...(extraOpts || {}) };
     if (!status || !grid) return;
     if (!append) {
       searchPage = 1;
@@ -6480,7 +7193,6 @@ function initSearchPage() {
     if (current === "ai") {
       hasMorePages = false;
       if (recentBox) recentBox.hidden = true;
-      if (q) RecentSearches.add(q);
       if (aiController) return aiController.search(q, searchOpts);
       status.textContent = "AI search assets are missing. Reload the page.";
       grid.textContent = "";
@@ -7336,10 +8048,11 @@ function initSettingsPage() {
     PROVIDERS.forEach((p, i) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `settings-provider${getProvider() === p.id ? " active" : ""}`;
-      btn.innerHTML = i === 0
-        ? `${p.name}<span class="provider-rec" aria-label="Recommended">★</span>`
-        : p.name;
+      btn.className = `settings-provider settings-provider-rich${getProvider() === p.id ? " active" : ""}`;
+      const capLabel = p.tracksProgress ? "Progress sync" : "Standard embed";
+      btn.innerHTML = `
+        <span class="provider-name-row">${esc(p.name)}${i === 0 ? `<span class="provider-rec" aria-label="Recommended">★</span>` : ""}</span>
+        <span class="provider-cap-pill${p.tracksProgress ? " is-sync" : ""}">${capLabel}</span>`;
       btn.addEventListener("click", () => {
         setProvider(p.id);
         providerBox.querySelectorAll(".settings-provider").forEach(b => b.classList.remove("active"));
@@ -7380,9 +8093,9 @@ function initSettingsPage() {
     BACKDROP_STYLES.forEach(s => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `settings-provider${curStyle === s.id ? " active" : ""}`;
+      btn.className = `settings-provider settings-bg-style-btn${curStyle === s.id ? " active" : ""}`;
       btn.dataset.bgStyle = s.id;
-      btn.textContent = s.label;
+      btn.innerHTML = `<span class="bg-style-swatch bg-swatch-${esc(s.id)}" aria-hidden="true"></span><span>${esc(s.label)}</span>`;
       btn.addEventListener("click", () => {
         SETTINGS.set(SETTINGS.bgStyleKey, s.id);
         bgStylesBox.querySelectorAll(".settings-provider").forEach(b => b.classList.remove("active"));
@@ -7500,7 +8213,7 @@ function initSettingsPage() {
       sync();
       applyGlobalSettings();
       if (key === SETTINGS.reduceMotionKey) {
-        if (on) clearInterval(heroTimer);
+        if (on) stopHeroTimer(false);
         else startHeroTimer();
       }
       toast(`${label} ${on ? "enabled" : "disabled"}`);
@@ -8203,6 +8916,7 @@ window.addEventListener("pageshow", () => NProgress.done());
 function initPullRefresh() {
   if (!isTouch()) return;
   let startY = 0;
+  let startX = 0;
   let pulling = false;
   const indicator = document.createElement("div");
   indicator.className = "ptr-indicator";
@@ -8211,24 +8925,45 @@ function initPullRefresh() {
   document.body.appendChild(indicator);
 
   document.addEventListener("touchstart", e => {
-    if (window.scrollY > 8) return;
+    if (window.scrollY > 8 || e.touches.length !== 1) return;
+    if (document.querySelector(".modal-overlay.open, #cmd-palette-backdrop.open")) return;
+    if (e.target?.closest?.(".row-track, .cast-scroll, .similar-row, #player-frame, .hero-carousel-controls, input, select, textarea")) return;
     startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
     pulling = true;
   }, { passive: true });
   document.addEventListener("touchmove", e => {
-    if (!pulling) return;
+    if (!pulling || !e.touches.length) return;
     const dy = e.touches[0].clientY - startY;
+    const dx = e.touches[0].clientX - startX;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 12) {
+      pulling = false;
+      indicator.hidden = true;
+      return;
+    }
     if (dy > 40 && window.scrollY <= 0) {
       indicator.hidden = false;
+      indicator.textContent = dy > 100 ? "Release to refresh view" : "Pull down to refresh";
       indicator.style.opacity = String(Math.min(1, dy / 120));
     } else indicator.hidden = true;
   }, { passive: true });
+  const cancelPull = () => {
+    pulling = false;
+    indicator.hidden = true;
+  };
+  document.addEventListener("touchcancel", cancelPull, { passive: true });
   document.addEventListener("touchend", e => {
     if (!pulling) return;
     pulling = false;
-    const dy = e.changedTouches[0].clientY - startY;
+    const dy = (e.changedTouches?.[0]?.clientY ?? startY) - startY;
     indicator.hidden = true;
-    if (window.scrollY <= 8 && dy > 100) location.reload();
+    if (window.scrollY <= 8 && dy > 100) {
+      if (typeof SeamlessRouter !== "undefined" && typeof SeamlessRouter.go === "function") {
+        SeamlessRouter.go(location.href, { skipHistory: true, force: true });
+      } else {
+        location.reload();
+      }
+    }
   }, { passive: true });
 }
 
@@ -8250,27 +8985,35 @@ function openKeyboardShortcutsModal() {
         <div class="subwin-header">
           <div>
             <h2 class="subwin-title">Keyboard Shortcuts</h2>
-            <p class="subwin-sub">Quick navigation controls</p>
+            <p class="subwin-sub">Quick navigation &amp; player controls</p>
           </div>
           <button type="button" class="subwin-close modal-close" id="shortcuts-close" aria-label="Close">✕</button>
         </div>
         <div class="subwin-divider"></div>
         <div style="display:flex;flex-direction:column;gap:4px;font-size:0.86rem">
           <div class="kbd-shortcut-row">
-            <span>Focus Search Input</span>
+            <span>Command Palette &amp; Quick Search</span>
+            <span><kbd class="shortcut-key">Ctrl</kbd> + <kbd class="shortcut-key">K</kbd></span>
+          </div>
+          <div class="kbd-shortcut-row">
+            <span>Focus Search / Open Search</span>
             <kbd class="shortcut-key">/</kbd>
+          </div>
+          <div class="kbd-shortcut-row">
+            <span>Toggle Theater Mode (Detail Player)</span>
+            <kbd class="shortcut-key">T</kbd>
+          </div>
+          <div class="kbd-shortcut-row">
+            <span>Open Watch Party</span>
+            <kbd class="shortcut-key">W</kbd>
           </div>
           <div class="kbd-shortcut-row">
             <span>Keyboard Shortcuts Cheat Sheet</span>
             <kbd class="shortcut-key">?</kbd>
           </div>
-          <div class="kbd-shortcut-row">
-            <span>Close Modals &amp; Player</span>
-            <kbd class="shortcut-key">ESC</kbd>
-          </div>
           <div class="kbd-shortcut-row" style="border-bottom:0">
-            <span>Surprise Me Reel</span>
-            <kbd class="shortcut-key">R</kbd>
+            <span>Close Modals, Trailer, or Exit Theater</span>
+            <kbd class="shortcut-key">ESC</kbd>
           </div>
         </div>
       </div>
@@ -8287,6 +9030,10 @@ function initGlobalShortcuts() {
   window.__orcShortcutsBound = true;
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
+      if (document.body.classList.contains("theater-mode")) {
+        document.body.classList.remove("theater-mode");
+        if (typeof syncTheaterButtons === "function") syncTheaterButtons();
+      }
       if (typeof window.closeCommandPalette === "function") window.closeCommandPalette();
       closeModal();
       closeTrailer();
@@ -8310,6 +9057,11 @@ function initGlobalShortcuts() {
         HeaderSearch.open();
       } else {
         location.href = routeUrl("search");
+      }
+    } else if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if ($("#player-frame") && typeof toggleTheaterMode === "function") {
+        e.preventDefault();
+        toggleTheaterMode();
       }
     } else if (e.key.toLowerCase() === "w" && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
@@ -8533,6 +9285,7 @@ function showUndoToast(msg, onUndo, timeout = 5000) {
     document.body.appendChild(t);
   }
   t.classList.toggle("toast-mobile", isMobile());
+  t.classList.add("toast-interactive");
   t.innerHTML = `<span>${esc(msg)}</span><button type="button" class="toast-undo-btn" style="margin-left:14px;background:none;border:none;color:var(--accent);font-weight:800;cursor:pointer;padding:2px 6px">Undo</button>`;
   t.classList.add("show");
   clearTimeout(t._timer);
@@ -8543,12 +9296,12 @@ function showUndoToast(msg, onUndo, timeout = 5000) {
     if (undone) return;
     undone = true;
     clearTimeout(t._timer);
-    t.classList.remove("show");
+    t.classList.remove("show", "toast-interactive");
     onUndo();
   }, { once: true });
 
   t._timer = setTimeout(() => {
-    t.classList.remove("show");
+    t.classList.remove("show", "toast-interactive");
   }, timeout);
 }
 
@@ -8692,16 +9445,67 @@ function initCommandPalette() {
     settings: ICONS.settings,
     discord: ICONS.discord,
     film: ICONS.film,
+    play: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>`,
+    nav: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`,
+    sparkle: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>`,
+    shortcuts: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M8 13h8"/></svg>`,
+  };
+
+  let selectedIdx = 0;
+  const getItems = () => Array.from(list.querySelectorAll(".cmd-palette-item"));
+  const syncSelection = (nextIdx = 0) => {
+    const items = getItems();
+    if (!items.length) {
+      selectedIdx = -1;
+      return;
+    }
+    selectedIdx = ((nextIdx % items.length) + items.length) % items.length;
+    items.forEach((el, i) => {
+      const active = i === selectedIdx;
+      el.classList.toggle("is-selected", active);
+      el.setAttribute("aria-selected", active ? "true" : "false");
+      if (active) {
+        try { el.scrollIntoView({ block: "nearest" }); } catch {}
+      }
+    });
   };
 
   const renderDefaultCommands = () => {
-    list.innerHTML = `
-      <button type="button" class="cmd-palette-item" data-action="list"><span class="cmd-palette-ico">${CMD_ICONS.list}</span><span>Go to My List</span></button>
-      <button type="button" class="cmd-palette-item" data-action="theme"><span class="cmd-palette-ico">${CMD_ICONS.theme}</span><span>Toggle Theme</span></button>
-      <button type="button" class="cmd-palette-item" data-action="surprise"><span class="cmd-palette-ico">${CMD_ICONS.surprise}</span><span>Surprise Me</span></button>
-      <button type="button" class="cmd-palette-item" data-action="settings"><span class="cmd-palette-ico">${CMD_ICONS.settings}</span><span>Settings</span></button>
-      <button type="button" class="cmd-palette-item" data-action="discord"><span class="cmd-palette-ico">${CMD_ICONS.discord}</span><span>Join Discord Community</span></button>
-    `;
+    const sections = [];
+    const recent = (typeof Progress !== "undefined" && typeof Progress.getAll === "function")
+      ? Progress.getAll().filter(it => it && it.id && (it.title || it.name)).slice(0, 3)
+      : [];
+    if (recent.length) {
+      sections.push(`<div class="cmd-palette-section">Continue Watching</div>` + recent.map(it => {
+        const media = it.mediaType === "tv" ? "tv" : "movie";
+        let url = `${routeUrl(media)}?id=${encodeURIComponent(it.id)}`;
+        if (media === "tv" && it.season && it.episode) {
+          url += `&season=${encodeURIComponent(it.season)}&episode=${encodeURIComponent(it.episode)}`;
+        }
+        const badge = (media === "tv" && it.season && it.episode)
+          ? `S${it.season} E${it.episode}`
+          : (media === "tv" ? "Show" : "Movie");
+        return `<button type="button" class="cmd-palette-item" data-url="${url}"><span class="cmd-palette-ico">${CMD_ICONS.play}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(it.title || it.name)}</span><span class="cmd-palette-meta">${esc(badge)}</span></button>`;
+      }).join(""));
+    }
+
+    sections.push(`
+      <div class="cmd-palette-section">Jump To</div>
+      <button type="button" class="cmd-palette-item" data-url="${routeUrl("home")}"><span class="cmd-palette-ico">${CMD_ICONS.nav}</span><span style="flex:1;">Home</span><span class="cmd-palette-meta">Page</span></button>
+      <button type="button" class="cmd-palette-item" data-url="${routeUrl("search", "type=ai")}"><span class="cmd-palette-ico">${CMD_ICONS.sparkle}</span><span style="flex:1;">AI Discovery &amp; Taste Match</span><span class="cmd-palette-meta">Search</span></button>
+      <button type="button" class="cmd-palette-item" data-url="${routeUrl("search", "type=movie&sort=pop")}"><span class="cmd-palette-ico">${CMD_ICONS.film}</span><span style="flex:1;">Discover Movies</span><span class="cmd-palette-meta">Catalog</span></button>
+      <button type="button" class="cmd-palette-item" data-url="${routeUrl("search", "type=tv&sort=pop")}"><span class="cmd-palette-ico">${CMD_ICONS.film}</span><span style="flex:1;">Discover Shows</span><span class="cmd-palette-meta">Catalog</span></button>
+      <button type="button" class="cmd-palette-item" data-url="${routeUrl("anime")}"><span class="cmd-palette-ico">${CMD_ICONS.nav}</span><span style="flex:1;">Anime Hub</span><span class="cmd-palette-meta">Page</span></button>
+      <button type="button" class="cmd-palette-item" data-action="list"><span class="cmd-palette-ico">${CMD_ICONS.list}</span><span style="flex:1;">My List</span><span class="cmd-palette-meta">Saved</span></button>
+      <button type="button" class="cmd-palette-item" data-action="settings"><span class="cmd-palette-ico">${CMD_ICONS.settings}</span><span style="flex:1;">Settings</span><span class="cmd-palette-meta">Preferences</span></button>
+      <div class="cmd-palette-section">Quick Actions</div>
+      <button type="button" class="cmd-palette-item" data-action="theme"><span class="cmd-palette-ico">${CMD_ICONS.theme}</span><span style="flex:1;">Toggle Theme</span><span class="cmd-palette-meta">Appearance</span></button>
+      <button type="button" class="cmd-palette-item" data-action="surprise"><span class="cmd-palette-ico">${CMD_ICONS.surprise}</span><span style="flex:1;">Surprise Me</span><span class="cmd-palette-meta">Random Pick</span></button>
+      <button type="button" class="cmd-palette-item" data-action="shortcuts"><span class="cmd-palette-ico">${CMD_ICONS.shortcuts}</span><span style="flex:1;">Keyboard Shortcuts</span><span class="cmd-palette-meta">?</span></button>
+      <button type="button" class="cmd-palette-item" data-action="discord"><span class="cmd-palette-ico">${CMD_ICONS.discord}</span><span style="flex:1;">Join Discord Community</span><span class="cmd-palette-meta">External</span></button>
+    `);
+    list.innerHTML = sections.join("");
+    syncSelection(0);
   };
 
   const openPalette = () => {
@@ -8736,8 +9540,7 @@ function initCommandPalette() {
     }
   };
 
-  list.addEventListener("click", e => {
-    const btn = e.target.closest(".cmd-palette-item");
+  const activateCommand = btn => {
     if (!btn) return;
     const action = btn.dataset.action;
     const url = btn.dataset.url;
@@ -8752,6 +9555,8 @@ function initCommandPalette() {
       window.open("https://discord.gg/yv8cVk8p4f", "_blank", "noopener");
     } else if (action === "surprise") {
       initSurpriseMe?.();
+    } else if (action === "shortcuts") {
+      if (typeof openKeyboardShortcutsModal === "function") openKeyboardShortcutsModal();
     } else if (action === "theme") {
       const cur = document.documentElement.getAttribute("data-theme") || "dark";
       const next = cur === "light" ? "dark" : "light";
@@ -8759,6 +9564,19 @@ function initCommandPalette() {
       applyGlobalSettings();
       toast(`Theme switched to ${next}`);
     }
+  };
+
+  list.addEventListener("mousemove", e => {
+    const btn = e.target.closest(".cmd-palette-item");
+    if (!btn) return;
+    const items = getItems();
+    const idx = items.indexOf(btn);
+    if (idx >= 0 && idx !== selectedIdx) syncSelection(idx);
+  });
+
+  list.addEventListener("click", e => {
+    const btn = e.target.closest(".cmd-palette-item");
+    if (btn) activateCommand(btn);
   });
 
   let searchTimer = null;
@@ -8775,6 +9593,7 @@ function initCommandPalette() {
         const hits = (res?.results || []).filter(r => (r.media_type === "movie" || r.media_type === "tv") && (r.title || r.name)).slice(0, 6);
         if (!hits.length) {
           list.innerHTML = `<div style="padding:14px;color:var(--text-3);font-size:0.85rem;text-align:center;">No matching titles found. Press Enter to search on Discover.</div>`;
+          syncSelection(-1);
           return;
         }
         list.innerHTML = hits.map(hit => {
@@ -8785,22 +9604,31 @@ function initCommandPalette() {
           return `<button type="button" class="cmd-palette-item" data-url="${url}">
             <span class="cmd-palette-ico">${CMD_ICONS.film}</span>
             <span style="flex:1;">${esc(title)} ${yr ? `<span style="color:var(--text-3);font-size:0.8rem;">(${yr})</span>` : ""}</span>
-            <span style="font-size:0.72rem;text-transform:uppercase;color:var(--text-3);">${type}</span>
+            <span class="cmd-palette-meta">${type}</span>
           </button>`;
         }).join("");
+        syncSelection(0);
       } catch (err) {
         list.innerHTML = `<div style="padding:14px;color:var(--text-3);font-size:0.85rem;text-align:center;">Failed to search.</div>`;
+        syncSelection(-1);
       }
     }, 220);
   });
 
   input.addEventListener("keydown", e => {
-    if (e.key === "Enter") {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      syncSelection(selectedIdx + 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      syncSelection(selectedIdx - 1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
       const q = input.value.trim();
-      const firstItem = list.querySelector(".cmd-palette-item");
-      if (firstItem && firstItem.dataset.url) {
-        closePalette();
-        goRoute(firstItem.dataset.url);
+      const items = getItems();
+      const active = list.querySelector(".cmd-palette-item.is-selected") || items[0];
+      if (active) {
+        activateCommand(active);
       } else if (q) {
         closePalette();
         goRoute(`${routeUrl("search")}?q=${encodeURIComponent(q)}`);
@@ -8830,39 +9658,8 @@ function initCommandPalette() {
   });
 }
 
-// Keyboard Help Sheet (Item K)
-function openKeyboardHelpSheet() {
-  let modal = $("#keyboard-help-modal");
-  if (!modal) {
-    modal = document.createElement("div");
-    modal.id = "keyboard-help-modal";
-    modal.className = "modal-overlay";
-    modal.innerHTML = `
-      <div class="subwin-card subwin-dialog-md" role="dialog" aria-modal="true">
-        <div class="subwin-header">
-          <div>
-            <h3 class="subwin-title">Keyboard Shortcuts</h3>
-            <p class="subwin-sub">Quick controls &amp; playback</p>
-          </div>
-          <button type="button" class="subwin-close modal-close" aria-label="Close">✕</button>
-        </div>
-        <div class="subwin-divider"></div>
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <div class="kbd-shortcut-row"><span>Open command palette / Quick search</span><div><span class="kbd-key">Ctrl</span> + <span class="kbd-key">K</span> or <span class="kbd-key">/</span></div></div>
-          <div class="kbd-shortcut-row"><span>Keyboard shortcuts help</span><span class="kbd-key">?</span></div>
-          <div class="kbd-shortcut-row"><span>Close modal or player</span><span class="kbd-key">Esc</span></div>
-          <div class="kbd-shortcut-row"><span>Toggle play / pause (in stream)</span><span class="kbd-key">Space</span></div>
-          <div class="kbd-shortcut-row" style="border-bottom:0"><span>Fullscreen toggle</span><span class="kbd-key">F</span></div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-    modal.addEventListener("click", e => {
-      if (e.target === modal || e.target.closest(".modal-close")) closeModal(modal);
-    });
-  }
-  openModal(modal);
-}
+// Unified Keyboard Help Sheet alias (Item A5 / K)
+const openKeyboardHelpSheet = openKeyboardShortcutsModal;
 
 // Mood Picker Integration (Item I)
 function initMoodPicker() {
@@ -8933,6 +9730,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let _orcPageAbort = null;
 function resetPageScope() {
+  document.body.classList.remove("theater-mode");
+  if (typeof resetPlayerSessionState === "function") resetPlayerSessionState();
   if (_orcPageAbort) {
     try { _orcPageAbort.abort(); } catch {}
   }
@@ -9050,12 +9849,15 @@ const SeamlessRouter = {
     if (url.origin !== location.origin) return false;
     const p = url.pathname.replace(/\/+$/, "") || "/";
     if (p.startsWith("/api/") || /\.(json|xml|txt|png|jpg|jpeg|webp|svg|ico|css|js|mp4)$/i.test(p)) return false;
+    if (/^\/(movie|tv)\/\d+$/.test(p)) return true;
     const validPrefixes = ["/", "/index.html", "/anime", "/anime.html", "/search", "/search.html", "/list", "/list.html", "/settings", "/settings.html", "/privacy", "/privacy.html", "/dmca", "/dmca.html", "/movie", "/movie.html", "/tv", "/tv.html"];
     return validPrefixes.includes(p);
   },
 
   fetchUrlForPath(url) {
     const clean = url.pathname.replace(/\/+$/, "") || "/";
+    if (/^\/movie\/\d+$/.test(clean)) return "/movie.html";
+    if (/^\/tv\/\d+$/.test(clean)) return "/tv.html";
     const map = {
       "/": "/index.html",
       "/anime": "/anime.html",
@@ -9100,7 +9902,7 @@ const SeamlessRouter = {
       if (!document.querySelector('link[href*="ai-search.css"]')) {
         const lk = document.createElement("link");
         lk.rel = "stylesheet";
-        lk.href = "ai-search.css";
+        lk.href = "/ai-search.css";
         document.head.appendChild(lk);
       }
       const loadScript = src => new Promise(res => {
@@ -9111,7 +9913,7 @@ const SeamlessRouter = {
         s.onerror = () => res();
         document.head.appendChild(s);
       });
-      loadScript("ai-search-catalog.js").then(() => loadScript("ai-search-ui.js")).then(() => resolve());
+      loadScript("/ai-search-catalog.js").then(() => loadScript("/ai-search-ui.js")).then(() => resolve());
     });
     return this.searchAssetsPromise;
   },
@@ -9128,6 +9930,13 @@ const SeamlessRouter = {
     if (targetFull === currentFull && !opts.force) {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
+    }
+
+    if (!opts.skipHistory) {
+      try {
+        const curState = (history.state && typeof history.state === "object") ? history.state : {};
+        history.replaceState({ ...curState, orcNav: true, scrollY: Math.round(window.scrollY || 0) }, "", location.href);
+      } catch {}
     }
 
     const token = ++this.inFlight;
@@ -9155,7 +9964,7 @@ const SeamlessRouter = {
 
       resetPageScope();
       if (!opts.skipHistory) {
-        history.pushState({ orcNav: true }, doc.title || document.title, targetFull);
+        history.pushState({ orcNav: true, scrollY: 0 }, doc.title || document.title, targetFull);
       }
       document.title = doc.title || document.title;
       document.body.className = doc.body.className || "";
@@ -9177,18 +9986,50 @@ const SeamlessRouter = {
       }
 
       mountPage(detectPage(), { viaRouter: true });
+      if (!url.hash && typeof opts.restoreScrollY === "number" && opts.restoreScrollY > 0) {
+        this.restoreScrollPos(opts.restoreScrollY, token);
+      }
     } catch (err) {
       console.warn("Seamless navigation fell back to full load:", err);
       location.href = url.href;
     }
   },
 
+  restoreScrollPos(targetY, token) {
+    if (!(targetY > 0)) return;
+    let attempts = 0;
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+      window.removeEventListener("wheel", cancel);
+      window.removeEventListener("touchstart", cancel);
+    };
+    window.addEventListener("wheel", cancel, { passive: true, once: true });
+    window.addEventListener("touchstart", cancel, { passive: true, once: true });
+    const tick = () => {
+      if (cancelled || token !== this.inFlight) {
+        cancel();
+        return;
+      }
+      window.scrollTo(0, targetY);
+      const maxReach = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const settled = maxReach >= targetY - 24 && Math.abs(window.scrollY - targetY) <= 24;
+      if (settled || ++attempts >= 18) {
+        cancel();
+        return;
+      }
+      setTimeout(() => requestAnimationFrame(tick), 60);
+    };
+    requestAnimationFrame(tick);
+  },
+
   init() {
     if (this.bound) return;
     this.bound = true;
 
-    window.addEventListener("popstate", () => {
-      this.go(location.href, { skipHistory: true, force: true });
+    window.addEventListener("popstate", e => {
+      const restoreScrollY = (e.state && typeof e.state.scrollY === "number") ? e.state.scrollY : null;
+      this.go(location.href, { skipHistory: true, force: true, restoreScrollY });
     });
 
     document.addEventListener("click", e => {
@@ -9235,17 +10076,36 @@ async function initAnimePage() {
   const randomBtn = $("#anime-random-btn");
   if (!catEl) return;
 
-  // Enforce "All Anime" + "pop" ("Most Popular") default matching anime.html <option value="pop">
-  let activeCat = "all";
-  let activeSort = "pop";
-  if (sortSelect) sortSelect.value = "pop";
+  const urlParams = new URLSearchParams(location.search);
+  const validCats = new Set(["all", "trending", "airing", "shonen", "fantasy", "scifi", "seinen", "movies"]);
+  const validSorts = new Set(["pop", "rating", "newest"]);
+  const paramCat = urlParams.get("cat") || "";
+  const paramSort = urlParams.get("sort") || "";
+  let activeCat = validCats.has(paramCat) ? paramCat : "all";
+  let activeSort = validSorts.has(paramSort) ? paramSort : "pop";
+  if (sortSelect) sortSelect.value = activeSort;
   filterStrip?.querySelectorAll("[data-anime-cat]").forEach(b => {
-    const isAll = (b.dataset.animeCat || "") === "all";
-    b.classList.toggle("active", isAll);
-    b.setAttribute("aria-selected", isAll ? "true" : "false");
+    const active = (b.dataset.animeCat || "") === activeCat;
+    b.classList.toggle("active", active);
+    b.setAttribute("aria-selected", active ? "true" : "false");
   });
-  if (gridWrap) gridWrap.hidden = true;
-  catEl.style.display = "";
+  const hasInitialFilter = activeCat !== "all" || activeSort !== "pop";
+  if (gridWrap) gridWrap.hidden = !hasInitialFilter;
+  catEl.style.display = hasInitialFilter ? "none" : "";
+
+  const syncAnimeUrl = () => {
+    try {
+      const next = new URL(location.href);
+      if (activeCat && activeCat !== "all") next.searchParams.set("cat", activeCat);
+      else next.searchParams.delete("cat");
+      if (activeSort && activeSort !== "pop") next.searchParams.set("sort", activeSort);
+      else next.searchParams.delete("sort");
+      const targetUrl = next.pathname + (next.search ? next.search : "") + (next.hash || "");
+      if (targetUrl !== location.pathname + location.search + location.hash) {
+        history.replaceState(history.state, "", targetUrl);
+      }
+    } catch {}
+  };
 
   const isAdultAllowed = () => SETTINGS.get(SETTINGS.hideAdultKey, "1") !== "0";
   const animeFilterParams = "&with_genres=16&with_original_language=ja&without_genres=10763,10767";
@@ -9417,6 +10277,10 @@ async function initAnimePage() {
     observeProgressiveImages(grid);
   };
 
+  if (hasInitialFilter) {
+    renderGridView(activeCat, activeSort);
+  }
+
   filterStrip?.querySelectorAll("[data-anime-cat]").forEach(btn => {
     btn.addEventListener("click", () => {
       activeCat = btn.dataset.animeCat || "all";
@@ -9425,6 +10289,7 @@ async function initAnimePage() {
         b.classList.toggle("active", on);
         b.setAttribute("aria-selected", on ? "true" : "false");
       });
+      syncAnimeUrl();
       if (activeCat === "all" && activeSort === "pop") {
         renderRowsView();
       } else {
@@ -9435,6 +10300,7 @@ async function initAnimePage() {
 
   sortSelect?.addEventListener("change", () => {
     activeSort = sortSelect.value || "pop";
+    syncAnimeUrl();
     if (activeCat === "all" && activeSort === "pop") {
       renderRowsView();
     } else {
@@ -10187,6 +11053,7 @@ const WatchPartyManager = {
   pollTimer: null,
   channel: null,
   chatOpen: true,
+  unreadCount: 0,
   seenMsgIds: new Set(),
 
   isHost() {
@@ -10302,6 +11169,7 @@ const WatchPartyManager = {
     this.teardownHud();
     if (!room) return;
     this.state = room;
+    this.unreadCount = 0;
     this.seenMsgIds = new Set((room.messages || []).map(m => m.id));
     this.renderHud(detailCtx);
     this.startPolling(detailCtx);
@@ -10311,6 +11179,7 @@ const WatchPartyManager = {
   teardownHud() {
     clearInterval(this.pollTimer);
     this.pollTimer = null;
+    this.unreadCount = 0;
     if (this.channel) {
       try { this.channel.unsubscribe?.(); } catch {}
       this.channel = null;
@@ -10440,33 +11309,67 @@ const WatchPartyManager = {
     setTimeout(() => el.remove(), 2000);
   },
 
-  appendMessages(list) {
+  syncUnreadBadge() {
+    const badge = $("#party-chat-unread");
+    if (!badge) return;
+    const count = Math.max(0, Number(this.unreadCount || 0));
+    badge.textContent = count > 9 ? "9+" : String(count);
+    badge.hidden = count <= 0 || this.chatOpen;
+  },
+
+  appendMessages(list, isInitial = false) {
     const log = $("#party-chat-log");
     if (!log || !Array.isArray(list)) return;
+    const nearBottom = (log.scrollHeight - log.scrollTop - log.clientHeight) < 64;
     let added = false;
+    let addedSelf = false;
+    let newlyUnread = 0;
+    const myName = this.getDisplayName();
     list.forEach(msg => {
       if (!msg?.id || this.seenMsgIds.has(msg.id)) return;
       this.seenMsgIds.add(msg.id);
       if (msg.type === "reaction") {
-        this.floatReaction(msg.text || "❤️");
+        if (!isInitial) this.floatReaction(msg.text || "❤️");
         return;
       }
+      const isSelf = (msg.clientId && msg.clientId === this.clientId) || (msg.sender && msg.sender === myName);
+      if (isSelf) addedSelf = true;
+      if (!isInitial && !this.chatOpen && msg.type !== "system" && !isSelf) {
+        newlyUnread += 1;
+      }
       const row = document.createElement("div");
-      row.className = `party-chat-msg${msg.type === "system" ? " system" : ""}`;
+      row.className = `party-chat-msg${msg.type === "system" ? " system" : ""}${isSelf ? " is-self" : ""}`;
       row.innerHTML = msg.type === "system"
         ? esc(msg.text)
         : `<strong>${esc(msg.sender)}:</strong> ${esc(msg.text)}`;
       log.appendChild(row);
       added = true;
     });
-    if (added) log.scrollTop = log.scrollHeight;
+    while (log.children.length > 150) {
+      log.firstElementChild.remove();
+    }
+    if (added && (isInitial || nearBottom || addedSelf)) {
+      log.scrollTop = log.scrollHeight;
+    }
+    if (newlyUnread > 0) {
+      this.unreadCount += newlyUnread;
+      this.syncUnreadBadge();
+    }
   },
 
   updateHudCounts() {
     const el = $("#party-hud-members");
     if (!el || !this.state) return;
-    const count = (this.state.members || []).length || 1;
-    el.textContent = `${count} ${count === 1 ? "member" : "members"} live`;
+    const members = Array.isArray(this.state.members) ? this.state.members : [];
+    const count = members.length || 1;
+    const chipsHtml = members.slice(0, 4).map(m => {
+      const mName = String(m?.name || "Viewer").trim() || "Viewer";
+      const isHost = m?.clientId && m.clientId === this.state.hostClientId;
+      const initial = mName.slice(0, 1).toUpperCase();
+      return `<span class="party-member-chip${isHost ? " is-host" : ""}" title="${esc(mName)}${isHost ? " (Host)" : ""}"><span class="party-member-dot">${esc(initial)}</span><span class="party-member-name">${esc(mName)}</span></span>`;
+    }).join("");
+    const extraHtml = members.length > 4 ? `<span class="party-member-more">+${members.length - 4}</span>` : "";
+    el.innerHTML = `<span class="party-member-chips">${chipsHtml}${extraHtml}</span><span class="party-member-count">${count} live</span>`;
   },
 
   renderHud(detailCtx) {
@@ -10491,7 +11394,7 @@ const WatchPartyManager = {
             ? `<button type="button" class="party-hud-btn active" id="party-countdown-btn">Sync 3-2-1</button>`
             : `<button type="button" class="party-hud-btn ${this.followHost ? "active" : ""}" id="party-follow-btn">Follow Host: ${this.followHost ? "ON" : "OFF"}</button>`
           }
-          <button type="button" class="party-hud-btn" id="party-chat-toggle">Chat</button>
+          <button type="button" class="party-hud-btn ${this.chatOpen ? "active" : ""}" id="party-chat-toggle" aria-expanded="${this.chatOpen ? "true" : "false"}">Chat<span class="party-unread-badge" id="party-chat-unread" hidden>0</span></button>
           <button type="button" class="party-hud-btn danger" id="party-leave-btn">${host ? "End Party" : "Leave"}</button>
         </div>
       </div>
@@ -10512,17 +11415,26 @@ const WatchPartyManager = {
     this.updateHudCounts();
     const initialMsgs = p.messages || [];
     this.seenMsgIds.clear();
-    this.appendMessages(initialMsgs);
+    this.appendMessages(initialMsgs, true);
+    this.syncUnreadBadge();
 
     hud.querySelector("#party-hud-copy-code").addEventListener("click", () => {
       const url = this.inviteUrl(this.state);
       navigator.clipboard?.writeText(url).then(() => toast(`Copied invite link (${this.state.code})`));
     });
 
-    hud.querySelector("#party-chat-toggle").addEventListener("click", () => {
+    hud.querySelector("#party-chat-toggle").addEventListener("click", e => {
       this.chatOpen = !this.chatOpen;
       const wrap = $("#party-chat-wrap");
       if (wrap) wrap.hidden = !this.chatOpen;
+      e.currentTarget.classList.toggle("active", this.chatOpen);
+      e.currentTarget.setAttribute("aria-expanded", this.chatOpen ? "true" : "false");
+      if (this.chatOpen) {
+        this.unreadCount = 0;
+        this.syncUnreadBadge();
+        const log = $("#party-chat-log");
+        if (log) log.scrollTop = log.scrollHeight;
+      }
     });
 
     hud.querySelector("#party-follow-btn")?.addEventListener("click", e => {
@@ -10648,6 +11560,11 @@ function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts
           </div>
           <div class="party-field" id="pm-picker-block">
             <label for="pm-picker-search">Choose Movie, Show, or Anime</label>
+            <div class="party-picker-tabs" id="pm-picker-tabs" role="tablist">
+              <button type="button" class="party-picker-tab active" data-picker-tab="trending" role="tab" aria-selected="true">Trending</button>
+              <button type="button" class="party-picker-tab" data-picker-tab="continue" role="tab" aria-selected="false">Continue Watching</button>
+              <button type="button" class="party-picker-tab" data-picker-tab="list" role="tab" aria-selected="false">My List</button>
+            </div>
             <input type="search" id="pm-picker-search" class="party-input" placeholder="Search title to watch together..." autocomplete="off" />
             <div class="party-picker-list" id="pm-picker-list"></div>
           </div>
@@ -10678,8 +11595,8 @@ function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts
     type: mediaType || "movie",
     title: title || "Selected Title",
     poster: opts.poster || "",
-    season: opts.season || 1,
-    episode: opts.episode || 1,
+    season: Math.max(1, Number(opts.season || 1)),
+    episode: Math.max(1, Number(opts.episode || 1)),
   } : null;
 
   const setTab = tab => {
@@ -10703,54 +11620,135 @@ function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts
           ${pUrl ? `<img src="${pUrl}" alt="">` : ""}
           <div style="min-width:0;flex:1">
             <div style="font-weight:750;font-size:0.93rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(picked.title)}</div>
-            <div style="font-size:0.78rem;color:var(--text-3)">${picked.type === "tv" ? `Series · S${picked.season} E${picked.episode}` : "Movie"}</div>
+            <div style="font-size:0.78rem;color:var(--text-3)" id="pm-picked-sub">${picked.type === "tv" ? `Series · S${picked.season} E${picked.episode}` : "Movie"}</div>
           </div>
+          ${picked.type === "tv" ? `
+            <div class="party-picked-ep-controls">
+              <label class="party-picked-ep-field"><span>S</span><input type="number" id="pm-pick-season" min="1" max="99" value="${Number(picked.season || 1)}" aria-label="Season"></label>
+              <label class="party-picked-ep-field"><span>E</span><input type="number" id="pm-pick-episode" min="1" max="999" value="${Number(picked.episode || 1)}" aria-label="Episode"></label>
+            </div>` : ""}
         </div>`;
+      if (picked.type === "tv") {
+        const sInp = box.querySelector("#pm-pick-season");
+        const eInp = box.querySelector("#pm-pick-episode");
+        const sub = box.querySelector("#pm-picked-sub");
+        const syncSe = () => {
+          picked.season = Math.max(1, parseInt(sInp?.value, 10) || 1);
+          picked.episode = Math.max(1, parseInt(eInp?.value, 10) || 1);
+          if (sub) sub.textContent = `Series · S${picked.season} E${picked.episode}`;
+        };
+        sInp?.addEventListener("input", syncSe);
+        eInp?.addEventListener("input", syncSe);
+        sInp?.addEventListener("change", () => { syncSe(); if (sInp) sInp.value = String(picked.season); });
+        eInp?.addEventListener("change", () => { syncSe(); if (eInp) eInp.value = String(picked.episode); });
+      }
     }
   };
 
   const pickerBlock = modal.querySelector("#pm-picker-block");
   const pickerList = modal.querySelector("#pm-picker-list");
   const pickerInput = modal.querySelector("#pm-picker-search");
+  const pickerTabBtns = Array.from(modal.querySelectorAll("[data-picker-tab]"));
+  let activePickerTab = "trending";
 
+  const renderPickerRows = (items, emptyMsg) => {
+    pickerList.textContent = "";
+    if (!items.length) {
+      pickerList.innerHTML = `<div style="padding:12px;color:var(--text-3);font-size:0.82rem">${esc(emptyMsg)}</div>`;
+      return;
+    }
+    items.forEach(it => {
+      const t = (it.media_type === "tv" || it.mediaType === "tv" || it.type === "tv" || (!it.media_type && !it.mediaType && !it.type && (Boolean(it.first_air_date) || it.season != null))) ? "tv" : "movie";
+      const name = it.title || it.name || "Untitled";
+      const pImg = posterUrl(it.poster_path || it.poster || "", "w342") || "";
+      const prog = t === "tv" ? Progress.getItem(it.id, "tv") : null;
+      const seLabel = t === "tv" && (it.season || prog?.season)
+        ? ` · S${Number(it.season || prog?.season || 1)} E${Number(it.episode || prog?.episode || 1)}`
+        : "";
+      const yrLabel = year(it.release_date || it.first_air_date || "") || "";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "party-picker-row";
+      btn.innerHTML = `
+        ${pImg ? `<img src="${pImg}" alt="">` : ""}
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:650;font-size:0.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
+          <div style="font-size:0.74rem;color:var(--text-3)">${t === "tv" ? "Show" : "Movie"}${yrLabel ? ` · ${yrLabel}` : ""}${seLabel}</div>
+        </div>`;
+      btn.addEventListener("click", () => {
+        picked = {
+          id: String(it.id),
+          type: t,
+          title: name,
+          poster: it.poster_path || it.poster || "",
+          season: Math.max(1, Number(it.season || prog?.season || 1)),
+          episode: Math.max(1, Number(it.episode || prog?.episode || 1)),
+        };
+        pickerList.querySelectorAll(".party-picker-row").forEach(r => r.classList.toggle("active", r === btn));
+        renderPicked();
+      });
+      pickerList.appendChild(btn);
+    });
+  };
+
+  let pickerReqId = 0;
   const loadPickerItems = async q => {
+    const reqId = ++pickerReqId;
+    const expectedTab = activePickerTab;
+    const cleanQ = (q || "").trim().toLowerCase();
+    if (expectedTab === "continue") {
+      const raw = Progress.getAll().filter(x => x && x.id && (x.title || x.name));
+      const filtered = cleanQ ? raw.filter(x => String(x.title || x.name || "").toLowerCase().includes(cleanQ)) : raw;
+      renderPickerRows(filtered.slice(0, 14), cleanQ ? "No Continue Watching titles match." : "No Continue Watching history yet.");
+      return;
+    }
+    if (expectedTab === "list") {
+      const raw = MyList.get().filter(x => x && x.id && (x.title || x.name));
+      const filtered = cleanQ ? raw.filter(x => String(x.title || x.name || "").toLowerCase().includes(cleanQ)) : raw;
+      renderPickerRows(filtered.slice(0, 14), cleanQ ? "No My List titles match." : "Your My List is empty.");
+      return;
+    }
     pickerList.innerHTML = `<div style="padding:12px;color:var(--text-3);font-size:0.82rem">Loading titles...</div>`;
     try {
-      const ep = q && q.trim()
+      const ep = cleanQ
         ? `/search/multi?query=${encodeURIComponent(q.trim())}&include_adult=false&page=1`
         : `/trending/all/day?page=1`;
       const res = await tmdb(ep);
+      if (reqId !== pickerReqId || activePickerTab !== "trending") return;
       const items = (res?.results || []).filter(x => x.media_type === "movie" || x.media_type === "tv").slice(0, 10);
-      pickerList.textContent = "";
-      items.forEach(it => {
-        const t = it.media_type || "movie";
-        const name = it.title || it.name || "Untitled";
-        const pImg = posterUrl(it.poster_path, "w342") || "";
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "party-picker-row";
-        btn.innerHTML = `
-          ${pImg ? `<img src="${pImg}" alt="">` : ""}
-          <div style="min-width:0;flex:1">
-            <div style="font-weight:650;font-size:0.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div>
-            <div style="font-size:0.74rem;color:var(--text-3)">${t === "tv" ? "Show" : "Movie"} · ${year(it.release_date || it.first_air_date || "")}</div>
-          </div>`;
-        btn.addEventListener("click", () => {
-          picked = { id: String(it.id), type: t, title: name, poster: it.poster_path || "", season: 1, episode: 1 };
-          pickerList.querySelectorAll(".party-picker-row").forEach(r => r.classList.toggle("active", r === btn));
-          renderPicked();
-        });
-        pickerList.appendChild(btn);
-      });
+      renderPickerRows(items, cleanQ ? "No matching titles found." : "No trending titles available.");
     } catch {
+      if (reqId !== pickerReqId || activePickerTab !== "trending") return;
       pickerList.innerHTML = `<div style="padding:12px;color:var(--text-3);font-size:0.82rem">Search failed.</div>`;
     }
   };
 
+  pickerTabBtns.forEach(tabBtn => {
+    tabBtn.classList.toggle("active", tabBtn.dataset.pickerTab === activePickerTab);
+    tabBtn.setAttribute("aria-selected", tabBtn.dataset.pickerTab === activePickerTab ? "true" : "false");
+    tabBtn.onclick = () => {
+      activePickerTab = tabBtn.dataset.pickerTab || "trending";
+      pickerTabBtns.forEach(b => {
+        const on = b === tabBtn;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      pickerInput.placeholder = activePickerTab === "trending"
+        ? "Search title to watch together..."
+        : `Filter ${activePickerTab === "continue" ? "Continue Watching" : "My List"}...`;
+      loadPickerItems(pickerInput.value);
+    };
+  });
+
   let pTimer = null;
   pickerInput.value = "";
+  pickerInput.placeholder = "Search title to watch together...";
   pickerInput.oninput = () => {
     clearTimeout(pTimer);
+    if (activePickerTab !== "trending") {
+      loadPickerItems(pickerInput.value);
+      return;
+    }
     pTimer = setTimeout(() => loadPickerItems(pickerInput.value), 220);
   };
 

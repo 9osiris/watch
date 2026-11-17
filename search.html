@@ -5,7 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Discover & Search Movies & TV Shows | Osiris Watch</title>
+  <meta name="apple-mobile-web-app-title" content="Osiris Watch">
+  <title>Discover &amp; Search | Osiris Watch</title>
+  <meta name="robots" content="noindex, follow">
+  <meta property="og:site_name" content="Osiris Watch">
+  <meta property="og:title" content="Discover &amp; Search | Osiris Watch">
+  <meta property="og:description" content="Search and discover thousands of free movies and TV shows on Osiris Watch. Filter by genre, release year, vote score, and trend popularity.">
+  <meta property="og:url" content="https://watch.osiris.rocks/search">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://watch.osiris.rocks/icon-512.png">
   <meta name="description" content="Search and discover thousands of free movies and TV shows on Osiris Watch. Filter by genre, release year, vote score, and trend popularity.">
   <link rel="canonical" href="https://watch.osiris.rocks/search">
   <script type="application/ld+json">
@@ -21,13 +29,14 @@
     }
   }
   </script>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="alternate icon" type="image/png" href="favicon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate icon" type="image/png" href="/favicon.png">
   <meta name="theme-color" content="#0b0b0d" media="(prefers-color-scheme: dark)">
   <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
   <meta name="color-scheme" content="dark light">
-  <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://api.themoviedb.org" crossorigin>
@@ -52,16 +61,17 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="orc-styles.css">
-  <link rel="stylesheet" href="ai-search.css">
+  <link rel="stylesheet" href="/orc-styles.css">
+  <link rel="stylesheet" href="/ai-search.css">
 </head>
 <body class="search-page">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <header class="topnav" id="topnav">
     <div class="topnav-inner">
-      <a href="/" class="topnav-logo" aria-label="Osiris Watch home">
-        <span class="topnav-word">Osiris<i>Watch</i></span>
+      <a href="/" class="topnav-logo" aria-label="Osiris Watch">
+        <img src="/favicon.svg" alt="Osiris Watch" width="28" height="28">
+        <span class="topnav-word">Osiris <i>Watch</i></span>
       </a>
       <nav class="topnav-links" aria-label="Primary">
         <a href="/" class="topnav-link">Home</a>
@@ -104,20 +114,36 @@
         <button type="button" id="search-clear" style="display:none;background:none;border:none;color:var(--text-dim);padding:4px;cursor:pointer" aria-label="Clear">✕</button>
         <button type="button" id="ai-search-submit" class="glass-chip ai-search-submit" hidden>Ask AI</button>
       </div>
-      <p id="ai-search-help" class="ai-search-help" hidden>Describe your ideal watch, then choose <strong>Ask AI</strong> or press Enter. Explicit constraints are checked against catalog facts.</p>
+      <p id="ai-search-help" class="ai-search-help" hidden>Describe your ideal watch or ask for picks from your history and My List, then choose <strong>Ask AI</strong> or press Enter.</p>
       <section id="ai-search-panel" class="ai-search-panel" aria-label="AI search options" hidden>
         <div class="ai-search-options">
           <label>Include <select id="ai-search-media" class="list-sort-select"><option value="all">Movies &amp; series</option><option value="movie">Movies</option><option value="tv">Series</option></select></label>
           <label>Prefer <select id="ai-search-sort" class="list-sort-select"><option value="relevance">Best match</option><option value="rating">Higher ratings</option><option value="recent">Recent releases</option><option value="hidden-gems">Hidden gems</option></select></label>
           <label class="ai-watched-option"><input type="checkbox" id="ai-search-hide-watched"> Hide watched titles</label>
+          <label class="ai-watched-option ai-personalize-option" title="Use your local watch progress, My List, folders, and genre habits for personalized recommendations"><input type="checkbox" id="ai-search-personalize" checked> Personalize with my activity</label>
           <button type="button" id="ai-search-cancel" class="glass-chip" hidden>Cancel search</button>
         </div>
+        <div id="ai-taste-card" class="ai-taste-card" hidden>
+          <div class="ai-taste-head">
+            <div class="ai-taste-summary-row">
+              <span class="ai-taste-badge">Taste AI Prototype</span>
+              <span id="ai-taste-headline" class="ai-taste-headline">Building local taste snapshot…</span>
+            </div>
+            <div class="ai-taste-head-actions">
+              <button type="button" id="ai-taste-pick-btn" class="glass-chip ai-taste-pick-btn">Pick for me</button>
+              <button type="button" id="ai-taste-toggle-btn" class="glass-chip ai-taste-toggle-btn" aria-expanded="false" aria-controls="ai-taste-details">Details</button>
+            </div>
+          </div>
+          <div id="ai-taste-details" class="ai-taste-details" hidden></div>
+        </div>
         <div id="ai-search-examples" class="ai-search-examples" role="group" aria-label="Example AI requests">
+          <button type="button" class="glass-chip" data-ai-query="Pick movies for me tonight based on my watch history and My List">For me tonight</button>
           <button type="button" class="glass-chip" data-ai-query="Thoughtful sci-fi like Arrival, no horror">Thoughtful sci-fi, no horror</button>
           <button type="button" class="glass-chip" data-ai-query="Crime thrillers released in the 1990s">1990s crime thrillers</button>
           <button type="button" class="glass-chip" data-ai-query="Feel-good movies under 100 minutes">A short feel-good movie</button>
-          <button type="button" class="glass-chip" data-ai-query="Mystery series with a small-town setting">Small-town mystery series</button>
+          <button type="button" class="glass-chip" data-ai-query="Hidden gems inspired by my saved list">Hidden gems from my list</button>
         </div>
+        <div id="ai-recent-prompts" class="ai-recent-prompts" hidden></div>
       </section>
 
       <div class="discover-filters-bar" style="display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;align-items:center">
@@ -187,14 +213,14 @@
     <footer class="page-foot">
       <p>Movie data from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>.</p>
       <p>Osiris Watch does not store or host media. Streams are provided by third-party services; legal concerns should be raised with those hosts directly. Osiris Watch is not responsible for content served by external providers.</p>
-      <p>© 2026 Osiris Industries · <a href="/privacy">Privacy</a> · <a href="/dmca">DMCA</a> · <a href="/settings">Settings</a></p>
+      <p>© 2026 <a href="/">Osiris Watch</a> · <a href="/privacy">Privacy</a> · <a href="/dmca">DMCA</a> · <a href="/settings">Settings</a></p>
       <p class="foot-social"><a href="https://discord.gg/yv8cVk8p4f" target="_blank" rel="noopener" aria-label="Join our Discord"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"></path></svg><span>Discord</span></a></p>
     </footer>
   </div>
 
-  <script src="backdrop.js"></script>
-  <script src="ai-search-catalog.js"></script>
-  <script src="ai-search-ui.js"></script>
-  <script src="orc-script.js"></script>
+  <script src="/backdrop.js"></script>
+  <script src="/ai-search-catalog.js"></script>
+  <script src="/ai-search-ui.js"></script>
+  <script src="/orc-script.js"></script>
 </body>
 </html>

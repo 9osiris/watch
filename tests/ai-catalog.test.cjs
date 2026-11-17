@@ -319,3 +319,61 @@ test("cross-layer integration: provider evidence, direct seeds, multi-genre/pers
   assert.equal(rankRes.body.results.length, 1);
   assert.equal(rankRes.body.results[0].id, 20);
 });
+
+
+test("buildLocalFallbackPlan extracts mediaType, genres, constraints, and provider locally", () => {
+  const tvPlan = catalog.buildLocalFallbackPlan("90s sci-fi thriller series on Netflix under 45 minutes rated 8+", { mediaType: "all" });
+  assert.equal(tvPlan.mediaType, "tv");
+  assert.ok(tvPlan.genres.includes("Science Fiction"));
+  assert.ok(tvPlan.genres.includes("Thriller"));
+  assert.ok(tvPlan.providers.includes("Netflix"));
+  assert.equal(tvPlan.runtimeMax, 45);
+  assert.equal(tvPlan.minRating, 8);
+  assert.equal(tvPlan.yearMin, 1990);
+  assert.equal(tvPlan.yearMax, 1999);
+});
+
+test("getConstraintRelaxations suggests up to 4 removable strict filters", () => {
+  const strictPlan = catalog.normalizePlan({
+    summary: "Strict filters",
+    genres: ["Science Fiction", "Thriller"],
+    strictGenres: true,
+    yearMin: 2015,
+    runtimeMax: 100,
+    minRating: 7.5,
+    language: "ko",
+    providers: ["Netflix"],
+  });
+  const relaxations = catalog.getConstraintRelaxations(strictPlan);
+  assert.equal(relaxations.length, 4);
+  assert.ok(relaxations.some(r => r.id === "strictGenres" && r.patch.strictGenres === false));
+  assert.ok(relaxations.some(r => r.id === "runtimeMax" && r.patch.runtimeMax === null));
+});
+
+test("collectCandidates honors configured watchRegion when verifying provider availability", async () => {
+  const show = movie(77, { title: "Region Test Film", release_date: "2020-04-04" });
+  const out = await collect([show], {
+    watchRegion: "CA",
+    plan: plan({ providers: ["Netflix"], genres: ["Sci-Fi"] }),
+    request: async url => {
+      if (url.pathname === "/movie/77") return { ...show, runtime: 105, keywords: { results: [{ name: "space exploration" }] } };
+      if (url.pathname === "/movie/77/watch/providers") {
+        return { results: { CA: { flatrate: [{ provider_id: 8, provider_name: "Netflix" }] }, US: { flatrate: [] } } };
+      }
+    },
+  });
+  assert.equal(out.items.length, 1);
+  assert.match(catalog.buildRankCandidates(out.items)[0].evidence, /Provider availability: Netflix \(CA\)/);
+});
+
+test("rankCandidates boosts un-watched profile genre affinity and penalizes already watched titles", () => {
+  const watchedFilm = movie(1, { title: "Interstellar", popularity: 80, genre_ids: [878] });
+  const freshMatch = movie(2, { title: "Fresh Arrival", popularity: 40, genre_ids: [878, 9648] });
+  const ranked = catalog.rankCandidates(
+    [watchedFilm, freshMatch],
+    plan({ genres: ["Science Fiction"] }),
+    "recommend sci-fi movies for me",
+    { profile: { topGenres: ["Sci-Fi", "Mystery"], recentWatched: [{ title: "Interstellar", type: "movie", progress: 95 }] } }
+  );
+  assert.equal(ranked[0].id, 2);
+});

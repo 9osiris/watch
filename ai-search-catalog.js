@@ -59,6 +59,7 @@
     if (!a || !b) return 0;
     if (a === b) return 1;
     if (a.replace(/^(the|a|an) /, "") === b.replace(/^(the|a|an) /, "")) return 0.98;
+    if (a.replace(/ /g, "") === b.replace(/ /g, "")) return 0.96;
     const aa = new Set(a.split(" ")), bb = new Set(b.split(" "));
     const common = [...aa].filter(v => bb.has(v)).length;
     return common / new Set([...aa, ...bb]).size * 0.9;
@@ -200,38 +201,47 @@
     });
   }
 
-  function deterministicReason(item, plan) {
+  function deterministicReason(item, plan, profileGenres = []) {
     const evidence = item._ai?.evidence || [];
     const reason = evidence.find(value => /^(Cast:|Director:|Related to:)/.test(value));
     if (reason) return reason.replace(/^Related to: /, "Recommended by the catalog alongside ") + ".";
     const genres = plan.genres.filter(name => matchesGenre(item, name));
     const facts = [];
     if (genres.length) facts.push(`${genres.join(" / ")} catalog match`);
+    if (profileGenres.length && (!genres.length || profileGenres.some(g => !genres.includes(g)))) {
+      facts.push(`fits your ${profileGenres.slice(0, 2).join(" & ")} taste`);
+    }
     if (plan.yearMin !== null || plan.yearMax !== null) facts.push(`released in ${(item.release_date || item.first_air_date).slice(0, 4)}`);
-    if (plan.runtimeMax !== null) facts.push(`${item.runtime}-minute runtime`);
+    if (plan.runtimeMax !== null && Number.isFinite(item.runtime)) facts.push(`${item.runtime}-minute runtime`);
     if (facts.length) return facts.join("; ") + ".";
     return item._ai?.sources.includes("ai") ? "AI-suggested title, verified against the TMDB catalog." : "Catalog match ranked by theme, ratings, and relevance to your request.";
   }
 
-  function rankCandidates(items, plan, query) {
+  function rankCandidates(items, plan, query, options = {}) {
     const queryTerms = tokens([query, ...plan.keywords].join(" "));
+    const profileTopGenres = Array.isArray(options.profile?.topGenres) ? options.profile.topGenres : [];
+    const recentTitles = new Set((Array.isArray(options.profile?.recentWatched) ? options.profile.recentWatched : []).map(r => normalizeTitle(r?.title || "")).filter(Boolean));
     const scored = items.map(item => {
       const words = new Set(tokens(`${item.title || item.name} ${item.overview || ""} ${genreNames(item).join(" ")} ${(item._ai?.keywordNames || []).join(" ")}`));
-      const coverage = queryTerms.length ? queryTerms.filter(term => words.has(term) || [...words].some(word => word.startsWith(term) && term.length >= 4)).length / queryTerms.length : 0;
+      const wordArr = [...words];
+      const coverage = queryTerms.length ? queryTerms.filter(term => words.has(term) || wordArr.some(word => (word.startsWith(term) && term.length >= 4) || (term.startsWith(word) && word.length >= 4))).length / queryTerms.length : 0;
       const votes = Math.max(0, item.vote_count || 0), rating = Math.max(0, Math.min(10, item.vote_average || 0));
       const quality = (votes * rating + 100 * 6) / (votes + 100);
       const sources = item._ai?.sources || [];
       const genreMatches = plan.genres.filter(genre => matchesGenre(item, genre)).length;
+      const matchedProfileGenres = profileTopGenres.filter(genre => matchesGenre(item, genre));
       const hasTheme = plan.genres.length || plan.keywords.length || plan.people.length || plan.seedTitles.length;
       const relevant = sources.some(source => ["ai", "seed", "person"].includes(source)) || genreMatches > 0 || item._ai?.catalogKeywordMatch || coverage > 0 || !hasTheme;
       let score = coverage * 12 + genreMatches * 2;
+      if (matchedProfileGenres.length) score += Math.min(3.5, matchedProfileGenres.length * 1.4);
+      if (recentTitles.has(normalizeTitle(item.title || item.name)) && titleSimilarity(item.title || item.name, query) < 0.85) score -= 3.5;
       if (sources.includes("ai")) score += 7;
       if (sources.includes("seed")) score += 4;
       if (sources.includes("person")) score += 4;
       score += (quality - 5) * (plan.sort === "rating" ? 2.5 : 0.7);
       if (plan.sort === "hidden-gems") score += Math.max(0, 3 - Math.log1p(item.popularity || 0) / 2);
       if (plan.sort === "recent") score += Math.max(0, Number((item.release_date || item.first_air_date).slice(0, 4)) - 1990) / 10;
-      return { ...item, _ai: { ...item._ai, score, relevant, reason: deterministicReason(item, plan) } };
+      return { ...item, _ai: { ...item._ai, score, relevant, reason: deterministicReason(item, plan, matchedProfileGenres) } };
     }).sort((a, b) => b._ai.score - a._ai.score || (b.vote_count || 0) - (a.vote_count || 0) || a.id - b.id);
     const remaining = scored.slice(), ordered = [], counts = { movie: 0, tv: 0 };
     while (remaining.length) {
@@ -256,6 +266,7 @@
     const entries = new Map(), warnings = [], exclude = new Set(options.exclude || []);
     const today = options.today || new Date().toISOString().slice(0, 10);
     const hideAdult = options.hideAdult !== false;
+    const watchRegion = /^[a-z]{2}$/i.test(options.watchRegion || "") ? options.watchRegion.toUpperCase() : "US";
     const report = () => onProgress({ candidates: entries.size, requests: client.stats.requests });
     const add = (raw, type, source, evidence = [], extra = {}) => {
       const item = catalogItem(raw, type, source, evidence);
@@ -334,7 +345,7 @@
     const requestedProviders = plan.providers.map(name => ({ name, id: PROVIDER_IDS[normalizeTitle(name).replace(/ /g, "")] }));
     const providerIds = unique(requestedProviders.map(provider => provider.id).filter(Boolean));
     const singleProviderNames = providerIds.length === 1 ? requestedProviders.filter(provider => provider.id).map(provider => provider.name) : [];
-    if (requestedProviders.some(provider => !provider.id)) warnings.push("Some requested services were not recognized. Availability is checked in the US catalog for recognized services only.");
+    if (requestedProviders.some(provider => !provider.id)) warnings.push(`Some requested services were not recognized. Availability is checked in the ${watchRegion} catalog for recognized services only.`);
     const media = plan.mediaType === "all" ? ["movie", "tv"] : [plan.mediaType];
     await parallel(media, async type => {
       const params = new URLSearchParams({ include_adult: String(!hideAdult), page: String(Math.max(1, Math.min(3, options.page || 1))), "vote_count.gte": plan.sort === "hidden-gems" ? "10" : "30" });
@@ -349,10 +360,10 @@
       if (excludedGenres.length) params.set("without_genres", excludedGenres.join(","));
       if (keywordIds.length) params.set("with_keywords", keywordIds.join("|"));
       if (plan.runtimeMax !== null && type === "movie") params.set("with_runtime.lte", String(plan.runtimeMax));
-      if (providerIds.length) { params.set("with_watch_providers", providerIds.join("|")); params.set("watch_region", "US"); }
+      if (providerIds.length) { params.set("with_watch_providers", providerIds.join("|")); params.set("watch_region", watchRegion); }
       if (type === "movie" && people.every(Boolean) && people.length) params.set("with_people", people.map(person => person.id).join(","));
       const data = await client.get(`/discover/${type}?${params}`);
-      (data?.results || []).forEach(item => add(item, type, "catalog", singleProviderNames.length ? [`Provider availability: ${singleProviderNames.join(", ")} (US)`] : [], {
+      (data?.results || []).forEach(item => add(item, type, "catalog", singleProviderNames.length ? [`Provider availability: ${singleProviderNames.join(", ")} (${watchRegion})`] : [], {
         providerMatch: singleProviderNames.length > 0,
         providerNames: singleProviderNames,
         catalogKeywordMatch: keywordIds.length > 0,
@@ -361,7 +372,7 @@
     checkAbort(signal);
 
     // Verify metadata only when a hard filter needs facts absent from list endpoints.
-    const metadataPool = rankCandidates([...entries.values()].filter(item => !exclude.has(keyOf(item))), { ...plan, people: [] }, query).slice(0, 40);
+    const metadataPool = rankCandidates([...entries.values()].filter(item => !exclude.has(keyOf(item))), { ...plan, people: [] }, query, { profile: options.profile }).slice(0, 40);
     await parallel(metadataPool, async item => {
       const needsRuntime = plan.runtimeMax !== null && !Number.isFinite(item.runtime);
       const needsGenreKeywords = (plan.strictGenres ? plan.genres : []).concat(plan.excludeGenres).some(genre => !genreIds([genre], item.media_type).length);
@@ -377,14 +388,14 @@
       }
       if (providerIds.length && !entries.get(keyOf(item))?._ai.providerMatch) {
         const providers = await client.get(`/${item.media_type}/${item.id}/watch/providers`);
-        const region = providers?.results?.US || {};
+        const region = providers?.results?.[watchRegion] || providers?.results?.US || {};
         const available = unique([...(region.flatrate || []), ...(region.free || []), ...(region.ads || []), ...(region.rent || []), ...(region.buy || [])].map(provider => provider.provider_id));
         const matchedNames = requestedProviders.filter(provider => available.includes(provider.id)).map(provider => provider.name);
         const original = entries.get(keyOf(item));
         if (original) {
           original._ai.providerMatch = matchedNames.length > 0;
           original._ai.providerNames = matchedNames;
-          if (matchedNames.length) original._ai.evidence.push(`Provider availability: ${matchedNames.join(", ")} (US)`);
+          if (matchedNames.length) original._ai.evidence.push(`Provider availability: ${matchedNames.join(", ")} (${providers?.results?.[watchRegion] ? watchRegion : "US"})`);
         }
       }
     }, signal);
@@ -392,9 +403,9 @@
     if (!entries.size && client.stats.failures && client.stats.failures >= client.stats.requests) throw new Error("The movie catalog could not be reached. Check your connection and retry.");
     if (client.stats.failures) warnings.push("Some catalog lookups failed; only successfully verified titles are included.");
     if (client.stats.limited) warnings.push("The catalog time/request limit was reached. Showing the matches verified so far.");
-    if (plan.providers.length) warnings.push("Service availability is checked for the US and can change by region or date.");
+    if (plan.providers.length) warnings.push(`Service availability is checked for ${watchRegion} and can change by region or date.`);
     const filtered = applyConstraints([...entries.values()], plan, { exclude: [...exclude], hideAdult, today });
-    const items = rankCandidates(filtered, plan, query).filter(item => item._ai.relevant).slice(0, 80);
+    const items = rankCandidates(filtered, plan, query, { profile: options.profile }).filter(item => item._ai.relevant).slice(0, 80);
     return { items, plan, warnings: unique(warnings), stats: { ...client.stats, verified: entries.size, matched: items.length } };
   }
 
@@ -437,5 +448,122 @@
     return parts;
   }
 
-  return { normalizeTitle, normalizePlan, chooseTitleMatch, createRequester, collectCandidates, applyConstraints, rankCandidates, buildRankCandidates, mergeRankedResults, describeConstraints, genreNames, keyOf };
+  function buildLocalFallbackPlan(query, options = {}) {
+    const raw = text(query, 1000);
+    const lower = normalizeTitle(raw);
+    let mediaType = ["movie", "tv"].includes(options.mediaType) ? options.mediaType : "all";
+    if (mediaType === "all") {
+      if (/\b(series|tv show|tv shows|shows|episodes|sitcom|miniseries|mini series)\b/.test(lower)) mediaType = "tv";
+      else if (/\b(movie|movies|film|films)\b/.test(lower)) mediaType = "movie";
+    }
+    const genreAliases = [
+      ["Science Fiction", /\b(sci fi|scifi|science fiction|cyberpunk|space opera)\b/],
+      ["Action", /\b(action|martial arts|superhero)\b/],
+      ["Adventure", /\b(adventure|quest|expedition)\b/],
+      ["Animation", /\b(animation|animated|anime|pixar)\b/],
+      ["Comedy", /\b(comedy|funny|hilarious|sitcom|romcom)\b/],
+      ["Crime", /\b(crime|heist|detective|noir|mafia|gangster)\b/],
+      ["Documentary", /\b(documentary|docuseries|docs)\b/],
+      ["Drama", /\b(drama|emotional|character study|family drama)\b/],
+      ["Fantasy", /\b(fantasy|magic|wizard|sword and sorcery|isekai)\b/],
+      ["Horror", /\b(horror|scary|slasher|haunted|zombie|gore)\b/],
+      ["Mystery", /\b(mystery|whodunit|enigma)\b/],
+      ["Romance", /\b(romance|romantic|love story)\b/],
+      ["Thriller", /\b(thriller|suspense|psychological)\b/],
+      ["War", /\b(war|military)\b/],
+      ["Western", /\b(western|cowboy)\b/],
+    ];
+    const excludeGenres = [], genres = [];
+    for (const [canonical, re] of genreAliases) {
+      const m = lower.match(re);
+      if (!m) continue;
+      const idx = m.index || 0;
+      const before = lower.slice(Math.max(0, idx - 14), idx);
+      if (/\b(no|not|without|except|avoid)\s+$/.test(before)) excludeGenres.push(canonical);
+      else genres.push(canonical);
+    }
+    let yearMin = null, yearMax = null;
+    const decadeMatch = lower.match(/\b(19\d0|20\d0)s\b/);
+    const shortDecadeMatch = !decadeMatch ? lower.match(/\b([2-9]0|00|10)s\b/) : null;
+    if (decadeMatch) {
+      yearMin = Number(decadeMatch[1]);
+      yearMax = yearMin + 9;
+    } else if (shortDecadeMatch) {
+      const twoDigit = Number(shortDecadeMatch[1]);
+      yearMin = twoDigit <= 20 ? 2000 + twoDigit : 1900 + twoDigit;
+      yearMax = yearMin + 9;
+    } else if (/\b(classic|older|vintage)\b/.test(lower)) {
+      yearMax = 2005;
+    } else if (/\b(recent|new|modern)\b/.test(lower)) {
+      yearMin = 2018;
+    }
+    let runtimeMax = null;
+    const rtMatch = raw.match(/(?:under|below|less than|<|up to|max)\s*(\d{2,3})\s*(?:min|mins|minutes|m\b)/i);
+    if (rtMatch) runtimeMax = number(Number(rtMatch[1]), 1, 1440);
+    let minRating = null;
+    const ratingMatch = raw.match(/(?:rated|rating|score|at least)\s*(?:over|above|>=?)?\s*([4-9](?:\.\d)?)\+?/i)
+      || raw.match(/(?:^|\s)([5-9](?:\.\d)?)\+(?=\s|$|[,.!])/);
+    if (ratingMatch) minRating = number(Number(ratingMatch[1]), 1, 9.5);
+    const providerAliases = [
+      ["Netflix", /\bnetflix\b/i],
+      ["Hulu", /\bhulu\b/i],
+      ["Prime Video", /\b(prime video|amazon prime)\b/i],
+      ["Disney+", /\bdisney(?:\s*\+|\s+plus)\b/i],
+      ["Apple TV+", /\bapple\s*tv(?:\s*\+|\s+plus)?\b/i],
+      ["Max", /\b(hbo\s*max|hbo|on\s+max)\b/i],
+      ["Paramount+", /\bparamount(?:\s*\+|\s+plus)?\b/i],
+      ["Peacock", /\bpeacock\b/i],
+      ["Crunchyroll", /\bcrunchyroll\b/i],
+    ];
+    const providers = [];
+    for (const [label, re] of providerAliases) {
+      if (re.test(raw)) providers.push(label);
+    }
+    let sort = ["rating", "recent", "hidden-gems"].includes(options.sort) ? options.sort : "relevance";
+    if (sort === "relevance") {
+      if (/\b(hidden gem|hidden gems|underrated|lesser known)\b/.test(lower)) sort = "hidden-gems";
+      else if (/\b(best rated|highest rated|top rated|acclaimed)\b/.test(lower)) sort = "rating";
+      else if (/\b(latest|recent|newest)\b/.test(lower)) sort = "recent";
+    }
+    const personalIntent = /\b(for me|my taste|my list|my history|i watch|based on my|tonight|pick for me|recommend me)\b/.test(lower);
+    const profileGenres = Array.isArray(options.profile?.topGenres) ? options.profile.topGenres : [];
+    const finalGenres = genres.length ? genres.slice(0, 5) : (personalIntent ? profileGenres.slice(0, 3) : []);
+    const seedTitles = [];
+    if (personalIntent && Array.isArray(options.profile?.savedList)) {
+      options.profile.savedList.slice(0, 2).forEach(entry => {
+        if (entry?.title && ["movie", "tv"].includes(entry.type)) seedTitles.push({ title: entry.title, year: null, type: entry.type });
+      });
+    }
+    return normalizePlan({
+      summary: raw || "Catalog recommendations",
+      mediaType,
+      genres: finalGenres,
+      excludeGenres,
+      keywords: tokens(raw).slice(0, 5),
+      yearMin,
+      yearMax,
+      runtimeMax,
+      minRating,
+      providers: providers.slice(0, 3),
+      seedTitles,
+      sort,
+      strictGenres: false,
+    }, options.mediaType || "all");
+  }
+
+  function getConstraintRelaxations(plan) {
+    const out = [];
+    if (!plan) return out;
+    if (plan.strictGenres && plan.genres.length > 1) out.push({ id: "strictGenres", label: "Match any listed genre", patch: { strictGenres: false } });
+    if (plan.runtimeMax !== null) out.push({ id: "runtimeMax", label: `Remove < ${plan.runtimeMax}m cap`, patch: { runtimeMax: null } });
+    if (plan.yearMin !== null || plan.yearMax !== null) out.push({ id: "years", label: "Any release year", patch: { yearMin: null, yearMax: null } });
+    if (plan.minRating !== null) out.push({ id: "minRating", label: "Lower min rating", patch: { minRating: null } });
+    if (plan.language) out.push({ id: "language", label: "Any language", patch: { language: null } });
+    if (plan.providers.length) out.push({ id: "providers", label: "All streaming services", patch: { providers: [] } });
+    if (plan.excludeGenres.length) out.push({ id: "excludeGenres", label: `Include ${plan.excludeGenres.join(", ")}`, patch: { excludeGenres: [] } });
+    if (plan.people.length) out.push({ id: "people", label: "Any cast & crew", patch: { people: [] } });
+    return out.slice(0, 4);
+  }
+
+  return { normalizeTitle, normalizePlan, chooseTitleMatch, createRequester, collectCandidates, applyConstraints, rankCandidates, buildRankCandidates, mergeRankedResults, describeConstraints, buildLocalFallbackPlan, getConstraintRelaxations, genreNames, keyOf };
 });

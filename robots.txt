@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /player/
+Disallow: /embed/
 
 Sitemap: https://watch.osiris.rocks/sitemap.xml

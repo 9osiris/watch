@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v44";
+const CACHE_NAME = "orc-static-v46";
 const TMDB_CACHE_NAME = "orc-tmdb-runtime-v2";
 const TMDB_CACHE_MAX_ENTRIES = 200;
 const TMDB_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -157,7 +157,7 @@ self.addEventListener("fetch", event => {
 
   // Only handle local same-origin requests below
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/api/") || url.pathname === "/robots.txt" || url.pathname.startsWith("/sitemap")) return;
 
   const pathname = url.pathname.replace(/\/$/, "") || "/";
   const canonicalRoute = HTML_TO_CLEAN.get(pathname) || (CLEAN_ROUTES.has(pathname) ? pathname : null);

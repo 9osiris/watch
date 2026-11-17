@@ -41,25 +41,29 @@ test("canonical URLs and structured data use the new origin and deployed clean r
       for (const siteUrl of structuredSiteUrls(JSON.parse(match[1]))) {
         const url = new URL(siteUrl);
         assert.equal(url.origin, origin);
-        assert.ok(routes.has(url.pathname), `${page}: ${url.pathname} exists`);
+        assert.ok(routes.has(url.pathname) || fs.existsSync(path.join(root, url.pathname.replace(/^\/+/, ""))), `${page}: ${url.pathname} exists`);
       }
     }
   }
-  assert.ok(read("index.html").includes(`${origin}/search?q={search_term_string}`));
+  assert.ok(!read("index.html").includes("SearchAction"), "index.html should not include retired SearchAction");
+  assert.ok(read("index.html").includes('"@type": "Organization"'), "index.html should include Organization JSON-LD");
 });
 
 test("sitemap and robots advertise the migrated clean URLs", () => {
-  const urls = [...read("sitemap.xml").matchAll(/<loc>(.*?)<\/loc>/g)].map(match => match[1]);
-  // Phase 7 Item 44: /list and /settings removed from sitemap; /privacy added; /anime added
-  assert.deepEqual(urls, ["/", "/movie", "/tv", "/anime", "/search", "/privacy", "/dmca"].map(route => origin + route));
-  assert.ok(read("robots.txt").includes(`Sitemap: ${origin}/sitemap.xml`));
-  assert.ok(!read("robots.txt").includes("wfc"));
+  const rewrites = JSON.parse(read("vercel.json")).rewrites.map(r => r.source);
+  for (const sm of ["/sitemap.xml", "/sitemap-static.xml", "/sitemap-movies.xml", "/sitemap-tv.xml", "/sitemap-anime.xml"]) {
+    assert.ok(rewrites.includes(sm), `vercel.json missing rewrite for ${sm}`);
+  }
+  const robots = read("robots.txt");
+  assert.ok(robots.includes(`Sitemap: ${origin}/sitemap.xml`));
+  assert.ok(robots.includes("Disallow: /api/"));
+  assert.ok(!robots.includes("wfc"));
 });
 
-test("legacy-host redirects are restricted to the two old hosts and cannot loop on Watch", () => {
+test("legacy-host redirects cover legacy domains and www without looping on Watch", () => {
   const redirects = JSON.parse(read("vercel.json")).redirects.filter(rule => rule.has?.some(condition => condition.type === "host"));
-  assert.equal(redirects.length, 2);
-  assert.deepEqual(redirects.map(rule => rule.has[0].value), ["osiris.rocks", "www.osiris.rocks"]);
+  assert.equal(redirects.length, 3);
+  assert.deepEqual(redirects.map(rule => rule.has[0].value), ["osiris.rocks", "www.osiris.rocks", "www.watch.osiris.rocks"]);
   redirects.forEach(rule => {
     assert.equal(rule.source, "/:path*");
     assert.equal(rule.destination, `${origin}/:path*`);
@@ -88,10 +92,10 @@ test("AI controls are accessible, new assets exist, and scripts compile", () => 
   assert.match(html, /<button type="button" id="ai-search-submit"[^>]*hidden>Ask AI<\/button>/);
   assert.match(html, /id="search-status"[^>]*role="status"/);
   for (const name of ["backdrop.js", "ai-search-catalog.js", "ai-search-ui.js", "orc-script.js", "sw.js"]) assert.doesNotThrow(() => new vm.Script(read(name)), name);
-  for (const match of html.matchAll(/(?:src|href)="([^"?#]+\.(?:js|css))"/g)) if (!match[1].startsWith("http")) assert.ok(fs.existsSync(path.join(root, match[1])), match[1]);
-  assert.ok(html.indexOf('src="backdrop.js"') < html.indexOf('src="orc-script.js"'));
-  assert.ok(html.indexOf('src="ai-search-catalog.js"') < html.indexOf('src="ai-search-ui.js"'));
-  assert.ok(html.indexOf('src="ai-search-ui.js"') < html.indexOf('src="orc-script.js"'));
+  for (const match of html.matchAll(/(?:src|href)="([^"?#]+\.(?:js|css))"/g)) if (!match[1].startsWith("http")) assert.ok(fs.existsSync(path.join(root, match[1].replace(/^\/+/, ""))), match[1]);
+  assert.ok(html.indexOf('backdrop.js"') < html.indexOf('orc-script.js"'));
+  assert.ok(html.indexOf('ai-search-catalog.js"') < html.indexOf('ai-search-ui.js"'));
+  assert.ok(html.indexOf('ai-search-ui.js"') < html.indexOf('orc-script.js"'));
   assert.doesNotMatch(read("orc-script.js"), /async function aiSearch\(/);
   assert.match(read("settings.html"), /id="settings-backdrop-styles"/);
   assert.match(read("settings.html"), /id="toggle-bg-sync-accent"/);
@@ -503,11 +507,12 @@ test("Phase 7: Cleanup regression suite", () => {
     assert.ok(read(page).includes('href="/privacy"'), `${page} footer links to privacy`);
   }
 
-  // 44. Sitemap refresh
-  const sitemap = read("sitemap.xml");
-  assert.ok(sitemap.includes("2026-11-10"));
-  assert.ok(!sitemap.includes("/list</loc>"));
-  assert.ok(!sitemap.includes("/settings</loc>"));
+  // 44. Dynamic Sitemap routes & static exclusions
+  const seoLib = require("../lib/seo.cjs");
+  const staticLocs = seoLib.getStaticSitemapEntries().map(e => e.loc);
+  assert.ok(!staticLocs.some(u => u.endsWith("/list")));
+  assert.ok(!staticLocs.some(u => u.endsWith("/settings")));
+  assert.ok(!staticLocs.some(u => u.endsWith("/search")));
 
   // 45. Plain-language update log
   assert.ok(read("orc-script.js").includes("WHAT'S NEW"));
@@ -615,7 +620,7 @@ test("unified subwindows, origin-morph animations, New Episodes fixes, and mobil
   const css = read("orc-styles.css");
   const sw = read("sw.js");
 
-  assert.ok(sw.includes('CACHE_NAME = "orc-static-v44"'));
+  assert.ok(sw.includes('CACHE_NAME = "orc-static-v46"'));
   assert.ok(script.includes("animateSubwindowMorph"));
   assert.ok(script.includes("getSavedTvShowsForNotif"));
   assert.ok(script.includes("todayStart"));
@@ -677,4 +682,75 @@ test("My List instant filter, Header Search tab cache, and Discover active filte
   assert.ok(script.includes("renderActiveFilters"));
   assert.ok(script.includes("DISCOVER_FILTER_META"));
   assert.ok(script.includes('params.get("ai") === "1"'));
+});
+
+
+test("UX/UI and Flow batches: deep links, episode tools, player fallback, theater mode, save inline folder, router scroll, watch party tabs, contrast tokens", () => {
+  const _fs = require("node:fs");
+  const _path = require("node:path");
+  const _root = _path.resolve(__dirname, "..");
+  const readFile = rel => _fs.readFileSync(_path.join(_root, rel), "utf8");
+
+  const script = readFile("orc-script.js");
+  const styles = readFile("orc-styles.css");
+  const searchHtml = readFile("search.html");
+  const settingsHtml = readFile("settings.html");
+  const aiUi = readFile("ai-search-ui.js");
+
+  // A1/A2/A4: WatchedEpisodes + explicit TV query params + player splash + CW Clear button
+  assert.ok(script.includes("const WatchedEpisodes ="));
+  assert.ok(script.includes("hasExplicitSeason"));
+  assert.ok(script.includes("hasExplicitEpisode"));
+  assert.ok(script.includes(".cw-clear-btn"));
+  assert.ok(script.includes("player-splash-sub"));
+
+  // A5/C1/C2: Unified keyboard help + Command Palette arrow nav + Theater mode + nested episode badge
+  assert.ok(script.includes("const openKeyboardHelpSheet = openKeyboardShortcutsModal;"));
+  assert.ok(script.includes('e.key === "ArrowDown"'));
+  assert.ok(script.includes("player-theater-btn"));
+  assert.ok(script.includes('document.body.classList.remove("theater-mode")'));
+  assert.ok(styles.includes("body.theater-mode .player-wrap"));
+  assert.match(script, /class="ep-row-thumb">[\s\S]*ep-watched-check/);
+
+  // B2/B3/B4/B6/B7/B8/B9: Episode tools, slow provider prompt, inline folder, touch preview, soft pull refresh, genre See all, seed notice
+  assert.ok(script.includes("#ep-sort-btn") || script.includes('id = "ep-sort-btn"'));
+  assert.ok(script.includes("#ep-jump-btn") || script.includes('id = "ep-jump-btn"'));
+  assert.ok(script.includes("player-slow-banner"));
+  assert.ok(script.includes("save-inline-create-form"));
+  assert.ok(script.includes("touch-preview-sheet"));
+  assert.ok(script.includes("detail-seed-notice"));
+  assert.ok(script.includes("renderDetailError"));
+  assert.ok(script.includes('row-see-all'));
+  assert.ok(script.includes('SETTINGS.get("orc_watch_region", "US")'));
+
+  // B5: SeamlessRouter scrollY restore & initAnimePage query sync
+  assert.ok(script.includes("restoreScrollPos("));
+  assert.ok(script.includes("scrollY: Math.round(window.scrollY || 0)"));
+  assert.ok(script.includes("syncAnimeUrl"));
+
+  // B10/C10: Watch Party unread badge, member chips, picker tabs, TV S/E controls
+  assert.ok(script.includes("syncUnreadBadge()"));
+  assert.ok(script.includes("party-chat-unread"));
+  assert.ok(script.includes("party-member-chips"));
+  assert.ok(script.includes("pm-picker-tabs"));
+  assert.ok(script.includes("pm-pick-season"));
+  assert.ok(script.includes("pm-pick-episode"));
+
+  // C3/C6/C8/C9: Toast mobile separation, Light theme contrast, dock clearance, Settings rich providers & swatches
+  assert.ok(styles.includes("--mobile-dock-clearance"));
+  assert.ok(styles.includes("--accent-contrast"));
+  assert.ok(styles.includes('html[data-theme="light"] .lg-surface'));
+  assert.ok(styles.includes(".toast.toast-interactive"));
+  assert.ok(styles.includes(".toast.toast-mobile"));
+  assert.ok(script.includes("settings-provider-rich"));
+  assert.ok(script.includes("bg-style-swatch"));
+  assert.ok(settingsHtml.includes("settings-backdrop-preview-wrap"));
+
+  // Unified AI Discovery & Local Taste Analytics
+  assert.ok(script.includes("const TasteAnalytics ="));
+  assert.ok(script.includes("const RecentAISearches ="));
+  assert.ok(searchHtml.includes('id="ai-search-personalize"'));
+  assert.ok(searchHtml.includes('id="ai-taste-card"'));
+  assert.ok(aiUi.includes("buildLocalFallbackPlan"));
+  assert.ok(aiUi.includes("getConstraintRelaxations"));
 });

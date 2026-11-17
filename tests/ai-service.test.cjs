@@ -859,3 +859,74 @@ test("Vercel wrapper emits the complete service contract and no-store on success
     for (const [name, value] of saved) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
   }
 });
+
+
+test("optional user taste profile is normalized, forwarded to plan/rank prompts, and isolates cache entries", async () => {
+  const seenContexts = [];
+  const f = fixture(async (_, options) => {
+    const reqPayload = JSON.parse(options.body);
+    seenContexts.push(JSON.parse(reqPayload.messages[1].content));
+    const isRank = reqPayload.max_completion_tokens === 3000;
+    return provider(isRank ? ranked() : planned());
+  });
+
+  const profileA = {
+    topGenres: ["Sci-Fi", "Mystery"],
+    mediaPreference: "movie",
+    preferredEra: "2010s+",
+    analyticsSummary: "4 tracked · top genres Sci-Fi, Mystery",
+    folders: ["Weekend"],
+    recentWatched: [{ title: "Interstellar", type: "movie", progress: 92, year: 2014, genres: ["Sci-Fi"] }],
+    savedList: [{ title: "Arrival", type: "movie", folder: "Weekend", genres: ["Sci-Fi"] }],
+  };
+  const profileB = {
+    topGenres: ["Comedy"],
+    mediaPreference: "tv",
+  };
+
+  const planA = await f.service.handle({ method: "POST", body: { operation: "plan", query: "Recommend something for me tonight", profile: profileA } });
+  assert.equal(planA.status, 200);
+  assert.equal(planA.body.cached, false);
+  assert.equal(seenContexts[0].profile.mediaPreference, "movie");
+  assert.deepEqual(seenContexts[0].profile.topGenres, ["Science Fiction", "Mystery"]);
+
+  const planB = await f.service.handle({ method: "POST", body: { operation: "plan", query: "Recommend something for me tonight", profile: profileB } });
+  assert.equal(planB.status, 200);
+  assert.equal(planB.body.cached, false);
+  assert.equal(seenContexts[1].profile.mediaPreference, "tv");
+
+  const planACached = await f.service.handle({ method: "POST", body: { operation: "plan", query: "Recommend something for me tonight", profile: profileA } });
+  assert.equal(planACached.status, 200);
+  assert.equal(planACached.body.cached, true);
+  assert.equal(seenContexts.length, 2);
+
+  const rankA = await f.service.handle({ method: "POST", body: rankBody({ query: "For me", profile: profileA }) });
+  assert.equal(rankA.status, 200);
+  assert.equal(seenContexts[2].profile.preferredEra, "2010s+");
+});
+
+test("invalid profile fields and unknown profile keys are rejected with 400", async () => {
+  const f = fixture();
+  const badEnum = await f.service.handle({
+    method: "POST",
+    body: { query: "Recommend something", profile: { mediaPreference: "anime" } },
+  });
+  assert.equal(badEnum.status, 400);
+
+  const badKey = await f.service.handle({
+    method: "POST",
+    body: { query: "Recommend something", profile: { unexpectedKey: true } },
+  });
+  assert.equal(badKey.status, 400);
+
+  const tooManyWatched = await f.service.handle({
+    method: "POST",
+    body: {
+      query: "Recommend something",
+      profile: {
+        recentWatched: Array.from({ length: 11 }, (_, i) => ({ title: `Title ${i}`, type: "movie" })),
+      },
+    },
+  });
+  assert.equal(tooManyWatched.status, 400);
+});
