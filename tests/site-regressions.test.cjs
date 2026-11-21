@@ -620,7 +620,7 @@ test("unified subwindows, origin-morph animations, New Episodes fixes, and mobil
   const css = read("orc-styles.css");
   const sw = read("sw.js");
 
-  assert.ok(sw.includes('CACHE_NAME = "orc-static-v47"'));
+  assert.ok(sw.includes('CACHE_NAME = "orc-static-v48"'));
   assert.ok(script.includes("animateSubwindowMorph"));
   assert.ok(script.includes("getSavedTvShowsForNotif"));
   assert.ok(script.includes("todayStart"));
@@ -768,4 +768,9 @@ test("UX/UI and Flow batches: deep links, episode tools, player fallback, theate
   assert.ok(styles.includes("@media (prefers-reduced-motion: reduce)"));
   assert.ok(styles.includes("@media print"));
   assert.ok(read("404.html").includes('href="/">Osiris Watch</a>'));
+  assert.ok(script.includes("ep-prev-btn") && script.includes("ep-next-btn"));
+  assert.ok(script.includes("Scroll row left") && script.includes("Scroll row right"));
+  assert.ok(script.includes('setAttribute("aria-current", "page")'));
+  assert.ok(script.includes("party-msg-time"));
+  assert.ok(script.includes("_focusTrapBound"));
 });

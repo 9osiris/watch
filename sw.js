@@ -1,4 +1,4 @@
-const CACHE_NAME = "orc-static-v47";
+const CACHE_NAME = "orc-static-v48";
 const TMDB_CACHE_NAME = "orc-tmdb-runtime-v2";
 const TMDB_CACHE_MAX_ENTRIES = 200;
 const TMDB_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -178,7 +178,7 @@ self.addEventListener("fetch", event => {
 
       const networkFetch = fetch(fetchTarget, event.request.mode === "navigate" ? { redirect: "follow" } : undefined)
         .then(async res => {
-          if (res && (res.status === 200 || res.status === 0)) {
+          if (res && res.status === 200 && res.type !== "opaque") {
             const clean = await cleanResponse(res);
             cache.put(cacheKey, clean.clone());
             return clean;

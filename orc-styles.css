@@ -8423,6 +8423,11 @@ html[data-theme="light"] .party-chat-log {
   margin-left: auto;
   padding-right: 4px;
 }
+.party-msg-time {
+  font-size: 0.66rem;
+  color: var(--text-3);
+  margin-left: 6px;
+}
 
 html[data-theme="light"] .ep-row {
   background: rgba(15, 23, 42, 0.03);

@@ -790,24 +790,28 @@ function trapModalFocus(modal, label = "Dialog") {
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("aria-label", label);
   
-  modal.addEventListener("keydown", function(e) {
-    if (e.key === "Tab") {
-      const focusableEls = modal.querySelectorAll('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])');
-      const firstFocusable = focusableEls[0];
-      const lastFocusable = focusableEls[focusableEls.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === firstFocusable) {
-          lastFocusable?.focus();
-          e.preventDefault();
-        }
-      } else {
-        if (document.activeElement === lastFocusable) {
-          firstFocusable?.focus();
-          e.preventDefault();
+  if (!modal._focusTrapBound) {
+    modal._focusTrapBound = true;
+    modal.addEventListener("keydown", function(e) {
+      if (e.key === "Tab") {
+        const focusableEls = [...modal.querySelectorAll('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter(el => el.offsetParent !== null);
+        const firstFocusable = focusableEls[0];
+        const lastFocusable = focusableEls[focusableEls.length - 1];
+        if (!firstFocusable) return;
+        if (e.shiftKey) {
+          if (document.activeElement === firstFocusable || !modal.contains(document.activeElement)) {
+            lastFocusable?.focus();
+            e.preventDefault();
+          }
+        } else {
+          if (document.activeElement === lastFocusable || !modal.contains(document.activeElement)) {
+            firstFocusable?.focus();
+            e.preventDefault();
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   requestAnimationFrame(() => {
     const defaultFocus = modal.querySelector(".modal-close, .modal-close-btn") || modal.querySelector('button, input');
@@ -1029,7 +1033,7 @@ function ensureTrackArrows(track) {
     const leftBtn = document.createElement("button");
     leftBtn.type = "button";
     leftBtn.className = "row-arrow left";
-    leftBtn.setAttribute("aria-label", "Previous");
+    leftBtn.setAttribute("aria-label", "Scroll row left");
     leftBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>`;
     leftBtn.addEventListener("click", () => track.scrollBy({ left: -360, behavior: "smooth" }));
     container.insertBefore(leftBtn, track);
@@ -1038,7 +1042,7 @@ function ensureTrackArrows(track) {
     const rightBtn = document.createElement("button");
     rightBtn.type = "button";
     rightBtn.className = "row-arrow right";
-    rightBtn.setAttribute("aria-label", "Next");
+    rightBtn.setAttribute("aria-label", "Scroll row right");
     rightBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>`;
     rightBtn.addEventListener("click", () => track.scrollBy({ left: 360, behavior: "smooth" }));
     container.appendChild(rightBtn);
@@ -3206,7 +3210,11 @@ function initSidebar(active) {
       else if (active === "list" && href.includes("list")) isAct = true;
       else if (active === "settings" && href.includes("settings")) isAct = true;
       a.classList.toggle("active", isAct);
+      if (isAct) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
     });
+    const mainEl = $("#main-content");
+    if (mainEl && !mainEl.hasAttribute("tabindex")) mainEl.setAttribute("tabindex", "-1");
     el.querySelectorAll(".topnav-actions .topnav-icon").forEach(a => {
       if (a.getAttribute("href")?.includes("search")) {
         a.classList.toggle("active", active === "search");
@@ -6887,6 +6895,37 @@ async function initTvPage() {
         epControlsBar.appendChild(epProgPill);
       }
 
+      let epPrevBtn = $("#ep-prev-btn");
+      if (!epPrevBtn) {
+        epPrevBtn = document.createElement("button");
+        epPrevBtn.type = "button";
+        epPrevBtn.id = "ep-prev-btn";
+        epPrevBtn.className = "glass-chip ep-tool-btn";
+        epPrevBtn.textContent = "Prev Ep";
+        epPrevBtn.title = "Previous episode (P)";
+        epControlsBar.appendChild(epPrevBtn);
+      }
+      let epNextBtn = $("#ep-next-btn");
+      if (!epNextBtn) {
+        epNextBtn = document.createElement("button");
+        epNextBtn.type = "button";
+        epNextBtn.id = "ep-next-btn";
+        epNextBtn.className = "glass-chip ep-tool-btn";
+        epNextBtn.textContent = "Next Ep";
+        epNextBtn.title = "Next episode (N)";
+        epControlsBar.appendChild(epNextBtn);
+      }
+      const stepEpisode = delta => {
+        const rows = $$(".ep-row", $("#ep-grid"));
+        if (!rows.length) return;
+        const ordered = [...rows].sort((a, b) => Number(a.dataset.ep) - Number(b.dataset.ep));
+        const curIdx = ordered.findIndex(r => Number(r.dataset.ep) === Number(episode));
+        const target = ordered[curIdx + delta];
+        if (target) target.click();
+      };
+      epPrevBtn.addEventListener("click", () => stepEpisode(-1), { signal: pageSignal() });
+      epNextBtn.addEventListener("click", () => stepEpisode(1), { signal: pageSignal() });
+
       let markSeasonBtn = $("#ep-mark-season-btn");
       if (!markSeasonBtn) {
         markSeasonBtn = document.createElement("button");
@@ -6913,6 +6952,10 @@ async function initTvPage() {
         if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
         if (evt.key === "t" || evt.key === "T") {
           $("#player-theater-btn")?.click();
+        } else if (evt.key === "n" || evt.key === "N") {
+          $("#ep-next-btn")?.click();
+        } else if (evt.key === "p" || evt.key === "P") {
+          $("#ep-prev-btn")?.click();
         } else if (evt.key === "/") {
           const epInp = $("#ep-search-input");
           if (epInp) { evt.preventDefault(); epInp.focus(); }
@@ -7047,7 +7090,8 @@ async function initTvPage() {
       seasons.forEach(s => {
         const o = document.createElement("option");
         o.value = s.season_number;
-        o.textContent = s.season_number === 0 ? "Specials" : `Season ${s.season_number}`;
+        const epCountLabel = s.episode_count > 0 ? ` (${s.episode_count} eps)` : "";
+        o.textContent = (s.season_number === 0 ? "Specials" : `Season ${s.season_number}`) + epCountLabel;
         if (s.season_number === season) o.selected = true;
         seasonSel.appendChild(o);
       });
@@ -11410,7 +11454,13 @@ const WatchPartyManager = {
         provider: delta.provider,
         isPlaying: delta.action === "play" ? true : undefined,
       });
-      if (res.room) this.state = res.room;
+      if (res.room) {
+        this.state = res.room;
+        const epPill = $("#party-ep-pill");
+        if (epPill && res.room.mediaType === "tv") {
+          epPill.textContent = `S${Number(res.room.season || 1)} E${Number(res.room.episode || 1)}`;
+        }
+      }
     } catch {}
   },
 
@@ -11484,9 +11534,12 @@ const WatchPartyManager = {
       }
       const row = document.createElement("div");
       row.className = `party-chat-msg${msg.type === "system" ? " system" : ""}${isSelf ? " is-self" : ""}`;
+      const timeStr = msg.timestamp
+        ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "";
       row.innerHTML = msg.type === "system"
         ? esc(msg.text)
-        : `<strong>${esc(msg.sender)}:</strong> ${esc(msg.text)}`;
+        : `<strong>${esc(msg.sender)}:</strong> ${esc(msg.text)}${timeStr ? ` <span class="party-msg-time">${esc(timeStr)}</span>` : ""}`;
       log.appendChild(row);
       added = true;
     });
@@ -11679,7 +11732,13 @@ const WatchPartyManager = {
             sender: this.getDisplayName(),
             emoji,
           });
-          if (res.room) this.state = res.room;
+          if (res.room) {
+        this.state = res.room;
+        const epPill = $("#party-ep-pill");
+        if (epPill && res.room.mediaType === "tv") {
+          epPill.textContent = `S${Number(res.room.season || 1)} E${Number(res.room.episode || 1)}`;
+        }
+      }
         } catch {}
       });
     });
@@ -11762,10 +11821,24 @@ function openWatchPartyModal(title = "", mediaId = "", mediaType = "movie", opts
     modal.querySelectorAll(".party-modal-tab").forEach(b => b.classList.toggle("active", b.dataset.pmTab === tab));
     modal.querySelector("#pm-host-pane").hidden = isJoin;
     modal.querySelector("#pm-join-pane").hidden = !isJoin;
+    if (isJoin) setTimeout(() => modal.querySelector("#pm-join-code")?.focus(), 40);
   };
   modal.querySelectorAll(".party-modal-tab").forEach(b => {
     b.onclick = () => setTab(b.dataset.pmTab);
   });
+  const joinCodeInput = modal.querySelector("#pm-join-code");
+  if (joinCodeInput && !joinCodeInput._extractBound) {
+    joinCodeInput._extractBound = true;
+    joinCodeInput.addEventListener("input", () => {
+      const raw = joinCodeInput.value.trim();
+      if (raw.includes("room=")) {
+        try {
+          const parsed = new URL(raw, location.origin).searchParams.get("room");
+          if (parsed) joinCodeInput.value = parsed.toUpperCase();
+        } catch {}
+      }
+    });
+  }
 
   const renderPicked = () => {
     const box = modal.querySelector("#pm-selected-host");

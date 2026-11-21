@@ -11,6 +11,8 @@ module.exports = async (req, res) => {
   }
 
   res.setHeader("x-osiris-proxy", "1");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   if (!TMDB_KEY) {
     // No server-side key configured: tell the client to use its direct fallback.
     res.setHeader("Cache-Control", "no-store");

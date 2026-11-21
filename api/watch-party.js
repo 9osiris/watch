@@ -172,7 +172,7 @@ function createRoomHandler(req, res, store, body) {
   const clientId = sanitizeText(body.clientId, 64, "host-" + Math.random().toString(36).slice(2, 10));
   const hostName = sanitizeText(body.hostName || body.name, 32, "Host");
   const provider = ALLOWED_PROVIDERS.has(body.provider) ? body.provider : "cinesrc";
-  const season = mediaType === "tv" ? Math.max(0, Math.min(999, parseInt(body.season, 10) || 1)) : 1;
+  const season = mediaType === "tv" ? Math.max(1, Math.min(200, parseInt(body.season, 10) || 1)) : 1;
   const episode = mediaType === "tv" ? Math.max(1, Math.min(2000, parseInt(body.episode, 10) || 1)) : 1;
 
   const room = {
@@ -352,7 +352,7 @@ async function handler(req, res) {
     }
 
     if (room.mediaType === "tv") {
-      if (body.season !== undefined) room.season = Math.max(0, Math.min(999, parseInt(body.season, 10) || 1));
+      if (body.season !== undefined) room.season = Math.max(1, Math.min(200, parseInt(body.season, 10) || 1));
       if (body.episode !== undefined) room.episode = Math.max(1, Math.min(2000, parseInt(body.episode, 10) || 1));
     }
     if (ALLOWED_PROVIDERS.has(body.provider)) room.provider = body.provider;
