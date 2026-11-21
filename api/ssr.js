@@ -65,13 +65,14 @@ module.exports = async (req, res) => {
       const id = String(q.id || "").trim();
       const numId = Number.parseInt(id, 10);
       if (Number.isInteger(numId) && numId > 0 && String(numId) === id) {
-        const detail = await fetchTmdb(`/${route}/${numId}`, PAGE_CACHE_TTL_MS);
+        const isPlayerOrQuery = hasExtraQuery || q.noindex === "1";
+        const detailPath = isPlayerOrQuery ? `/${route}/${numId}` : `/${route}/${numId}?append_to_response=credits`;
+        const detail = await fetchTmdb(detailPath, PAGE_CACHE_TTL_MS);
         if (!detail) {
           html = setRobotsMeta(html, "noindex,follow");
           res.setHeader("X-Robots-Tag", "noindex, follow");
           return sendWithOptionalGzip(req, res, 404, "text/html; charset=utf-8", html, "no-store");
         }
-        const isPlayerOrQuery = hasExtraQuery || q.noindex === "1";
         html = renderTitlePageHtml(html, {
           type: route,
           id: numId,

@@ -21,6 +21,13 @@
     const more = document.querySelector("#ai-search-more");
     const refresh = document.querySelector("#ai-search-refresh");
     const media = document.querySelector("#ai-search-media");
+    let copyPicksBtn = document.querySelector("#ai-copy-picks-btn");
+    if (!copyPicksBtn && actions) {
+      copyPicksBtn = node("button", "glass-chip ai-copy-picks-btn", "Copy picks");
+      copyPicksBtn.type = "button";
+      copyPicksBtn.id = "ai-copy-picks-btn";
+      actions.appendChild(copyPicksBtn);
+    }
     const sort = document.querySelector("#ai-search-sort");
     const hideWatched = document.querySelector("#ai-search-hide-watched");
     const personalize = document.querySelector("#ai-search-personalize");
@@ -413,6 +420,40 @@
       tasteDetails.hidden = !open;
       tasteToggleBtn.setAttribute("aria-expanded", String(open));
       tasteToggleBtn.textContent = open ? "Hide details" : "Details";
+      try { sessionStorage.setItem("orc_ai_taste_open", open ? "1" : "0"); } catch {}
+    });
+    if (tasteDetails && tasteToggleBtn) {
+      try {
+        if (sessionStorage.getItem("orc_ai_taste_open") === "1" && !tasteToggleBtn.hidden) {
+          tasteDetails.hidden = false;
+          tasteToggleBtn.setAttribute("aria-expanded", "true");
+          tasteToggleBtn.textContent = "Hide details";
+        }
+      } catch {}
+    }
+    copyPicksBtn?.addEventListener("click", async () => {
+      if (!allItems.length) return;
+      const lines = allItems.slice(0, shown).map((it, idx) => {
+        const t = it.title || it.name || "Untitled";
+        const y = (it.release_date || it.first_air_date || "").slice(0, 4);
+        const r = it._ai?.reason ? ` - ${it._ai.reason}` : "";
+        return `${idx + 1}. ${t}${y ? ` (${y})` : ""}${r}`;
+      });
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+        const orig = copyPicksBtn.textContent;
+        copyPicksBtn.textContent = "Copied ✓";
+        setTimeout(() => { copyPicksBtn.textContent = orig; }, 1600);
+      } catch {}
+    });
+    input?.addEventListener("keydown", e => {
+      if (!enabled || e.key !== "Escape") return;
+      if (active) {
+        active.ctrl.abort();
+      } else if (input.value) {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
     });
     tastePickBtn?.addEventListener("click", () => {
       const snap = typeof config.getTasteSnapshot === "function" ? config.getTasteSnapshot() : null;

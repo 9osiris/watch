@@ -8324,3 +8324,140 @@ html[data-theme="light"] .ep-watch-toggle.is-active {
   border-color: rgba(22, 163, 74, 0.45);
   color: #15803d;
 }
+
+/* ===== Focus, Scrollbars, Episode Controls & Light-Mode Polish ===== */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+.glass-chip:focus-visible,
+.ep-row:focus-visible,
+.party-picker-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.row-track,
+.ep-grid,
+.party-chat-log {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+html[data-theme="light"] .row-track,
+html[data-theme="light"] .ep-grid,
+html[data-theme="light"] .party-chat-log {
+  scrollbar-color: rgba(15, 23, 42, 0.22) transparent;
+}
+
+.ep-row.on {
+  border-left: 3px solid var(--accent);
+}
+.ep-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: var(--pill);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.ep-quick-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.discover-recent-strip {
+  margin: 0 0 22px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+.discover-recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.discover-recent-head span {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.discover-recent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.list-toolbar-extra {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.party-hud-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.party-ep-pill {
+  padding: 3px 9px;
+  border-radius: var(--pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.party-chat-counter {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  margin-left: auto;
+  padding-right: 4px;
+}
+
+html[data-theme="light"] .ep-row {
+  background: rgba(15, 23, 42, 0.03);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+html[data-theme="light"] .ep-row.on {
+  background: color-mix(in srgb, var(--accent) 10%, #ffffff);
+}
+html[data-theme="light"] .discover-recent-strip {
+  background: rgba(15, 23, 42, 0.03);
+}
+html[data-theme="light"] .party-hud {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 42, 0.14);
+}
+html[data-theme="light"] .touch-preview-sheet {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .topnav, .mobile-dock, .player-wrap, #party-hud-root, .toast, .back-top, .modal-overlay {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}

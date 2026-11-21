@@ -453,14 +453,14 @@
     const lower = normalizeTitle(raw);
     let mediaType = ["movie", "tv"].includes(options.mediaType) ? options.mediaType : "all";
     if (mediaType === "all") {
-      if (/\b(series|tv show|tv shows|shows|episodes|sitcom|miniseries|mini series)\b/.test(lower)) mediaType = "tv";
+      if (/\b(series|tv show|tv shows|shows|episodes|sitcom|miniseries|mini series|limited series)\b/.test(lower)) mediaType = "tv";
       else if (/\b(movie|movies|film|films)\b/.test(lower)) mediaType = "movie";
     }
     const genreAliases = [
       ["Science Fiction", /\b(sci fi|scifi|science fiction|cyberpunk|space opera)\b/],
-      ["Action", /\b(action|martial arts|superhero)\b/],
+      ["Action", /\b(action|martial arts|superhero|marvel)\b/],
       ["Adventure", /\b(adventure|quest|expedition)\b/],
-      ["Animation", /\b(animation|animated|anime|pixar)\b/],
+      ["Animation", /\b(animation|animated|anime|pixar|studio ghibli|dreamworks)\b/],
       ["Comedy", /\b(comedy|funny|hilarious|sitcom|romcom)\b/],
       ["Crime", /\b(crime|heist|detective|noir|mafia|gangster)\b/],
       ["Documentary", /\b(documentary|docuseries|docs)\b/],

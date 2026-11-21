@@ -387,7 +387,7 @@ function buildNotifItemsHtml(data) {
     const epLabel = `S${sNum} E${eNum}${ep.name ? ` · ${esc(ep.name)}` : ""}`;
     const dateLabel = formatNotifAirDate(ep.air_date);
     return `
-      <a href="${routeUrl("tv")}?id=${encodeURIComponent(show.id)}&season=${sNum}&episode=${eNum}" class="notif-item" data-notif-nav="1">
+      <a href="${titleUrl("tv", show.id, `season=${sNum}&episode=${eNum}`)}" class="notif-item" data-notif-nav="1">
         <div class="notif-thumb"><img src="${esc(posterSrc)}" alt="${esc(show.title || "Series")}" loading="lazy" /></div>
         <div class="notif-info">
           <div class="notif-title">${esc(show.title || "Series")}</div>
@@ -1161,7 +1161,7 @@ async function openPersonModal(id, seedActor = null) {
         <h3>Known for</h3>
         <div class="person-credit-list">${credits.map((c, idx) => {
           const kind = c.media_type === "tv" ? "tv" : "movie";
-          const href = kind === "tv" ? `${routeUrl("tv")}?id=${c.id}` : `${routeUrl("movie")}?id=${c.id}`;
+          const href = titleUrl(kind, c.id);
           const title = c.title || c.name || "Untitled";
           return `<a href="${href}" data-credit-idx="${idx}"><span>${esc(title)}</span><span>${year(c.release_date || c.first_air_date)}</span></a>`;
         }).join("")}</div>
@@ -2479,10 +2479,16 @@ function closeModal(target = ".modal-overlay") {
       animateSubwindowMorph(card, m._morphTrigger, false, () => {
         m.classList.remove("open", "is-closing");
         m.style.display = "";
+        if (m._morphTrigger && m._morphTrigger.isConnected && typeof m._morphTrigger.focus === "function") {
+          try { m._morphTrigger.focus({ preventScroll: true }); } catch {}
+        }
       });
     } else {
       m.classList.remove("open", "is-closing");
       m.style.display = "";
+      if (m._morphTrigger && m._morphTrigger.isConnected && typeof m._morphTrigger.focus === "function") {
+        try { m._morphTrigger.focus({ preventScroll: true }); } catch {}
+      }
     }
   });
   releaseModalFocus();
@@ -3871,7 +3877,7 @@ function showPopup(card, item, type) {
   const kind = mediaType(item, type);
   const title = item.title || item.name || "Untitled";
   const thumb = item.backdrop_path ? `${IMG_W500}${item.backdrop_path}` : posterUrl(item.poster_path);
-  const href = kind === "tv" ? `${routeUrl("tv")}?id=${id}` : `${routeUrl("movie")}?id=${id}`;
+  const href = titleUrl(kind, id);
   const saved = MyList.has(id, kind);
   const rating = item.vote_average ? (typeof item.vote_average === "number" ? item.vote_average.toFixed(1) : "") : "";
 
@@ -4887,7 +4893,7 @@ function bindHeroActions() {
   $("#hero-play-btn")?.addEventListener("click", () => {
     if (!heroData) return;
     const type = mediaType(heroData);
-    const href = type === "tv" ? `${routeUrl("tv")}?id=${heroData.id}` : `${routeUrl("movie")}?id=${heroData.id}`;
+    const href = titleUrl(type, heroData.id);
     const backdrop = heroData.backdrop_path ? `${IMG_ORIG}${heroData.backdrop_path}` : "";
     const title = heroData.title || heroData.name || "";
     navigateWithLoader(href, backdrop, title, { id: heroData.id, type, item: heroData });
@@ -4895,7 +4901,7 @@ function bindHeroActions() {
   $("#hero-info-btn")?.addEventListener("click", () => {
     if (!heroData) return;
     const type = mediaType(heroData);
-    const href = type === "tv" ? `${routeUrl("tv")}?id=${heroData.id}` : `${routeUrl("movie")}?id=${heroData.id}`;
+    const href = titleUrl(type, heroData.id);
     const backdrop = heroData.backdrop_path ? `${IMG_ORIG}${heroData.backdrop_path}` : "";
     const title = heroData.title || heroData.name || "";
     navigateWithLoader(href, backdrop, title, { id: heroData.id, type, item: heroData });
@@ -4993,7 +4999,7 @@ function buildSeasonSpotlight(shows) {
       <div class="spotlight-foot">
         <div class="spotlight-title">${esc(s.name || s.title || "")}</div>
       </div>`;
-    const href = `${routeUrl("tv")}?id=${s.id}`;
+    const href = titleUrl("tv", s.id);
     card.href = href;
     const go = e => {
       if (e && (e.ctrlKey || e.metaKey || e.button === 1 || e.shiftKey)) return;
@@ -5058,7 +5064,7 @@ function initInstantSearch(inputEl, isEnabled = () => true) {
           const title = item.title || item.name || "";
           const img = item.poster_path ? `${IMG_W185}${item.poster_path}` : "";
           const y = year(item.release_date || item.first_air_date);
-          const link = `/${type}?id=${item.id}`;
+          const link = titleUrl(type, item.id);
           return `
             <a href="${link}" class="instant-search-item" data-hit-idx="${idx}">
               <img src="${esc(img)}" class="instant-search-poster" alt="${esc(item.title || item.name || '')}" loading="eager" decoding="async" />
@@ -6872,6 +6878,15 @@ async function initTvPage() {
         }
       }, { signal: pageSignal() });
 
+      let epProgPill = $("#ep-progress-pill");
+      if (!epProgPill) {
+        epProgPill = document.createElement("span");
+        epProgPill.id = "ep-progress-pill";
+        epProgPill.className = "ep-progress-pill";
+        epProgPill.textContent = "0/0 watched";
+        epControlsBar.appendChild(epProgPill);
+      }
+
       let markSeasonBtn = $("#ep-mark-season-btn");
       if (!markSeasonBtn) {
         markSeasonBtn = document.createElement("button");
@@ -6891,6 +6906,17 @@ async function initTvPage() {
         WatchedEpisodes.setSeason(id, curSel, epNums, !allWatched);
         loadEps(curSel);
         toast(!allWatched ? `Marked Season ${curSel} watched` : `Cleared Season ${curSel} watched`);
+      }, { signal: pageSignal() });
+      document.addEventListener("keydown", evt => {
+        const tag = (evt.target?.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || tag === "select" || evt.target?.isContentEditable) return;
+        if (evt.metaKey || evt.ctrlKey || evt.altKey) return;
+        if (evt.key === "t" || evt.key === "T") {
+          $("#player-theater-btn")?.click();
+        } else if (evt.key === "/") {
+          const epInp = $("#ep-search-input");
+          if (epInp) { evt.preventDefault(); epInp.focus(); }
+        }
       }, { signal: pageSignal() });
     }
 
@@ -6920,8 +6946,11 @@ async function initTvPage() {
         const airedEpNums = [];
         const syncMarkSeasonBtn = () => {
           const btn = $("#ep-mark-season-btn");
+          const watchedCount = airedEpNums.filter(n => WatchedEpisodes.has(id, sn, n)).length;
+          const progEl = $("#ep-progress-pill");
+          if (progEl) progEl.textContent = `${watchedCount}/${airedEpNums.length} watched`;
           if (!btn) return;
-          const allDone = airedEpNums.length > 0 && airedEpNums.every(n => WatchedEpisodes.has(id, sn, n));
+          const allDone = airedEpNums.length > 0 && watchedCount === airedEpNums.length;
           btn.textContent = allDone ? "Season Watched ✓" : "Mark Season Watched";
           btn.classList.toggle("active", allDone);
         };
@@ -7752,7 +7781,7 @@ async function initSurpriseMe() {
           playBtn.style.display = "inline-flex";
           playBtn.onclick = () => {
             closeModal(modal);
-            const targetPath = kind === "tv" ? `${routeUrl("tv")}?id=${selectedTitle.id}` : `${routeUrl("movie")}?id=${selectedTitle.id}`;
+            const targetPath = titleUrl(kind, selectedTitle.id);
             const bg = selectedTitle.backdrop_path ? `${isMobile() ? IMG_W780 : IMG_ORIG}${selectedTitle.backdrop_path}` : (posterUrl(selectedTitle.poster_path) || "");
             navigateWithLoader(targetPath, bg, titleName, { id: selectedTitle.id, type: kind, item: selectedTitle });
           };
@@ -9597,10 +9626,7 @@ function initCommandPalette() {
     if (recent.length) {
       sections.push(`<div class="cmd-palette-section">Continue Watching</div>` + recent.map(it => {
         const media = it.mediaType === "tv" ? "tv" : "movie";
-        let url = `${routeUrl(media)}?id=${encodeURIComponent(it.id)}`;
-        if (media === "tv" && it.season && it.episode) {
-          url += `&season=${encodeURIComponent(it.season)}&episode=${encodeURIComponent(it.episode)}`;
-        }
+        const url = titleUrl(media, it.id, (media === "tv" && it.season && it.episode) ? `season=${encodeURIComponent(it.season)}&episode=${encodeURIComponent(it.episode)}` : "");
         const badge = (media === "tv" && it.season && it.episode)
           ? `S${it.season} E${it.episode}`
           : (media === "tv" ? "Show" : "Movie");
@@ -9719,7 +9745,7 @@ function initCommandPalette() {
           const title = hit.title || hit.name;
           const type = hit.media_type === "tv" ? "tv" : "movie";
           const yr = (hit.release_date || hit.first_air_date || "").slice(0, 4);
-          const url = `${routeUrl(type)}?id=${hit.id}`;
+          const url = titleUrl(type, hit.id);
           return `<button type="button" class="cmd-palette-item" data-url="${url}">
             <span class="cmd-palette-ico">${CMD_ICONS.film}</span>
             <span style="flex:1;">${esc(title)} ${yr ? `<span style="color:var(--text-3);font-size:0.8rem;">(${yr})</span>` : ""}</span>
@@ -9820,7 +9846,7 @@ function initWatchlistShuffle() {
     const type = pick.type === "tv" ? "tv" : "movie";
     toast(`Picked "${pick.title || "Title"}" for you!`);
     setTimeout(() => {
-      location.href = `${routeUrl(type)}?id=${pick.id}`;
+      location.href = titleUrl(type, pick.id);
     }, 600);
   });
 }
@@ -10432,7 +10458,7 @@ async function initAnimePage() {
     if (!pool.length) return;
     const pickItem = pool[Math.floor(Math.random() * pool.length)];
     const type = mediaType(pickItem, "tv");
-    const href = `${routeUrl(type)}?id=${pickItem.id}`;
+    const href = titleUrl(type, pickItem.id);
     navigateWithLoader(href, pickItem.backdrop_path ? `${IMG_ORIG}${pickItem.backdrop_path}` : "", pickItem.name || pickItem.title || "", {
       id: pickItem.id,
       type,
@@ -10721,7 +10747,7 @@ const HeaderSearch = {
     items.slice(0, 12).forEach((item, idx) => {
       const kind = mediaType(item, forcedType || (item.first_air_date || item.name ? "tv" : "movie"));
       const title = item.title || item.name || "Untitled";
-      const href = kind === "tv" ? `${routeUrl("tv")}?id=${item.id}` : `${routeUrl("movie")}?id=${item.id}`;
+      const href = titleUrl(kind, item.id);
       const posterSrc = posterUrl(item.poster_path, "w342") || "";
 
       const row = document.createElement("a");
@@ -11506,9 +11532,11 @@ const WatchPartyManager = {
         <div class="party-hud-left">
           <span class="party-live-dot" aria-hidden="true"></span>
           <button type="button" class="party-code-pill" id="party-hud-copy-code" title="Copy room invite link">ROOM: ${esc(p.code)}</button>
+          ${p.mediaType === "tv" ? `<span class="party-ep-pill" id="party-ep-pill">S${Number(p.season || 1)} E${Number(p.episode || 1)}</span>` : ""}
           <span class="party-members" id="party-hud-members"></span>
         </div>
         <div class="party-hud-actions">
+          <button type="button" class="party-hud-btn party-hud-copy-btn" id="party-copy-link-btn" title="Copy Watch Party invite link">Copy Invite</button>
           ${host
             ? `<button type="button" class="party-hud-btn active" id="party-countdown-btn">Sync 3-2-1</button>`
             : `<button type="button" class="party-hud-btn ${this.followHost ? "active" : ""}" id="party-follow-btn">Follow Host: ${this.followHost ? "ON" : "OFF"}</button>`
@@ -11522,6 +11550,7 @@ const WatchPartyManager = {
         <div class="party-chat-controls">
           <form class="party-chat-form" id="party-chat-form">
             <input type="text" id="party-chat-input" placeholder="Send a message to the party..." maxlength="240" autocomplete="off" />
+            <span class="party-chat-counter" id="party-chat-counter">0/240</span>
             <button type="submit" class="party-hud-btn active">Send</button>
           </form>
           <div class="party-reactions-row" aria-label="Reactions">
@@ -11537,10 +11566,20 @@ const WatchPartyManager = {
     this.appendMessages(initialMsgs, true);
     this.syncUnreadBadge();
 
-    hud.querySelector("#party-hud-copy-code").addEventListener("click", () => {
+    const copyPartyInvite = () => {
       const url = this.inviteUrl(this.state);
       navigator.clipboard?.writeText(url).then(() => toast(`Copied invite link (${this.state.code})`));
-    });
+    };
+    hud.querySelector("#party-hud-copy-code").addEventListener("click", copyPartyInvite);
+    hud.querySelector("#party-copy-link-btn")?.addEventListener("click", copyPartyInvite);
+
+    const chatInp = hud.querySelector("#party-chat-input");
+    const chatCounter = hud.querySelector("#party-chat-counter");
+    if (chatInp && chatCounter) {
+      chatInp.addEventListener("input", () => {
+        chatCounter.textContent = `${chatInp.value.length}/240`;
+      });
+    }
 
     hud.querySelector("#party-chat-toggle").addEventListener("click", e => {
       this.chatOpen = !this.chatOpen;

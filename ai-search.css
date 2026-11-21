@@ -51,6 +51,7 @@
 .ai-card-runtime { display: block; margin-top: 7px; color: var(--text-3); font-size: .72rem; }
 .ai-result-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin: 26px 0 0; }
 .ai-result-actions button, .ai-retry { min-height: 44px; cursor: pointer; }
+.ai-copy-picks-btn { border-color: color-mix(in srgb, var(--accent) 34%, var(--border)); }
 .ai-retry { margin-top: 18px; }
 .ai-refinements { margin: 24px 0 0; }
 .ai-refinement-label { font-size: .8rem; color: var(--text-2); margin-bottom: 10px; }

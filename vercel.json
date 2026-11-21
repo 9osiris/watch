@@ -9,15 +9,26 @@
       ]
     },
     {
-      "source": "/(list|settings|search)",
+      "source": "/(list|settings|search|404.html|offline.html)",
       "headers": [
         { "key": "X-Robots-Tag", "value": "noindex, follow" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
   ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
+      "destination": "/api/sitemap?type=index"
+    },
+    {
+      "source": "/sitemap-index.xml",
       "destination": "/api/sitemap?type=index"
     },
     {

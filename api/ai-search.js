@@ -8,6 +8,8 @@ const service = createService();
 module.exports = async function aiSearch(req, res) {
   // Set this before invoking the service, including all validation/error paths.
   res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
   const result = await service.handle(req);
   for (const [name, value] of Object.entries(result.headers)) res.setHeader(name, value);
   res.status(result.status).json(result.body);

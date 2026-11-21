@@ -143,3 +143,53 @@ test("branded search & head signals on index.html and subpages", () => {
     assert.ok(html.includes('alt="Osiris Watch"'), `${p}: missing logo alt text`);
   }
 });
+
+test("SSR title pages include BreadcrumbList, ISO duration, actors, Twitter cards, and sitemap ETag 304", async () => {
+  const tpl = read("movie.html");
+  const out = seo.renderTitlePageHtml(tpl, {
+    type: "movie",
+    id: 27205,
+    isNoindex: false,
+    detail: {
+      id: 27205,
+      title: "Inception",
+      overview: "A skilled thief enters dreams.",
+      release_date: "2010-07-16",
+      runtime: 148,
+      original_language: "en",
+      poster_path: "/pInc.jpg",
+      genres: [{ name: "Science Fiction" }],
+      credits: {
+        crew: [{ job: "Director", name: "Christopher Nolan" }],
+        cast: [{ name: "Leonardo DiCaprio" }, { name: "Joseph Gordon-Levitt" }],
+      },
+    },
+  });
+  assert.ok(out.includes('"@type":"BreadcrumbList"'));
+  assert.ok(out.includes('"duration":"PT148M"'));
+  assert.ok(out.includes('"director":{"@type":"Person","name":"Christopher Nolan"}'));
+  assert.ok(out.includes('name="twitter:card" content="summary_large_image"'));
+
+  const res1 = makeMockRes();
+  await sitemapHandler({ method: "GET", query: { type: "static" }, headers: {} }, res1);
+  assert.equal(res1.statusCode, 200);
+  assert.ok(res1.headers.etag);
+
+  const res304 = makeMockRes();
+  await sitemapHandler({ method: "GET", query: { type: "static" }, headers: { "if-none-match": res1.headers.etag } }, res304);
+  assert.equal(res304.statusCode, 304);
+
+  const healthHandler = require("../api/health.js");
+  const hRes = {
+    headers: {},
+    code: 0,
+    body: null,
+    setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
+    status(c) { this.code = c; return this; },
+    json(b) { this.body = b; return this; },
+  };
+  healthHandler({ method: "GET" }, hRes);
+  assert.equal(hRes.code, 200);
+  assert.equal(hRes.body.ok, true);
+  assert.equal(hRes.headers["cache-control"], "no-store");
+});
