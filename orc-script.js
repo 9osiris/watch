@@ -56,6 +56,14 @@ function routeUrl(route, params = "") {
   return query ? `${base}?${query}` : base;
 }
 
+function titleUrl(type, id, params = "") {
+  const cleanType = type === "tv" ? "tv" : "movie";
+  const base = `/${cleanType}/${encodeURIComponent(id)}`;
+  if (!params) return base;
+  const query = params instanceof URLSearchParams ? params.toString() : String(params).replace(/^\?/, "");
+  return query ? `${base}?${query}` : base;
+}
+
 function authRedirectUrl() {
   const origin = ["osiris.rocks", "www.osiris.rocks"].includes(window.location.hostname)
     ? "https://watch.osiris.rocks"
@@ -2656,6 +2664,30 @@ const WatchedEpisodes = {
   has(id, season, episode) {
     const all = this.get();
     return Boolean(all[String(id)]?.[`${season}_${episode}`]);
+  },
+  toggle(id, season, episode) {
+    if (this.has(id, season, episode)) {
+      this.remove(id, season, episode);
+      return false;
+    }
+    this.save(id, season, episode);
+    return true;
+  },
+  setSeason(id, season, episodes, watched) {
+    if (!id || !season || !Array.isArray(episodes)) return;
+    const all = this.get();
+    const sid = String(id);
+    if (watched) {
+      if (!all[sid] || typeof all[sid] !== "object") all[sid] = {};
+      const now = Date.now();
+      episodes.forEach(ep => {
+        if (ep > 0) all[sid][`${season}_${ep}`] = now;
+      });
+    } else if (all[sid]) {
+      episodes.forEach(ep => { delete all[sid][`${season}_${ep}`]; });
+      if (!Object.keys(all[sid]).length) delete all[sid];
+    }
+    this.saveAll(all);
   }
 };
 
@@ -3322,7 +3354,10 @@ function toast(msg) {
 }
 
 async function sharePageLink(title) {
-  const url = location.href;
+  const u = new URL(location.href);
+  let url = u.href;
+  const canonicalHref = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+  if (canonicalHref && !u.searchParams.get("room")) url = canonicalHref;
   if (navigator.share && isMobile()) {
     try {
       await navigator.share({ title: title || document.title, url });
@@ -3428,8 +3463,8 @@ function buildCard(item, type = "movie", opts = {}) {
   const deepSeason = progObj?.season ? parseInt(progObj.season, 10) : 0;
   const deepEpisode = progObj?.episode ? parseInt(progObj.episode, 10) : 0;
   const href = kind === "tv"
-    ? `${routeUrl("tv")}?id=${id}${deepSeason > 0 && deepEpisode > 0 ? `&season=${deepSeason}&episode=${deepEpisode}` : ""}`
-    : `${routeUrl("movie")}?id=${id}`;
+    ? titleUrl("tv", id, deepSeason > 0 && deepEpisode > 0 ? `season=${deepSeason}&episode=${deepEpisode}` : "")
+    : titleUrl("movie", id);
   const saved = MyList.has(id, kind);
   const prog = opts.progressValue ?? progObj?.progress;
   const watched = prog && prog >= 95;
@@ -3603,8 +3638,8 @@ function showTouchPreviewSheet(item, type = "movie", triggerEl = null) {
   const deepSeason = progObj?.season ? parseInt(progObj.season, 10) : 0;
   const deepEpisode = progObj?.episode ? parseInt(progObj.episode, 10) : 0;
   const href = kind === "tv"
-    ? `${routeUrl("tv")}?id=${id}${deepSeason > 0 && deepEpisode > 0 ? `&season=${deepSeason}&episode=${deepEpisode}` : ""}`
-    : `${routeUrl("movie")}?id=${id}`;
+    ? titleUrl("tv", id, deepSeason > 0 && deepEpisode > 0 ? `season=${deepSeason}&episode=${deepEpisode}` : "")
+    : titleUrl("movie", id);
 
   let modal = $("#touch-preview-modal");
   if (!modal) {
@@ -6363,7 +6398,7 @@ async function initMoviePage() {
   }
 
   try {
-    setMetaTags({ title: m.title, description: m.overview, image: m.poster_path ? `${IMG_W500}${m.poster_path}` : "", url: `${siteOrigin}/movie?id=${m.id}` });
+    setMetaTags({ title: m.title, description: m.overview, image: m.poster_path ? `${IMG_W500}${m.poster_path}` : "", url: `${siteOrigin}/movie/${m.id}` });
     if (m.backdrop_path) applyDetailBackdrop(m.backdrop_path);
 
     const saved = MyList.has(m.id, "movie");
@@ -6623,7 +6658,7 @@ async function initTvPage() {
   }
 
   try {
-    setMetaTags({ title: show.name, description: show.overview, image: show.poster_path ? `${IMG_W500}${show.poster_path}` : "", url: `${siteOrigin}/tv?id=${show.id}` });
+    setMetaTags({ title: show.name, description: show.overview, image: show.poster_path ? `${IMG_W500}${show.poster_path}` : "", url: `${siteOrigin}/tv/${show.id}` });
     if (show.backdrop_path) applyDetailBackdrop(show.backdrop_path);
 
     const saved = MyList.has(show.id, "tv");
@@ -6836,6 +6871,27 @@ async function initTvPage() {
           activeRow.scrollIntoView({ behavior: "smooth", block: "center" });
         }
       }, { signal: pageSignal() });
+
+      let markSeasonBtn = $("#ep-mark-season-btn");
+      if (!markSeasonBtn) {
+        markSeasonBtn = document.createElement("button");
+        markSeasonBtn.type = "button";
+        markSeasonBtn.id = "ep-mark-season-btn";
+        markSeasonBtn.className = "glass-chip ep-tool-btn";
+        markSeasonBtn.textContent = "Mark Season Watched";
+        markSeasonBtn.title = "Toggle watched status for all aired episodes in this season";
+        epControlsBar.appendChild(markSeasonBtn);
+      }
+      markSeasonBtn.addEventListener("click", () => {
+        const curSel = Number($("#season-select")?.value ?? season);
+        const rows = $$(".ep-row:not(.is-unaired)", $("#ep-grid"));
+        const epNums = rows.map(r => Number(r.dataset.ep)).filter(n => n > 0);
+        if (!epNums.length) return;
+        const allWatched = epNums.every(n => WatchedEpisodes.has(id, curSel, n));
+        WatchedEpisodes.setSeason(id, curSel, epNums, !allWatched);
+        loadEps(curSel);
+        toast(!allWatched ? `Marked Season ${curSel} watched` : `Cleared Season ${curSel} watched`);
+      }, { signal: pageSignal() });
     }
 
     async function loadEps(sn) {
@@ -6861,8 +6917,17 @@ async function initTvPage() {
         if (rawEps.length && !rawEps.some(ep => ep.episode_number === episode)) episode = rawEps[0].episode_number;
         const eps = epReverseOrder ? [...rawEps].reverse() : rawEps;
         const todayIso = new Date().toISOString().slice(0, 10);
+        const airedEpNums = [];
+        const syncMarkSeasonBtn = () => {
+          const btn = $("#ep-mark-season-btn");
+          if (!btn) return;
+          const allDone = airedEpNums.length > 0 && airedEpNums.every(n => WatchedEpisodes.has(id, sn, n));
+          btn.textContent = allDone ? "Season Watched ✓" : "Mark Season Watched";
+          btn.classList.toggle("active", allDone);
+        };
         eps.forEach(ep => {
           const isUnaired = Boolean(ep.air_date && /^\d{4}-\d{2}-\d{2}$/.test(ep.air_date) && ep.air_date > todayIso);
+          if (!isUnaired && ep.episode_number > 0) airedEpNums.push(ep.episode_number);
           const isWatchedEp = WatchedEpisodes.has(id, sn, ep.episode_number);
           const el = document.createElement("button");
           el.type = "button";
@@ -6879,15 +6944,48 @@ async function initTvPage() {
             }
           }
           const dur = ep.runtime ? `${ep.runtime}m` : "";
+          const checkSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>';
           el.innerHTML = `
             <span class="ep-row-num">${ep.episode_number}</span>
-            <div class="ep-row-thumb">${ep.still_path ? `<img src="${esc(IMG_W300 + ep.still_path)}" alt="${esc(ep.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : ""}${isWatchedEp ? '<span class="ep-watched-check" title="Watched" aria-label="Watched"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></span>' : ""}</div>
+            <div class="ep-row-thumb">${ep.still_path ? `<img src="${esc(IMG_W300 + ep.still_path)}" alt="${esc(ep.name || '')}" loading="lazy" decoding="async" draggable="false"/>` : ""}${isWatchedEp ? `<span class="ep-watched-check" title="Watched" aria-label="Watched">${checkSvg}</span>` : ""}</div>
             <div class="ep-row-body">
               <div class="ep-row-title">${esc(ep.name || `Episode ${ep.episode_number}`)}${isUnaired ? '<span class="ep-unaired-badge">Upcoming</span>' : ""}</div>
               ${air ? `<div class="ep-row-date">${air}</div>` : ""}
               <div class="ep-row-desc">${esc(ep.overview || "")}</div>
             </div>
-            ${dur ? `<span class="ep-row-dur">${dur}</span>` : ""}`;
+            <span class="ep-row-aside">
+              ${dur ? `<span class="ep-row-dur">${dur}</span>` : ""}
+              ${!isUnaired ? `<span role="button" tabindex="0" class="ep-watch-toggle${isWatchedEp ? " is-active" : ""}" aria-label="${isWatchedEp ? "Mark unwatched" : "Mark watched"}" title="${isWatchedEp ? "Mark unwatched" : "Mark watched"}">${checkSvg}</span>` : ""}
+            </span>`;
+          const toggleBtn = el.querySelector(".ep-watch-toggle");
+          if (toggleBtn) {
+            const handleToggle = evt => {
+              evt.stopPropagation();
+              evt.preventDefault();
+              const nowWatched = WatchedEpisodes.toggle(id, sn, ep.episode_number);
+              el.classList.toggle("is-watched-ep", nowWatched);
+              toggleBtn.classList.toggle("is-active", nowWatched);
+              toggleBtn.setAttribute("aria-label", nowWatched ? "Mark unwatched" : "Mark watched");
+              toggleBtn.setAttribute("title", nowWatched ? "Mark unwatched" : "Mark watched");
+              const thumb = el.querySelector(".ep-row-thumb");
+              const existingBadge = thumb?.querySelector(".ep-watched-check");
+              if (nowWatched && thumb && !existingBadge) {
+                const badge = document.createElement("span");
+                badge.className = "ep-watched-check";
+                badge.title = "Watched";
+                badge.setAttribute("aria-label", "Watched");
+                badge.innerHTML = checkSvg;
+                thumb.appendChild(badge);
+              } else if (!nowWatched && existingBadge) {
+                existingBadge.remove();
+              }
+              syncMarkSeasonBtn();
+            };
+            toggleBtn.addEventListener("click", handleToggle);
+            toggleBtn.addEventListener("keydown", evt => {
+              if (evt.key === "Enter" || evt.key === " ") handleToggle(evt);
+            });
+          }
           el.addEventListener("click", () => {
             season = sn; episode = ep.episode_number;
             $$(".ep-row").forEach(x => x.classList.remove("on"));
@@ -6901,6 +6999,7 @@ async function initTvPage() {
           });
           $("#ep-grid").appendChild(el);
         });
+        syncMarkSeasonBtn();
         applyEpisodeFilter();
       } catch (err) { console.warn('Caught error:', err);
         $("#ep-grid").innerHTML = `<p style="color:var(--text-muted);padding:20px;text-align:center">Episodes unavailable.</p>`;
@@ -9114,6 +9213,7 @@ function exportUserDataJSON() {
     watchlist: MyList.get(),
     folders: Folders.get(),
     progress: Progress.get(),
+    watchedEpisodes: WatchedEpisodes.get(),
     settings: {
       accent: SETTINGS.get(SETTINGS.accentKey),
       theme: SETTINGS.get(SETTINGS.themeKey),
@@ -9228,9 +9328,28 @@ function importAndMergeUserData(file) {
           Progress.saveAll(currentProg);
         }
 
+        // Validate & Merge Watched Episodes
+        if (parsed.watchedEpisodes && typeof parsed.watchedEpisodes === "object" && !Array.isArray(parsed.watchedEpisodes)) {
+          const currentWatched = WatchedEpisodes.get();
+          Object.keys(parsed.watchedEpisodes).forEach(showId => {
+            const epMap = parsed.watchedEpisodes[showId];
+            if (epMap && typeof epMap === "object" && !Array.isArray(epMap)) {
+              if (!currentWatched[showId] || typeof currentWatched[showId] !== "object") currentWatched[showId] = {};
+              Object.keys(epMap).forEach(epKey => {
+                if (/^\d+_\d+$/.test(epKey) && epMap[epKey]) {
+                  currentWatched[showId][epKey] = Math.max(Number(currentWatched[showId][epKey] || 0), Number(epMap[epKey] || Date.now()));
+                }
+              });
+            }
+          });
+          WatchedEpisodes.saveAll(currentWatched);
+        }
+
         // Apply settings if present
         if (parsed.settings && typeof parsed.settings === "object") {
           if (parsed.settings.accent) SETTINGS.set(SETTINGS.accentKey, parsed.settings.accent);
+          if (parsed.settings.theme) SETTINGS.set(SETTINGS.themeKey, parsed.settings.theme);
+          if (parsed.settings.bgStyle) SETTINGS.set(SETTINGS.bgStyleKey, parsed.settings.bgStyle);
           if (parsed.settings.prefLang) SETTINGS.set(SETTINGS.prefLangKey, parsed.settings.prefLang);
           if (parsed.settings.provider) setProvider(parsed.settings.provider);
           applyGlobalSettings();

@@ -753,4 +753,12 @@ test("UX/UI and Flow batches: deep links, episode tools, player fallback, theate
   assert.ok(searchHtml.includes('id="ai-taste-card"'));
   assert.ok(aiUi.includes("buildLocalFallbackPlan"));
   assert.ok(aiUi.includes("getConstraintRelaxations"));
+
+  // Clean canonical titleUrl, manual episode watched toggles, and lossless backup export/import
+  assert.ok(script.includes("function titleUrl("));
+  assert.ok(script.includes("ep-watch-toggle"));
+  assert.ok(script.includes("ep-mark-season-btn"));
+  assert.ok(script.includes("setSeason(id, season, episodes, watched)"));
+  assert.ok(script.includes("watchedEpisodes: WatchedEpisodes.get()"));
+  assert.ok(styles.includes(".ep-watch-toggle.is-active"));
 });
