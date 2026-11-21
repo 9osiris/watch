@@ -773,4 +773,8 @@ test("UX/UI and Flow batches: deep links, episode tools, player fallback, theate
   assert.ok(script.includes('setAttribute("aria-current", "page")'));
   assert.ok(script.includes("party-msg-time"));
   assert.ok(script.includes("_focusTrapBound"));
+  assert.ok(script.includes("discover-recent-strip"));
+  assert.ok(script.includes("list-folder-rename-btn"));
+  assert.ok(script.includes("list-folder-delete-btn"));
+  assert.ok(styles.includes("folder-header-actions"));
 });

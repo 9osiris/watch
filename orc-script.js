@@ -3512,7 +3512,16 @@ function buildCard(item, type = "movie", opts = {}) {
       cardImgEl.classList.add("is-loaded");
     } else {
       cardImgEl.addEventListener("load", () => cardImgEl.classList.add("is-loaded"), { once: true });
-      cardImgEl.addEventListener("error", () => cardImgEl.classList.add("is-loaded"), { once: true });
+      cardImgEl.addEventListener("error", () => {
+        const wrap = cardImgEl.parentElement;
+        cardImgEl.remove();
+        if (wrap && !wrap.querySelector(".no-img-poster")) {
+          const ph = document.createElement("div");
+          ph.className = "no-img-poster";
+          ph.innerHTML = `${ICONS.film}<span>${esc(title)}</span>`;
+          wrap.insertBefore(ph, wrap.querySelector(".card-foot") || null);
+        }
+      }, { once: true });
     }
   }
 
@@ -4924,26 +4933,29 @@ function bindHeroActions() {
 }
 
 function openTrailer(youtubeKey) {
+  const cleanKey = String(youtubeKey || "").replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!cleanKey) {
+    toast("Trailer unavailable for this title.");
+    return;
+  }
   let modal = $("#trailer-modal");
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "trailer-modal";
     modal.className = "modal-overlay";
-    modal.innerHTML = `<button class="modal-close" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="modal-box"><iframe allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+    modal.innerHTML = `<button type="button" class="modal-close" aria-label="Close trailer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button><div class="modal-box"><iframe title="Title trailer" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
     document.body.appendChild(modal);
     modal.querySelector(".modal-close").addEventListener("click", closeTrailer);
     modal.addEventListener("click", e => { if (e.target === modal) closeTrailer(); });
   }
-  modal.querySelector("iframe").src = `https://www.youtube.com/embed/${youtubeKey}?autoplay=1&rel=0`;
-  modal.classList.add("open");
-  trapModalFocus(modal, "Video trailer");
+  modal.querySelector("iframe").src = `https://www.youtube.com/embed/${cleanKey}?autoplay=1&rel=0`;
+  openModal(modal, document.activeElement);
 }
 
 function closeTrailer() {
   const modal = $("#trailer-modal");
   if (!modal) return;
-  modal.classList.remove("open");
-  releaseModalFocus();
+  closeModal(modal);
   setTimeout(() => { const f = modal.querySelector("iframe"); if (f) f.src = ""; }, 300);
 }
 
@@ -4951,13 +4963,32 @@ function initGenreStrip() {
   const strip = $("#genre-strip");
   if (!strip) return;
   strip.textContent = "";
+  if (!strip._keyNavBound) {
+    strip._keyNavBound = true;
+    strip.addEventListener("keydown", e => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const pills = [...strip.querySelectorAll(".genre-pill")];
+      const idx = pills.indexOf(document.activeElement);
+      if (idx === -1) return;
+      e.preventDefault();
+      const next = pills[e.key === "ArrowRight" ? Math.min(pills.length - 1, idx + 1) : Math.max(0, idx - 1)];
+      next?.focus();
+    });
+  }
   GENRES.forEach((g, i) => {
     const btn = document.createElement("button");
+    btn.type = "button";
     btn.className = `genre-pill${i === 0 ? " active" : ""}`;
+    btn.setAttribute("aria-pressed", i === 0 ? "true" : "false");
     btn.textContent = g.name;
     btn.addEventListener("click", async () => {
-      $$(".genre-pill").forEach(b => b.classList.remove("active"));
+      $$(".genre-pill").forEach(b => {
+        b.classList.remove("active");
+        b.setAttribute("aria-pressed", "false");
+      });
       btn.classList.add("active");
+      btn.setAttribute("aria-pressed", "true");
+      btn.scrollIntoView?.({ behavior: "smooth", inline: "nearest", block: "nearest" });
       const row = $("#genre-row");
       if (!row) return;
       const titleEl = row.querySelector(".row-title");
@@ -7062,6 +7093,17 @@ async function initTvPage() {
             season = sn; episode = ep.episode_number;
             $$(".ep-row").forEach(x => x.classList.remove("on"));
             el.classList.add("on");
+            const existingProg = Progress.getItem(id, "tv");
+            Progress.save({
+              id: show.id,
+              mediaType: "tv",
+              title: show.name,
+              poster_path: show.poster_path || "",
+              backdrop_path: show.backdrop_path || "",
+              season,
+              episode,
+              progress: Math.max(Number(existingProg?.progress || 0), 5),
+            });
             const newUrl = new URL(location.href);
             newUrl.searchParams.set("season", String(season));
             newUrl.searchParams.set("episode", String(episode));
@@ -7672,7 +7714,37 @@ function initSearchPage() {
     doSearch("");
     if (!isMobile() && !isTouch()) input.focus();
   });
+  const renderDiscoverRecentViewed = () => {
+    let strip = $("#discover-recent-strip");
+    const items = typeof RecentViewed !== "undefined" ? RecentViewed.get() : [];
+    const hasQuery = Boolean(input?.value.trim());
+    if (!items.length || hasQuery || current === "ai" || !grid?.parentElement) {
+      if (strip) strip.remove();
+      return;
+    }
+    if (!strip) {
+      strip = document.createElement("section");
+      strip.id = "discover-recent-strip";
+      strip.className = "discover-recent-strip";
+      grid.parentElement.insertBefore(strip, grid);
+    }
+    strip.innerHTML = `
+      <div class="discover-recent-head">
+        <span>Recently Viewed</span>
+        <button type="button" class="glass-chip" id="discover-recent-clear-btn">Clear</button>
+      </div>
+      <div class="discover-recent-chips">${items.slice(0, 8).map(v => {
+        const media = v.mediaType === "tv" ? "tv" : "movie";
+        return `<a class="glass-chip" href="${titleUrl(media, v.id)}">${esc(v.title || v.name || "Untitled")}</a>`;
+      }).join("")}</div>`;
+    strip.querySelector("#discover-recent-clear-btn")?.addEventListener("click", () => {
+      safeRemoveItem(RecentViewed.key);
+      strip.remove();
+      toast("Cleared recently viewed history");
+    });
+  };
   renderRecent();
+  renderDiscoverRecentViewed();
 }
 
 async function initSurpriseMe() {
@@ -8424,8 +8496,13 @@ function initSettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      await importAndMergeUserData(file);
-      toast("Backup successfully merged and restored!");
+      const summary = await importAndMergeUserData(file);
+      const parts = [];
+      if (summary?.watchlistAdded) parts.push(`${summary.watchlistAdded} list`);
+      if (summary?.foldersAdded) parts.push(`${summary.foldersAdded} folders`);
+      if (summary?.progressUpdated) parts.push(`${summary.progressUpdated} progress`);
+      if (summary?.episodesMerged) parts.push(`${summary.episodesMerged} episodes`);
+      toast(parts.length ? `Imported: ${parts.join(", ")}` : "Backup merged and restored!");
     } catch (err) {
       toast(err.message || "Failed to import backup");
     } finally {
@@ -8749,7 +8826,11 @@ async function initListPage() {
       headerBar.style = "grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap";
       headerBar.innerHTML = `
         <button type="button" class="btn-play folder-back-btn" style="padding:8px 16px;background:var(--bg-2);color:var(--text);font-size:0.88rem">← Back to Folders</button>
-        <h2 style="font-size:1.25rem;font-weight:800;margin:0">${esc(folder.name)}</h2>
+        <h2 id="list-folder-heading" style="font-size:1.25rem;font-weight:800;margin:0">${esc(folder.name)}</h2>
+        <div class="folder-header-actions">
+          <button type="button" class="glass-chip" id="list-folder-rename-btn">Rename</button>
+          <button type="button" class="glass-chip danger" id="list-folder-delete-btn">Delete</button>
+        </div>
       `;
 
       const goBackToFolders = () => {
@@ -8760,6 +8841,36 @@ async function initListPage() {
         loadData();
       };
       headerBar.querySelector(".folder-back-btn")?.addEventListener("click", goBackToFolders);
+      headerBar.querySelector("#list-folder-rename-btn")?.addEventListener("click", () => {
+        const nextName = window.prompt("Rename folder:", folder.name)?.trim();
+        if (!nextName || nextName === folder.name) return;
+        const allF = Folders.get();
+        if (allF.some(f => f.id !== folder.id && f.name.toLowerCase() === nextName.toLowerCase())) {
+          toast("A folder with that name already exists.");
+          return;
+        }
+        const target = allF.find(f => f.id === folder.id);
+        if (target) {
+          target.name = nextName.slice(0, 40);
+          Folders.save(allF);
+          folder.name = target.name;
+          const h = headerBar.querySelector("#list-folder-heading");
+          if (h) h.textContent = target.name;
+          toast(`Renamed folder to "${target.name}"`);
+        }
+      });
+      headerBar.querySelector("#list-folder-delete-btn")?.addEventListener("click", () => {
+        const snapshot = Folders.get();
+        showConfirmModal("Delete folder?", `Remove "${folder.name}"? Titles stay in your main Watchlist.`, () => {
+          Folders.save(snapshot.filter(f => f.id !== folder.id));
+          goBackToFolders();
+          showUndoToast(`Deleted folder "${folder.name}"`, () => {
+            Folders.save(snapshot);
+            if (currentTab === "folders") renderFoldersGrid();
+            toast(`Restored "${folder.name}"`);
+          });
+        });
+      });
       currentFolderHeader = headerBar;
 
       if (!folder.items.length) {
@@ -9344,6 +9455,8 @@ function importAndMergeUserData(file) {
           return reject(new Error("Invalid backup format: root must be an object"));
         }
 
+        const stats = { watchlistAdded: 0, foldersAdded: 0, progressUpdated: 0, episodesMerged: 0 };
+
         // Validate & Merge Watchlist
         if (Array.isArray(parsed.watchlist)) {
           const currentList = MyList.get();
@@ -9356,6 +9469,7 @@ function importAndMergeUserData(file) {
               const key = `${item.type || 'movie'}_${item.id}`;
               if (!existingMap.has(key)) {
                 existingMap.set(key, item);
+                stats.watchlistAdded += 1;
               }
             }
           });
@@ -9370,8 +9484,8 @@ function importAndMergeUserData(file) {
             if (f && f.name && f.id) {
               if (!folderMap.has(f.id)) {
                 folderMap.set(f.id, f);
+                stats.foldersAdded += 1;
               } else {
-                // Merge items inside folder
                 const existingF = folderMap.get(f.id);
                 const itemKeys = new Set((existingF.items || []).map(it => `${it.type}_${it.id}`));
                 (f.items || []).forEach(it => {
@@ -9395,6 +9509,7 @@ function importAndMergeUserData(file) {
               const existing = currentProg[k];
               if (!existing || (incoming.savedAt || 0) > (existing.savedAt || 0)) {
                 currentProg[k] = incoming;
+                stats.progressUpdated += 1;
               }
             }
           });
@@ -9410,6 +9525,7 @@ function importAndMergeUserData(file) {
               if (!currentWatched[showId] || typeof currentWatched[showId] !== "object") currentWatched[showId] = {};
               Object.keys(epMap).forEach(epKey => {
                 if (/^\d+_\d+$/.test(epKey) && epMap[epKey]) {
+                  if (!currentWatched[showId][epKey]) stats.episodesMerged += 1;
                   currentWatched[showId][epKey] = Math.max(Number(currentWatched[showId][epKey] || 0), Number(epMap[epKey] || Date.now()));
                 }
               });
@@ -9428,7 +9544,7 @@ function importAndMergeUserData(file) {
           applyGlobalSettings();
         }
 
-        resolve(true);
+        resolve(stats);
       } catch (err) {
         reject(new Error("Malformed JSON backup file"));
       }

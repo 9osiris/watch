@@ -8447,6 +8447,31 @@ html[data-theme="light"] .touch-preview-sheet {
   background: #ffffff;
   color: #0f172a;
 }
+html[data-theme="light"] .instant-search-dropdown,
+html[data-theme="light"] .header-search-panel,
+html[data-theme="light"] .cmd-palette-dialog {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.14);
+}
+html[data-theme="light"] .hero-badge-pill {
+  background: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.14);
+}
+.folder-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.folder-header-actions .glass-chip.danger {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+.mobile-dock-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
